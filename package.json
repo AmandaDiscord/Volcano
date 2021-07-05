@@ -1,0 +1,53 @@
+{
+  "name": "volcano",
+  "version": "1.0.0",
+  "description": "A light-weight LavaLink compatible replacement",
+  "main": "dist/index.js",
+  "scripts": {
+    "compile": "tsc -p .",
+    "start": "node ."
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AmandaDiscord/Volcano.git"
+  },
+  "keywords": [
+    "discord",
+    "voice",
+    "lavalink",
+    "light-weight",
+    "modular",
+    "volcano"
+  ],
+  "author": "PapiOphidian",
+  "license": "MIT",
+  "dependencies": {
+    "@discordjs/opus": "^0.5.3",
+    "@discordjs/voice": "^0.5.1",
+    "@lavalink/encoding": "^0.1.1",
+    "backtracker": "^3.1.0",
+    "centra": "^2.4.2",
+    "eslint": "^7.29.0",
+    "express": "^4.17.1",
+    "ffmpeg-static": "^4.4.0",
+    "mixin-deep": "^2.0.1",
+    "music-metadata": "^7.8.8",
+    "soundcloud-scraper": "^5.0.0",
+    "tweetnacl": "^1.0.3",
+    "typescript": "^4.3.5",
+    "ws": "^7.5.1",
+    "yaml": "^1.10.2",
+    "youtube-dl-exec": "^1.2.4"
+  },
+  "devDependencies": {
+    "@types/centra": "^2.2.0",
+    "@types/express": "^4.17.12",
+    "@types/node": "^15.12.5",
+    "@types/ws": "^7.4.5",
+    "@typescript-eslint/eslint-plugin": "^4.28.1",
+    "@typescript-eslint/parser": "^4.28.1"
+  },
+  "files": [
+    "./dist"
+  ]
+}
