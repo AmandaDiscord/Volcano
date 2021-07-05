@@ -1,4 +1,4 @@
-![Volcano's icon, a cartoon style volcano eruption with the text "volcano".](https://raw.githubusercontent.com/AmandaDiscord/Volcano/main/.github/images/volcano-icon.png)
+![Volcano's icon, a cartoon style volcano eruption with the text "volcano".](./images/volcano-icon.png)
 
 Volcano is a (Mostly) LavaLink compatible replacement which is written in TypeScript for the Node JS runtime.
 
