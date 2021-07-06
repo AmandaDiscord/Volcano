@@ -1,43 +1,40 @@
 import centra from "centra";
+const tokenizer: typeof import("@tokenizer/http") = require("@tokenizer/http");
 const metadata: typeof import("music-metadata") = require("music-metadata");
 
-import Constants from "../Constants";
 import LimitedReadWriteStream from "../util/LimitedReadWriteStream";
+import Constants from "../Constants";
 
-const mimeRegex = /(^(audio|video)\/(.+)$)|(^application\/ogg$)/;
+const mimeRegex = /^(audio|video)\/(.+)$|^application\/(ogg)$/;
 
 async function getHTTPAsSource(resource: string) {
 	type ExtraData = { title?: string; author?: string; stream: boolean; probe: string }
-	return centra(resource, "get").header(Constants.baseHTTPRequestHeaders).compress().stream().send().then(async res => {
-		const message: import("http").IncomingMessage = res as any;
+	let parsed: import("music-metadata").IAudioMetadata;
+	let headers: any;
 
-		if (!Constants.OKStatusCodes.includes(message.statusCode as number)) {
-			message.destroy();
-			throw new Error("Non OK status code");
-		}
-
-		const mimeMatch = message.headers["content-type"]?.match(mimeRegex);
-		if (message.headers["content-type"] && !mimeMatch) {
-			message.destroy();
-			throw new Error("Unknown file format.");
-		}
-
-		const chunked = !!(message.headers["transfer-encoding"] && message.headers["transfer-encoding"].includes("chunked"));
-		// chunked is up here because I previously used it to limit how many frames were piped if it was chunked or not.
+	try {
+		const toke = await tokenizer.makeTokenizer(resource, { timeoutInSec: 10 }, { resolveUrl: true });
+		parsed = await metadata.parseFromTokenizer(toke);
+	} catch {
+		const stream: import("http").IncomingMessage = await centra(resource, "get").header(Constants.baseHTTPRequestHeaders).compress().stream().send() as any;
 		const readwrite = new LimitedReadWriteStream(20);
-		const parsed = await metadata.parseStream(message.pipe(readwrite), { mimeType: message.headers["content-type"], size: message.headers["content-length"] ? Number(message.headers["content-length"]) : undefined });
+		parsed = await metadata.parseStream(stream.pipe(readwrite), { mimeType: stream.headers["content-type"], size: stream.headers["content-length"] ? Number(stream.headers["content-length"]) : undefined });
+		stream.destroy();
+		headers = stream.headers;
+	}
 
-		message.destroy();
-		if (!message.headers["content-type"] && !parsed.format.container) throw new Error("Unknown file format.");
+	if (!headers) headers = await centra(resource, "head").header(Constants.baseHTTPRequestHeaders).send().then(d => d.headers);
 
-		const extra: ExtraData = {
-			stream: chunked,
-			probe: mimeMatch ? mimeMatch[2] : parsed.format.container!.toLowerCase()
-		};
-		if (message.headers["icy-description"]) extra.title = message.headers["icy-description"] as string;
-		if (message.headers["icy-name"]) extra.author = message.headers["icy-name"] as string;
-		return { parsed, extra };
-	});
+	const mimeMatch = headers["content-type"]?.match(mimeRegex);
+	const chunked = !!(headers["transfer-encoding"] && headers["transfer-encoding"].includes("chunked"));
+
+	const extra: ExtraData = {
+		stream: chunked,
+		probe: mimeMatch ? (mimeMatch[3] ? mimeMatch[3] : mimeMatch[2]) : parsed.format.container!.toLowerCase()
+	};
+	if (headers["icy-description"]) extra.title = headers["icy-description"] as string;
+	if (headers["icy-name"]) extra.author = headers["icy-name"] as string;
+	return { parsed, extra };
 }
 
 export = getHTTPAsSource;
