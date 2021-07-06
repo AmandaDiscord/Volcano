@@ -121,7 +121,8 @@ exports.workerOPCodes = {
     ACKKNOWLEDGE: 4,
     REPLY: 5,
     STATS: 6,
-    VOICE_SERVER: 7
+    VOICE_SERVER: 7,
+    DELETE_ALL: 8
 };
 exports.OKStatusCodes = [200, 201, 204, 304];
 exports.baseSoundcloudURL = "https://soundcloud.com";

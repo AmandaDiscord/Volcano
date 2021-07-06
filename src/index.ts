@@ -54,9 +54,9 @@ const server = express();
 const http = HTTP.createServer(server);
 const ws = new WebSocket.Server({ noServer: true });
 
-const connections = new Map<string, Array<{ socket: WebSocket; shards: number; resumeKey: string | null; resumeTimeout: number }>>();
+const connections = new Map<string, Array<{ socket: WebSocket; resumeKey: string | null; resumeTimeout: number }>>();
 const voiceServerStates = new Map<string, { clientID: string; guildId: string, sessionId: string, event: { token: string; guild_id: string; endpoint: string } }>();
-const socketDeleteTimeouts = new Map<string, NodeJS.Timeout>();
+const socketDeleteTimeouts = new Map<string, { timeout: NodeJS.Timeout; events: Array<any> }>();
 const playerMap = new Map<string, WebSocket>();
 
 pool.on("message", (id, msg) => {
@@ -64,12 +64,16 @@ pool.on("message", (id, msg) => {
 	const userID: string = msg.clientID;
 
 	const socket = playerMap.get(`${userID}.${guildID}`);
+	const entry = [...connections.values()].find(i => i.find(c => c.socket === socket));
+	const rKey = entry?.find(c => c.socket);
+	if (entry && rKey && rKey.resumeKey && socketDeleteTimeouts.has(rKey.resumeKey)) socketDeleteTimeouts.get(rKey.resumeKey)!.events.push(msg.data);
 	socket?.send(JSON.stringify(msg.data));
 });
 
 pool.on("datareq", (op, data) => {
 	if (op === Constants.workerOPCodes.VOICE_SERVER) {
-		pool.broadcast({ op: Constants.workerOPCodes.VOICE_SERVER, data: voiceServerStates.get(`${data.clientID}.${data.guildId}`) });
+		const v = voiceServerStates.get(`${data.clientID}.${data.guildId}`);
+		if (v) pool.broadcast({ op: Constants.workerOPCodes.VOICE_SERVER, data: v });
 	}
 });
 
@@ -121,27 +125,33 @@ http.on("upgrade", (request: HTTP.IncomingMessage, socket: import("net").Socket,
 	if (passwordIncorrect || invalidUserID) return socket.write(temp401, () => socket.destroy());
 	const userID = request.headers["user-id"] as string;
 
-	let totalShards = 1;
-	if (request.headers["num-shards"] && !Array.isArray(request.headers["num-shards"]) && request.headers["num-shards"].match(/^\d+$/)) totalShards = Number(request.headers["num-shards"]);
-
 	ws.handleUpgrade(request, socket, head, s => {
 		if (request.headers["resume-key"] && socketDeleteTimeouts.has(request.headers["resume-key"] as string)) {
-			clearTimeout(socketDeleteTimeouts.get(request.headers["resume-key"] as string) as NodeJS.Timeout);
+			const resume = socketDeleteTimeouts.get(request.headers["resume-key"] as string)!;
+			clearTimeout(resume.timeout);
 			socketDeleteTimeouts.delete(request.headers["resume-key"] as string);
 			const exist = connections.get(userID);
 			if (exist) {
-				const pre = exist.find(i => i.resumeKey === request.headers["num-shards"]);
+				const pre = exist.find(i => i.resumeKey === request.headers["resume-key"]);
 				if (pre) pre.socket = s;
-				else exist.push({ socket: s, shards: totalShards, resumeKey: null, resumeTimeout: 60 });
-			} else connections.set(userID, [{ socket: s, shards: totalShards, resumeKey: null, resumeTimeout: 60 }]);
+				else exist.push({ socket: s, resumeKey: null, resumeTimeout: 60 });
+			} else connections.set(userID, [{ socket: s, resumeKey: null, resumeTimeout: 60 }]);
 
-			llLog(`Successfully resumed ${request.headers["resume-key"]}`);
+			llLog(`Replaying ${resume.events.length}`);
+
+			for (const event of resume.events) {
+				s.send(JSON.stringify(event));
+			}
+
+			resume.events.length = 0;
+
+			llLog(`Resumed session with key ${request.headers["resume-key"]}`);
 			return ws.emit("connection", s, request);
 		}
 
 		llLog("Connection successfully established");
 		const existing = connections.get(userID);
-		const pl = { socket: s, shards: totalShards, resumeKey: null, resumeTimeout: 60 };
+		const pl = { socket: s, resumeKey: null, resumeTimeout: 60 };
 		if (existing) existing.push(pl);
 		else connections.set(userID, [pl]);
 		ws.emit("connection", s, request);
@@ -157,8 +167,8 @@ ws.on("connection", async (socket, request) => {
 	socket.isAlive = true;
 	socket.on("pong", socketHeartbeat);
 
-	socket.once("close", () => onClientClose(socket, userID));
-	socket.once("error", () => onClientClose(socket, userID));
+	socket.once("close", code => onClientClose(socket, userID, code));
+	socket.once("error", () => onClientClose(socket, userID, 1000));
 });
 
 async function onClientMessage(socket: WebSocket, data: WebSocket.Data, userID: string) {
@@ -174,6 +184,7 @@ async function onClientMessage(socket: WebSocket, data: WebSocket.Data, userID: 
 
 	const pl = { op: Constants.workerOPCodes.MESSAGE, data: Object.assign(msg, { clientID: userID }) };
 	if (msg.op === "play") {
+		if (!msg.guildId || !msg.track) return;
 		const responses = await pool.broadcast(pl);
 		if (!responses.includes(true)) pool.execute(pl);
 		return playerMap.set(`${userID}.${msg.guildId}`, socket);
@@ -181,14 +192,17 @@ async function onClientMessage(socket: WebSocket, data: WebSocket.Data, userID: 
 
 	else if (msg.op === "voiceUpdate") {
 		voiceServerStates.set(`${userID}.${msg.guildId}`, { clientID: userID, guildId: msg.guildId as string, sessionId: msg.sessionId as string, event: msg.event as any });
+		setTimeout(() => voiceServerStates.delete(`${userID}.${msg.guildId}`), 20000);
 		return pool.broadcast({ op: Constants.workerOPCodes.VOICE_SERVER, data: voiceServerStates.get(`${userID}.${msg.guildId}`) });
 	}
 
 	else if (msg.op === "stop" || msg.op === "pause" || msg.op === "destroy" || msg.op === "filters") {
+		if (!msg.guildId) return;
 		return pool.broadcast(pl);
 	}
 
 	else if (msg.op === "configureResuming") {
+		if (!msg.key) return;
 		const entry = connections.get(userID);
 		const found = entry!.find(i => i.socket === socket);
 		if (found) {
@@ -198,19 +212,24 @@ async function onClientMessage(socket: WebSocket, data: WebSocket.Data, userID: 
 	}
 }
 
-function onClientClose(socket: WebSocket, userID: string) {
+function onClientClose(socket: WebSocket, userID: string, closeCode: number) {
+	if (socket.readyState !== WebSocket.CLOSING && socket.readyState !== WebSocket.CLOSED) socket.close(closeCode);
 	socket.removeAllListeners();
 	const entry = connections.get(userID);
 	const found = entry!.find(i => i.socket === socket);
 	if (found) {
 		if (found.resumeKey) {
-			socketDeleteTimeouts.set(found.resumeKey, setTimeout(() => {
+			// @ts-ignore
+			const remote = socket._socket ? socket._socket.address() : { port: undefined, address: socket.url };
+			llLog(`Connection closed from /${remote.address}${remote.port ? `:${remote.port}` : ""} with status CloseStatus[code=${closeCode}, reason=destroy] -- Session can be resumed within the next ${found.resumeTimeout} seconds with key ${found.resumeKey}`);
+			socketDeleteTimeouts.set(found.resumeKey, { timeout: setTimeout(() => {
 				const index = entry!.indexOf(found);
 				if (index === -1) return;
 				entry!.splice(index, 1);
 				socketDeleteTimeouts.delete(found.resumeKey as string);
 				if (entry!.length === 0) connections.delete(userID);
-			}, (found.resumeTimeout || 60) * 1000));
+				pool.broadcast({ op: Constants.workerOPCodes.DELETE_ALL, data: { clientID: userID } });
+			}, (found.resumeTimeout || 60) * 1000), events: [] }) ;
 		} else {
 			const index = entry!.indexOf(found);
 			if (index === -1) return;

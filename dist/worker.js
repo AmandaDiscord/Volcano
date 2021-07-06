@@ -22,7 +22,7 @@ const reportInterval = setInterval(() => {
         return;
     for (const queue of queues.values()) {
         const state = queue.state;
-        if (!queue.paused && state.connected)
+        if (!queue.paused)
             parentPort.postMessage({ op: Constants_1.default.workerOPCodes.MESSAGE, data: { op: Constants_1.default.OPCodes.PLAYER_UPDATE, guildId: queue.guildID, state: state }, clientID: queue.clientID });
     }
 }, 5000);
@@ -306,6 +306,9 @@ parentPort.on("message", async (packet) => {
     else if (packet.op === Constants_1.default.workerOPCodes.VOICE_SERVER) {
         (_d = methodMap.get(`${packet.data.clientID}.${packet.data.guildId}`)) === null || _d === void 0 ? void 0 : _d.onVoiceStateUpdate({ channel_id: "", guild_id: packet.data.guildId, user_id: packet.data.clientID, session_id: packet.data.sessionId, deaf: false, self_deaf: false, mute: false, self_mute: false, self_video: false, suppress: false, request_to_speak_timestamp: null });
         (_e = methodMap.get(`${packet.data.clientID}.${packet.data.guildId}`)) === null || _e === void 0 ? void 0 : _e.onVoiceServerUpdate({ guild_id: packet.data.guildId, token: packet.data.event.token, endpoint: packet.data.event.endpoint });
+    }
+    else if (packet.op === Constants_1.default.workerOPCodes.DELETE_ALL) {
+        [...queues.values()].filter(q => q.clientID === packet.data.clientID).forEach(i => i.destroy());
     }
 });
 function voiceAdapterCreator(userID, guildID) {

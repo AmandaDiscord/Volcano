@@ -20,7 +20,7 @@ const reportInterval = setInterval(() => {
 	if (!queues.size) return;
 	for (const queue of queues.values()) {
 		const state = queue.state;
-		if (!queue.paused && state.connected) parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: Constants.OPCodes.PLAYER_UPDATE, guildId: queue.guildID, state: state }, clientID: queue.clientID });
+		if (!queue.paused) parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: Constants.OPCodes.PLAYER_UPDATE, guildId: queue.guildID, state: state }, clientID: queue.clientID });
 	}
 }, 5000);
 
@@ -290,6 +290,8 @@ parentPort.on("message", async (packet: { data?: import("./types").InboundPayloa
 	} else if (packet.op === Constants.workerOPCodes.VOICE_SERVER) {
 		methodMap.get(`${packet.data!.clientID}.${packet.data!.guildId}`)?.onVoiceStateUpdate({ channel_id: "" as any, guild_id: packet.data!.guildId as any, user_id: packet.data!.clientID as any, session_id: packet.data!.sessionId!, deaf: false, self_deaf: false, mute: false, self_mute: false, self_video: false, suppress: false, request_to_speak_timestamp: null });
 		methodMap.get(`${packet.data!.clientID}.${packet.data!.guildId}`)?.onVoiceServerUpdate({ guild_id: packet.data!.guildId as any, token: packet.data!.event!.token, endpoint: packet.data!.event!.endpoint });
+	} else if (packet.op === Constants.workerOPCodes.DELETE_ALL) {
+		[...queues.values()].filter(q => q.clientID === packet.data!.clientID).forEach(i => i.destroy());
 	}
 });
 

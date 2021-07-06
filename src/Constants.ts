@@ -125,7 +125,8 @@ export const workerOPCodes = {
 	ACKKNOWLEDGE: 4 as const,
 	REPLY: 5 as const,
 	STATS: 6 as const,
-	VOICE_SERVER: 7 as const
+	VOICE_SERVER: 7 as const,
+	DELETE_ALL: 8 as const
 };
 
 export const OKStatusCodes = [200, 201, 204, 304];
