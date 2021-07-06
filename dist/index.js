@@ -123,12 +123,12 @@ http.on("upgrade", (request, socket, head) => {
             }
             else
                 connections.set(userID, [{ socket: s, resumeKey: null, resumeTimeout: 60 }]);
-            llLog(`Replaying ${resume.events.length}`);
             for (const event of resume.events) {
                 s.send(JSON.stringify(event));
             }
-            resume.events.length = 0;
             llLog(`Resumed session with key ${request.headers["resume-key"]}`);
+            llLog(`Replaying ${resume.events.length} events`);
+            resume.events.length = 0;
             return ws.emit("connection", s, request);
         }
         llLog("Connection successfully established");
@@ -148,8 +148,8 @@ ws.on("connection", async (socket, request) => {
     socket.on("message", data => onClientMessage(socket, data, userID));
     socket.isAlive = true;
     socket.on("pong", socketHeartbeat);
-    socket.once("close", code => onClientClose(socket, userID, code));
-    socket.once("error", () => onClientClose(socket, userID, 1000));
+    socket.once("close", code => onClientClose(socket, userID, code, { ip: request.socket.remoteAddress, port: request.socket.remotePort }));
+    socket.once("error", () => onClientClose(socket, userID, 1000, { ip: request.socket.remoteAddress, port: request.socket.remotePort }));
 });
 async function onClientMessage(socket, data, userID) {
     let buf;
@@ -167,6 +167,7 @@ async function onClientMessage(socket, data, userID) {
         if (!msg.guildId || !msg.track)
             return;
         const responses = await pool.broadcast(pl);
+        console.log(responses);
         if (!responses.includes(true))
             pool.execute(pl);
         return playerMap.set(`${userID}.${msg.guildId}`, socket);
@@ -192,7 +193,7 @@ async function onClientMessage(socket, data, userID) {
         }
     }
 }
-function onClientClose(socket, userID, closeCode) {
+async function onClientClose(socket, userID, closeCode, extra) {
     if (socket.readyState !== ws_1.default.CLOSING && socket.readyState !== ws_1.default.CLOSED)
         socket.close(closeCode);
     socket.removeAllListeners();
@@ -200,26 +201,31 @@ function onClientClose(socket, userID, closeCode) {
     const found = entry.find(i => i.socket === socket);
     if (found) {
         if (found.resumeKey) {
-            const remote = socket._socket ? socket._socket.address() : { port: undefined, address: socket.url };
-            llLog(`Connection closed from /${remote.address}${remote.port ? `:${remote.port}` : ""} with status CloseStatus[code=${closeCode}, reason=destroy] -- Session can be resumed within the next ${found.resumeTimeout} seconds with key ${found.resumeKey}`);
-            socketDeleteTimeouts.set(found.resumeKey, { timeout: setTimeout(() => {
-                    const index = entry.indexOf(found);
-                    if (index === -1)
-                        return;
+            llLog(`Connection closed from /${extra.ip}:${extra.port} with status CloseStatus[code=${closeCode}, reason=destroy] -- Session can be resumed within the next ${found.resumeTimeout} seconds with key ${found.resumeKey}`);
+            const timeout = setTimeout(async () => {
+                const rk = entry.find(e => e.resumeKey === found.resumeKey);
+                const index = entry.indexOf(rk);
+                if (index !== -1)
                     entry.splice(index, 1);
-                    socketDeleteTimeouts.delete(found.resumeKey);
-                    if (entry.length === 0)
-                        connections.delete(userID);
-                    pool.broadcast({ op: Constants_1.default.workerOPCodes.DELETE_ALL, data: { clientID: userID } });
-                }, (found.resumeTimeout || 60) * 1000), events: [] });
+                socketDeleteTimeouts.delete(found.resumeKey);
+                if (entry.length === 0)
+                    connections.delete(userID);
+                const results = await pool.broadcast({ op: Constants_1.default.workerOPCodes.DELETE_ALL, data: { clientID: userID } });
+                const count = results.reduce((acc, cur) => acc + cur, 0);
+                llLog(`Shutting down ${count} playing players`);
+            }, (found.resumeTimeout || 60) * 1000);
+            socketDeleteTimeouts.set(found.resumeKey, { timeout: timeout, events: [] });
         }
         else {
             const index = entry.indexOf(found);
             if (index === -1)
-                return;
+                return Logger_1.default.error(`Socket delete could not be removed: ${found.resumeKey}\n${index}`);
             entry.splice(index, 1);
             if (entry.length === 0)
                 connections.delete(userID);
+            const results = await pool.broadcast({ op: Constants_1.default.workerOPCodes.DELETE_ALL, data: { clientID: userID } });
+            const count = results.reduce((acc, cur) => acc + cur, 0);
+            llLog(`Shutting down ${count} playing players`);
         }
     }
     for (const key of voiceServerStates.keys()) {

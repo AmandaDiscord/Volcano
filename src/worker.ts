@@ -243,7 +243,7 @@ class Queue {
 parentPort.on("message", async (packet: { data?: import("./types").InboundPayload; op: typeof Constants.workerOPCodes[keyof typeof Constants.workerOPCodes], threadID: number; broadcasted?: boolean }) => {
 	if (packet.op === Constants.workerOPCodes.STATS) {
 		const qs = [...queues.values()];
-		return parentPort.postMessage({ op: Constants.workerOPCodes.REPLY, data: { playingPlayers: qs.filter(q => !q.paused).length, players: queues.size } });
+		return parentPort.postMessage({ op: Constants.workerOPCodes.REPLY, data: { playingPlayers: qs.filter(q => !q.paused).length, players: queues.size }, threadID: packet.threadID });
 	} else if (packet.op === Constants.workerOPCodes.MESSAGE) {
 		const guildID = packet.data!.guildId;
 		const userID = packet.data!.clientID!;
@@ -291,7 +291,11 @@ parentPort.on("message", async (packet: { data?: import("./types").InboundPayloa
 		methodMap.get(`${packet.data!.clientID}.${packet.data!.guildId}`)?.onVoiceStateUpdate({ channel_id: "" as any, guild_id: packet.data!.guildId as any, user_id: packet.data!.clientID as any, session_id: packet.data!.sessionId!, deaf: false, self_deaf: false, mute: false, self_mute: false, self_video: false, suppress: false, request_to_speak_timestamp: null });
 		methodMap.get(`${packet.data!.clientID}.${packet.data!.guildId}`)?.onVoiceServerUpdate({ guild_id: packet.data!.guildId as any, token: packet.data!.event!.token, endpoint: packet.data!.event!.endpoint });
 	} else if (packet.op === Constants.workerOPCodes.DELETE_ALL) {
-		[...queues.values()].filter(q => q.clientID === packet.data!.clientID).forEach(i => i.destroy());
+		const forUser = [...queues.values()].filter(q => q.clientID === packet.data!.clientID);
+		parentPort.postMessage({ op: Constants.workerOPCodes.REPLY, data: forUser.length, threadID: packet.threadID });
+		for (const q of forUser) {
+			q.destroy();
+		}
 	}
 });
 

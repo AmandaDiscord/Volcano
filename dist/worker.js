@@ -254,7 +254,7 @@ parentPort.on("message", async (packet) => {
     var _a, _b, _c, _d, _e;
     if (packet.op === Constants_1.default.workerOPCodes.STATS) {
         const qs = [...queues.values()];
-        return parentPort.postMessage({ op: Constants_1.default.workerOPCodes.REPLY, data: { playingPlayers: qs.filter(q => !q.paused).length, players: queues.size } });
+        return parentPort.postMessage({ op: Constants_1.default.workerOPCodes.REPLY, data: { playingPlayers: qs.filter(q => !q.paused).length, players: queues.size }, threadID: packet.threadID });
     }
     else if (packet.op === Constants_1.default.workerOPCodes.MESSAGE) {
         const guildID = packet.data.guildId;
@@ -308,7 +308,11 @@ parentPort.on("message", async (packet) => {
         (_e = methodMap.get(`${packet.data.clientID}.${packet.data.guildId}`)) === null || _e === void 0 ? void 0 : _e.onVoiceServerUpdate({ guild_id: packet.data.guildId, token: packet.data.event.token, endpoint: packet.data.event.endpoint });
     }
     else if (packet.op === Constants_1.default.workerOPCodes.DELETE_ALL) {
-        [...queues.values()].filter(q => q.clientID === packet.data.clientID).forEach(i => i.destroy());
+        const forUser = [...queues.values()].filter(q => q.clientID === packet.data.clientID);
+        parentPort.postMessage({ op: Constants_1.default.workerOPCodes.REPLY, data: forUser.length, threadID: packet.threadID });
+        for (const q of forUser) {
+            q.destroy();
+        }
     }
 });
 function voiceAdapterCreator(userID, guildID) {

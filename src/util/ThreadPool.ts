@@ -144,10 +144,10 @@ class ThreadPool extends ThreadBasedReplier {
 			this.outgoing.set(payload.threadID, msg => {
 				parts.push(msg);
 				if (parts.length === expecting) res(parts);
-				setTimeout(() => {
-					if (parts.length !== expecting) res(parts);
-				}, 5000);
 			});
+			setTimeout(() => {
+				if (parts.length !== expecting) res(parts);
+			}, 5000);
 
 			for (const child of this.children.values()) {
 				child.postMessage(payload);
