@@ -1,8 +1,12 @@
 import { parentPort as parentport } from "worker_threads";
+import path from "path";
+import fs from "fs";
 
 const Discord: typeof import("@discordjs/voice") = require("@discordjs/voice");
 const encoding: typeof import("@lavalink/encoding") = require("@lavalink/encoding");
 import { raw as ytdl } from "youtube-dl-exec";
+import Soundcloud from "soundcloud-scraper";
+import centra from "centra";
 
 if (!parentport) throw new Error("THREAD_IS_PARENT");
 const parentPort = parentport;
@@ -12,10 +16,10 @@ import Constants from "./Constants";
 const queues = new Map<string, Queue>();
 const methodMap = new Map<string, import("@discordjs/voice").DiscordGatewayAdapterLibraryMethods>();
 
-const reportInterval = setInterval(async () => {
+const reportInterval = setInterval(() => {
 	if (!queues.size) return;
 	for (const queue of queues.values()) {
-		const state = await queue.state;
+		const state = queue.state;
 		if (!queue.paused && state.connected) parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: Constants.OPCodes.PLAYER_UPDATE, guildId: queue.guildID, state: state }, clientID: queue.clientID });
 	}
 }, 5000);
@@ -39,6 +43,19 @@ const codeReasons = {
 	4016: "We didn't recognize your encryption."
 };
 
+const keyDir = path.join(__dirname, "../soundcloud.txt");
+let APIKey: string;
+
+if (fs.existsSync(keyDir)) {
+	APIKey = fs.readFileSync(keyDir, { encoding: "utf-8" });
+} else {
+	Soundcloud.keygen(true).then(key => {
+		if (!key) throw new Error("SOUNDCLOUD_KEY_NO_CREATE");
+		APIKey = key;
+		fs.writeFileSync(keyDir, key, { encoding: "utf-8" });
+	});
+}
+
 class Queue {
 	public connection: import("@discordjs/voice").VoiceConnection;
 	public clientID: string;
@@ -47,6 +64,7 @@ class Queue {
 	public audioPlayer = Discord.createAudioPlayer();
 	public paused = false;
 	public current: import("@discordjs/voice").AudioResource<import("@lavalink/encoding").TrackInfo> | null = null;
+	public stopping = false;
 
 	public constructor(connection: import("@discordjs/voice").VoiceConnection, clientID: string, guildID: string) {
 		this.connection = connection;
@@ -80,7 +98,8 @@ class Queue {
 		this.audioPlayer.on("stateChange", async (oldState, newState) => {
 			if (newState.status === Discord.AudioPlayerStatus.Idle && oldState.status !== Discord.AudioPlayerStatus.Idle) {
 				this.current = null;
-				parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackEndEvent", guildId: this.guildID, reason: "FINISHED" }, clientID: this.clientID });
+				if (!this.stopping) parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackEndEvent", guildId: this.guildID, reason: "FINISHED" }, clientID: this.clientID });
+				this.stopping = false;
 				this._nextSong();
 				await new Promise((res, rej) => {
 					let timer: NodeJS.Timeout | undefined = void 0;
@@ -133,18 +152,41 @@ class Queue {
 
 		const meta = this.tracks[0];
 		const decoded = encoding.decode(meta.track);
-		const resource = await new Promise<import("@discordjs/voice").AudioResource<import("@lavalink/encoding").TrackInfo>>((resolve, reject) => {
-			const sub = ytdl(decoded.uri as string, { o: "-", q: "", f: "bestaudio[ext=webm+acodec=opus+asr=48000]/bestaudio", r: "100K" }, { stdio: ["ignore", "pipe", "ignore"] });
-			if (!sub.stdout) return reject(new Error("No stdout"));
-			const stream = sub.stdout;
-			const onError = (error: Error) => {
-				if (!sub.killed) sub.kill();
+		if (!decoded.uri) return this._nextSong();
+		// eslint-disable-next-line no-async-promise-executor
+		const resource = await new Promise<import("@discordjs/voice").AudioResource<import("@lavalink/encoding").TrackInfo>>(async (resolve, reject) => {
+			const onError = (error: Error, stream: import("stream").Readable, sub?: any) => {
+				if (sub && !sub.killed && typeof sub.kill === "function") sub.kill();
 				stream.resume();
 				return reject(error);
 			};
-			sub.once("spawn", () => {
-				Discord.demuxProbe(stream).then(probe => resolve(Discord.createAudioResource(probe.stream, { metadata: decoded, inputType: probe.type, inlineVolume: true }))).catch(onError);
-			}).catch(onError);
+			const demux = (s: import("stream").Readable, sub?: any) => {
+				Discord.demuxProbe(s).then(probe => resolve(Discord.createAudioResource(probe.stream, { metadata: decoded, inputType: probe.type, inlineVolume: true }))).catch(e => onError(e, s, sub));
+			};
+			if (decoded.source === "youtube") {
+				const sub = ytdl(decoded.uri as string, { o: "-", q: "", f: "bestaudio[ext=webm+acodec=opus+asr=48000]/bestaudio", r: "100K" }, { stdio: ["ignore", "pipe", "ignore"] });
+				if (!sub.stdout) return reject(new Error("No stdout"));
+				const stream = sub.stdout;
+				sub.once("spawn", () => demux(stream, sub)).catch(e => onError(e, stream, sub));
+			} else if (decoded.source === "soundcloud") {
+				let stream: import("stream").Readable;
+				const url = decoded.identifier.replace(/^O:/, "");
+				const streamURL = await Soundcloud.Util.fetchSongStreamURL(url, APIKey);
+				if (url.endsWith("/hls")) stream = await Soundcloud.StreamDownloader.downloadHLS(streamURL);
+				else stream = await Soundcloud.StreamDownloader.downloadProgressive(streamURL);
+				try {
+					demux(stream);
+				} catch (e) {
+					onError(e, stream);
+				}
+			} else {
+				const stream: import("http").IncomingMessage = await centra(decoded.uri as string, "get").header(Constants.baseHTTPRequestHeaders).compress().stream().send() as any;
+				try {
+					demux(stream);
+				} catch (e) {
+					onError(e, stream);
+				}
+			}
 		}).catch(e => {
 			console.log(e);
 			this._nextSong();
@@ -163,10 +205,6 @@ class Queue {
 		if (track.replace) this.replace();
 	}
 
-	public skip() {
-		this.audioPlayer.stop();
-	}
-
 	public replace() {
 		parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackEndEvent", guildId: this.guildID, reason: "REPLACED" }, clientID: this.clientID });
 		this._nextSong();
@@ -181,12 +219,13 @@ class Queue {
 	}
 
 	public stop(destroyed?: boolean) {
-		this.tracks.length = 0;
+		this.stopping = true;
 		this.audioPlayer.stop(true);
 		if (!destroyed) parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackEndEvent", guildId: this.guildID, reason: "STOPPED" }, clientID: this.clientID });
 	}
 
 	public destroy() {
+		this.tracks.length = 0;
 		this.stop(true);
 		this.connection.destroy();
 		queues.delete(`${this.clientID}.${this.guildID}`);
@@ -212,14 +251,12 @@ parentPort.on("message", async (packet: { data?: import("./types").InboundPayloa
 
 		case "play": {
 			let q: Queue;
-			let newQueue = false;
 			if (!queues.has(`${userID}.${guildID}`)) {
 				if (packet.broadcasted) return parentPort.postMessage({ op: Constants.workerOPCodes.REPLY, data: false, threadID: packet.threadID });
 
 				// Channel IDs are never forwarded to LavaLink and are not really necessary in code except for in the instance of sending packets
 				const voiceConnection = new Discord.VoiceConnection({ channelId: "", guildId: guildID, selfDeaf: false, selfMute: false }, { adapterCreator: voiceAdapterCreator(userID, guildID) });
 				q = new Queue(voiceConnection, userID, guildID);
-				newQueue = true;
 				queues.set(`${userID}.${guildID}`, q);
 				parentPort.postMessage({ op: Constants.workerOPCodes.VOICE_SERVER, data: { clientID: userID, guildId: guildID } });
 			} else {
@@ -228,7 +265,7 @@ parentPort.on("message", async (packet: { data?: import("./types").InboundPayloa
 			}
 
 			q.queue({ track: packet.data!.track!, start: Number(packet.data!.startTime || "0"), end: Number(packet.data!.endTime || "0"), volume: Number(packet.data!.volume || "100"), replace: !packet.data!.noReplace, pause: packet.data!.pause || false });
-			if (newQueue) q.play();
+			if (q.tracks.length === 1) q.play();
 			break;
 		}
 		case "destroy": {

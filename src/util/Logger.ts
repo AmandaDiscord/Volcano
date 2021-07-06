@@ -1,6 +1,6 @@
 import { BackTracker } from "backtracker";
 
-const workerNameMaxLogLength = 7;
+const workerNameMaxLogLength = 10;
 const scopeNameMaxLogLength = 15;
 
 function stringify(data: any) {

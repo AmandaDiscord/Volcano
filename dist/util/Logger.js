@@ -1,6 +1,6 @@
 "use strict";
 const backtracker_1 = require("backtracker");
-const workerNameMaxLogLength = 7;
+const workerNameMaxLogLength = 10;
 const scopeNameMaxLogLength = 15;
 function stringify(data) {
     if (typeof data === "object" && data !== null && !Array.isArray(data)) {

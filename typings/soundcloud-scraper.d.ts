@@ -1,3 +1,8 @@
+declare class Downloader {
+	public static downloadHLS(url: string, options?: import("m3u8stream").Options): Promise<import("m3u8stream").Stream>;
+	public static downloadProgressive(url: string, options?: import("http").RequestOptions): Promise<import("http").IncomingMessage>;
+}
+
 declare module "soundcloud-scraper" {
 	type ClientOptions = {
 		fetchAPIKey?: boolean;
@@ -131,11 +136,6 @@ declare module "soundcloud-scraper" {
 	};
 
 	export const Store: typeof Map;
-
-	class Downloader {
-		public static downloadHLS(url: string, options?: import("m3u8stream").Options): Promise<import("m3u8stream").Stream>;
-		public static downloadProgressive(url: string, options?: import("http").RequestOptions): Promise<import("http").IncomingMessage>;
-	}
 
 	export const StreamDownloader: typeof Downloader;
 }

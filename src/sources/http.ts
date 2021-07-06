@@ -4,7 +4,7 @@ const metadata: typeof import("music-metadata") = require("music-metadata");
 import Constants from "../Constants";
 import LimitedReadWriteStream from "../util/LimitedReadWriteStream";
 
-const mimeRegex = /^(audio|video)\/(.+)$/;
+const mimeRegex = /(^(audio|video)\/(.+)$)|(^application\/ogg$)/;
 
 async function getHTTPAsSource(resource: string) {
 	type ExtraData = { title?: string; author?: string; stream: boolean; probe: string }

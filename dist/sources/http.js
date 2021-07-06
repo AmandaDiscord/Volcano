@@ -6,7 +6,7 @@ const centra_1 = __importDefault(require("centra"));
 const metadata = require("music-metadata");
 const Constants_1 = __importDefault(require("../Constants"));
 const LimitedReadWriteStream_1 = __importDefault(require("../util/LimitedReadWriteStream"));
-const mimeRegex = /^(audio|video)\/(.+)$/;
+const mimeRegex = /(^(audio|video)\/(.+)$)|(^application\/ogg$)/;
 async function getHTTPAsSource(resource) {
     return centra_1.default(resource, "get").header(Constants_1.default.baseHTTPRequestHeaders).compress().stream().send().then(async (res) => {
         var _a;

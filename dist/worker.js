@@ -4,20 +4,24 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const worker_threads_1 = require("worker_threads");
+const path_1 = __importDefault(require("path"));
+const fs_1 = __importDefault(require("fs"));
 const Discord = require("@discordjs/voice");
 const encoding = require("@lavalink/encoding");
 const youtube_dl_exec_1 = require("youtube-dl-exec");
+const soundcloud_scraper_1 = __importDefault(require("soundcloud-scraper"));
+const centra_1 = __importDefault(require("centra"));
 if (!worker_threads_1.parentPort)
     throw new Error("THREAD_IS_PARENT");
 const parentPort = worker_threads_1.parentPort;
 const Constants_1 = __importDefault(require("./Constants"));
 const queues = new Map();
 const methodMap = new Map();
-const reportInterval = setInterval(async () => {
+const reportInterval = setInterval(() => {
     if (!queues.size)
         return;
     for (const queue of queues.values()) {
-        const state = await queue.state;
+        const state = queue.state;
         if (!queue.paused && state.connected)
             parentPort.postMessage({ op: Constants_1.default.workerOPCodes.MESSAGE, data: { op: Constants_1.default.OPCodes.PLAYER_UPDATE, guildId: queue.guildID, state: state }, clientID: queue.clientID });
     }
@@ -39,12 +43,26 @@ const codeReasons = {
     4015: "The server crashed. Our bad! Try resuming.",
     4016: "We didn't recognize your encryption."
 };
+const keyDir = path_1.default.join(__dirname, "../soundcloud.txt");
+let APIKey;
+if (fs_1.default.existsSync(keyDir)) {
+    APIKey = fs_1.default.readFileSync(keyDir, { encoding: "utf-8" });
+}
+else {
+    soundcloud_scraper_1.default.keygen(true).then(key => {
+        if (!key)
+            throw new Error("SOUNDCLOUD_KEY_NO_CREATE");
+        APIKey = key;
+        fs_1.default.writeFileSync(keyDir, key, { encoding: "utf-8" });
+    });
+}
 class Queue {
     constructor(connection, clientID, guildID) {
         this.tracks = new Array();
         this.audioPlayer = Discord.createAudioPlayer();
         this.paused = false;
         this.current = null;
+        this.stopping = false;
         this.connection = connection;
         this.clientID = clientID;
         this.guildID = guildID;
@@ -81,7 +99,9 @@ class Queue {
         this.audioPlayer.on("stateChange", async (oldState, newState) => {
             if (newState.status === Discord.AudioPlayerStatus.Idle && oldState.status !== Discord.AudioPlayerStatus.Idle) {
                 this.current = null;
-                parentPort.postMessage({ op: Constants_1.default.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackEndEvent", guildId: this.guildID, reason: "FINISHED" }, clientID: this.clientID });
+                if (!this.stopping)
+                    parentPort.postMessage({ op: Constants_1.default.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackEndEvent", guildId: this.guildID, reason: "FINISHED" }, clientID: this.clientID });
+                this.stopping = false;
                 this._nextSong();
                 await new Promise((res, rej) => {
                     let timer = void 0;
@@ -137,20 +157,49 @@ class Queue {
             return;
         const meta = this.tracks[0];
         const decoded = encoding.decode(meta.track);
-        const resource = await new Promise((resolve, reject) => {
-            const sub = youtube_dl_exec_1.raw(decoded.uri, { o: "-", q: "", f: "bestaudio[ext=webm+acodec=opus+asr=48000]/bestaudio", r: "100K" }, { stdio: ["ignore", "pipe", "ignore"] });
-            if (!sub.stdout)
-                return reject(new Error("No stdout"));
-            const stream = sub.stdout;
-            const onError = (error) => {
-                if (!sub.killed)
+        if (!decoded.uri)
+            return this._nextSong();
+        const resource = await new Promise(async (resolve, reject) => {
+            const onError = (error, stream, sub) => {
+                if (sub && !sub.killed && typeof sub.kill === "function")
                     sub.kill();
                 stream.resume();
                 return reject(error);
             };
-            sub.once("spawn", () => {
-                Discord.demuxProbe(stream).then(probe => resolve(Discord.createAudioResource(probe.stream, { metadata: decoded, inputType: probe.type, inlineVolume: true }))).catch(onError);
-            }).catch(onError);
+            const demux = (s, sub) => {
+                Discord.demuxProbe(s).then(probe => resolve(Discord.createAudioResource(probe.stream, { metadata: decoded, inputType: probe.type, inlineVolume: true }))).catch(e => onError(e, s, sub));
+            };
+            if (decoded.source === "youtube") {
+                const sub = youtube_dl_exec_1.raw(decoded.uri, { o: "-", q: "", f: "bestaudio[ext=webm+acodec=opus+asr=48000]/bestaudio", r: "100K" }, { stdio: ["ignore", "pipe", "ignore"] });
+                if (!sub.stdout)
+                    return reject(new Error("No stdout"));
+                const stream = sub.stdout;
+                sub.once("spawn", () => demux(stream, sub)).catch(e => onError(e, stream, sub));
+            }
+            else if (decoded.source === "soundcloud") {
+                let stream;
+                const url = decoded.identifier.replace(/^O:/, "");
+                const streamURL = await soundcloud_scraper_1.default.Util.fetchSongStreamURL(url, APIKey);
+                if (url.endsWith("/hls"))
+                    stream = await soundcloud_scraper_1.default.StreamDownloader.downloadHLS(streamURL);
+                else
+                    stream = await soundcloud_scraper_1.default.StreamDownloader.downloadProgressive(streamURL);
+                try {
+                    demux(stream);
+                }
+                catch (e) {
+                    onError(e, stream);
+                }
+            }
+            else {
+                const stream = await centra_1.default(decoded.uri, "get").header(Constants_1.default.baseHTTPRequestHeaders).compress().stream().send();
+                try {
+                    demux(stream);
+                }
+                catch (e) {
+                    onError(e, stream);
+                }
+            }
         }).catch(e => {
             console.log(e);
             this._nextSong();
@@ -170,9 +219,6 @@ class Queue {
         if (track.replace)
             this.replace();
     }
-    skip() {
-        this.audioPlayer.stop();
-    }
     replace() {
         parentPort.postMessage({ op: Constants_1.default.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackEndEvent", guildId: this.guildID, reason: "REPLACED" }, clientID: this.clientID });
         this._nextSong();
@@ -184,12 +230,13 @@ class Queue {
         this.paused = !this.audioPlayer.unpause();
     }
     stop(destroyed) {
-        this.tracks.length = 0;
+        this.stopping = true;
         this.audioPlayer.stop(true);
         if (!destroyed)
             parentPort.postMessage({ op: Constants_1.default.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackEndEvent", guildId: this.guildID, reason: "STOPPED" }, clientID: this.clientID });
     }
     destroy() {
+        this.tracks.length = 0;
         this.stop(true);
         this.connection.destroy();
         queues.delete(`${this.clientID}.${this.guildID}`);
@@ -215,13 +262,11 @@ parentPort.on("message", async (packet) => {
         switch (packet.data.op) {
             case "play": {
                 let q;
-                let newQueue = false;
                 if (!queues.has(`${userID}.${guildID}`)) {
                     if (packet.broadcasted)
                         return parentPort.postMessage({ op: Constants_1.default.workerOPCodes.REPLY, data: false, threadID: packet.threadID });
                     const voiceConnection = new Discord.VoiceConnection({ channelId: "", guildId: guildID, selfDeaf: false, selfMute: false }, { adapterCreator: voiceAdapterCreator(userID, guildID) });
                     q = new Queue(voiceConnection, userID, guildID);
-                    newQueue = true;
                     queues.set(`${userID}.${guildID}`, q);
                     parentPort.postMessage({ op: Constants_1.default.workerOPCodes.VOICE_SERVER, data: { clientID: userID, guildId: guildID } });
                 }
@@ -231,7 +276,7 @@ parentPort.on("message", async (packet) => {
                     q = queues.get(`${userID}.${guildID}`);
                 }
                 q.queue({ track: packet.data.track, start: Number(packet.data.startTime || "0"), end: Number(packet.data.endTime || "0"), volume: Number(packet.data.volume || "100"), replace: !packet.data.noReplace, pause: packet.data.pause || false });
-                if (newQueue)
+                if (q.tracks.length === 1)
                     q.play();
                 break;
             }
