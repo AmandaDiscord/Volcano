@@ -8,7 +8,7 @@ exports.defaultOptions = {
         }
     },
     server: {
-        port: 2333,
+        port: process.env.PORT || 2333,
         address: "0.0.0.0"
     },
     lavalink: {
