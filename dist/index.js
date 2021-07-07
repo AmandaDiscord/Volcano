@@ -25,8 +25,14 @@ const pool = new ThreadPool_1.default({
     size: cpuCount,
     dir: path_1.default.join(__dirname, "./worker.js")
 });
-const cfgyml = fs_1.default.readFileSync(path_1.default.join(process.cwd(), "./application.yml"), { encoding: "utf-8" });
-const cfgparsed = yaml_1.default.parse(cfgyml);
+const configDir = path_1.default.join(process.cwd(), "./application.yml");
+let cfgparsed;
+if (fs_1.default.existsSync(configDir)) {
+    const cfgyml = fs_1.default.readFileSync(configDir, { encoding: "utf-8" });
+    cfgparsed = yaml_1.default.parse(cfgyml);
+}
+else
+    cfgparsed = {};
 const config = mixin_deep_1.default({}, Constants_1.default.defaultOptions, cfgparsed);
 const rootLog = config.logging.level.root === "WARN" ? Logger_1.default.warn : config.logging.level.root === "ERROR" ? Logger_1.default.error : Logger_1.default.info;
 const llLog = config.logging.level.lavalink === "WARN" ? Logger_1.default.warn : config.logging.level.lavalink === "ERROR" ? Logger_1.default.error : Logger_1.default.info;

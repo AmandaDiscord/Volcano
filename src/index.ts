@@ -30,9 +30,16 @@ const pool = new ThreadPool({
 	dir: path.join(__dirname, "./worker.js")
 });
 
-const cfgyml = fs.readFileSync(path.join(process.cwd(), "./application.yml"), { encoding: "utf-8" });
-const cfgparsed: import("./types").LavaLinkConfig = yaml.parse(cfgyml);
+const configDir = path.join(process.cwd(), "./application.yml");
+let cfgparsed: import("./types").LavaLinkConfig;
+
+if (fs.existsSync(configDir)) {
+	const cfgyml = fs.readFileSync(configDir, { encoding: "utf-8" });
+	cfgparsed = yaml.parse(cfgyml);
+} else cfgparsed = {};
+
 const config = mixin({}, Constants.defaultOptions, cfgparsed);
+
 
 const rootLog = config.logging.level.root === "WARN" ? logger.warn : config.logging.level.root === "ERROR" ? logger.error : logger.info;
 const llLog = config.logging.level.lavalink === "WARN" ? logger.warn : config.logging.level.lavalink === "ERROR" ? logger.error : logger.info;
