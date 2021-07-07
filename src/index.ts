@@ -265,11 +265,14 @@ const serverLoopInterval = setInterval(async () => {
 const IDRegex = /(ytsearch:)?(scsearch:)?(.+)/;
 
 server.use((req, res, next) => {
-	if (config.lavalink.server.password && (!req.headers.authorization || req.headers.authorization !== String(config.lavalink.server.password))) return res.status(401).send("Unauthorized");
+	if (req.path !== "/" && req.path !== "/wakemydyno.txt" && config.lavalink.server.password && (!req.headers.authorization || req.headers.authorization !== String(config.lavalink.server.password))) return res.status(401).send("Unauthorized");
 	next();
 });
 
 const soundCloudURL = new URL(Constants.baseSoundcloudURL);
+
+server.get("/", (req, res) => res.status(200).send("Ok boomer."));
+server.get("/wakemydyno.txt", (req, res) => res.status(200).send("Hi. Thank you :)"));
 
 server.get("/loadtracks", async (request, response) => {
 	const identifier = request.query.identifier as string | undefined;
