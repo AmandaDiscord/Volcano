@@ -100,7 +100,7 @@ async function getStats() {
 function socketHeartbeat() {
     this.isAlive = true;
 }
-function noop() { }
+function noop() { void 0; }
 ws.on("headers", (headers, request) => {
     headers.push(`Session-Resumed: ${!!request.headers["resume-key"] && socketDeleteTimeouts.has(request.headers["resume-key"])}`, "Lavalink-Major-Version: 3");
 });
@@ -172,12 +172,14 @@ async function onClientMessage(socket, data, userID) {
             console.log(responses);
             if (!responses.includes(true))
                 pool.execute(pl);
-            return playerMap.set(`${userID}.${msg.guildId}`, socket);
+            void playerMap.set(`${userID}.${msg.guildId}`, socket);
+            break;
         }
         case "voiceUpdate": {
             voiceServerStates.set(`${userID}.${msg.guildId}`, { clientID: userID, guildId: msg.guildId, sessionId: msg.sessionId, event: msg.event });
             setTimeout(() => voiceServerStates.delete(`${userID}.${msg.guildId}`), 20000);
-            return pool.broadcast({ op: Constants_1.default.workerOPCodes.VOICE_SERVER, data: voiceServerStates.get(`${userID}.${msg.guildId}`) });
+            void pool.broadcast({ op: Constants_1.default.workerOPCodes.VOICE_SERVER, data: voiceServerStates.get(`${userID}.${msg.guildId}`) });
+            break;
         }
         case "stop":
         case "pause":
@@ -185,7 +187,8 @@ async function onClientMessage(socket, data, userID) {
         case "filters": {
             if (!msg.guildId)
                 return;
-            return pool.broadcast(pl);
+            void pool.broadcast(pl);
+            break;
         }
         case "configureResuming": {
             if (!msg.key)
@@ -196,6 +199,7 @@ async function onClientMessage(socket, data, userID) {
                 found.resumeKey = msg.key;
                 found.resumeTimeout = msg.timeout || 60;
             }
+            break;
         }
     }
 }

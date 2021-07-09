@@ -40,17 +40,17 @@ if (fs.existsSync(configDir)) {
 
 const config = mixin({}, Constants.defaultOptions, cfgparsed);
 
-const rootLog: Function = logger[config.logging.level.root?.toLowerCase?.()] ?? logger.info;
-const llLog: Function = logger[config.logging.level.lavalink?.toLowerCase?.()] ?? logger.info;
+const rootLog: typeof logger.info = logger[config.logging.level.root?.toLowerCase?.()] ?? logger.info;
+const llLog: typeof logger.info = logger[config.logging.level.lavalink?.toLowerCase?.()] ?? logger.info;
 
 if (config.spring.main["banner-mode"] === "log")
 	rootLog("\n" +
-                "\x1b[33m__      __   _                                \x1b[97moOOOOo\n" +
-                "\x1b[33m\\ \\    / /  | |                             \x1b[97mooOOoo  oo\n" +
-                "\x1b[33m \\ \\  / /__ | | ___ __ _ _ __   ___        \x1b[0m/\x1b[31mvvv\x1b[0m\\    \x1b[97mo\n" +
-                "\x1b[33m  \\ \\/ / _ \\| |/ __/ _` | '_ \\ / _ \\      \x1b[0m/\x1b[31mV V V\x1b[0m\\\n" +
-                "\x1b[33m   \\  / (_) | | (_| (_| | | | | (_) |    \x1b[0m/   \x1b[31mV   \x1b[0m\\\n" +
-                "\x1b[33m    \\/ \\___/|_|\\___\\__,_|_| |_|\\___/  \x1b[0m/\\/     \x1b[31mVV  \x1b[0m\\");
+					"\x1b[33m__      __   _                                \x1b[97moOOOOo\n" +
+					"\x1b[33m\\ \\    / /  | |                             \x1b[97mooOOoo  oo\n" +
+					"\x1b[33m \\ \\  / /__ | | ___ __ _ _ __   ___        \x1b[0m/\x1b[31mvvv\x1b[0m\\    \x1b[97mo\n" +
+					"\x1b[33m  \\ \\/ / _ \\| |/ __/ _` | '_ \\ / _ \\      \x1b[0m/\x1b[31mV V V\x1b[0m\\\n" +
+					"\x1b[33m   \\  / (_) | | (_| (_| | | | | (_) |    \x1b[0m/   \x1b[31mV   \x1b[0m\\\n" +
+					"\x1b[33m    \\/ \\___/|_|\\___\\__,_|_| |_|\\___/  \x1b[0m/\\/     \x1b[31mVV  \x1b[0m\\");
 
 rootLog(`Starting on ${os.hostname()} with PID ${process.pid} (${__filename} started by ${os.userInfo().username} in ${process.cwd()})`);
 rootLog(`Using ${cpuCount} worker threads in pool`);
@@ -115,7 +115,7 @@ function socketHeartbeat(): void {
 	this.isAlive = true;
 }
 
-function noop(): void {}
+function noop(): void { void 0; }
 
 ws.on("headers", (headers, request) => {
 	headers.push(`Session-Resumed: ${!!request.headers["resume-key"] && socketDeleteTimeouts.has(request.headers["resume-key"] as string)}`, "Lavalink-Major-Version: 3");
@@ -175,58 +175,62 @@ ws.on("connection", async (socket, request) => {
 	socket.once("error", () => onClientClose(socket, userID, 1000, { ip: request.socket.remoteAddress!, port: request.socket.remotePort! }));
 });
 
-async function onClientMessage(socket: WebSocket, data: WebSocket.Data, userID: string): Array<any> | undefined {
-      const buf: string | Buffer = Array.isArray(data)
-      ? Buffer.concat(data)
-      : (data instanceof ArrayBuffer)
-      ? Buffer.from(data)
-      : data;
+async function onClientMessage(socket: WebSocket, data: WebSocket.Data, userID: string): Promise<void> {
+	const buf: string | Buffer = Array.isArray(data)
+		? Buffer.concat(data)
+		: (data instanceof ArrayBuffer)
+			? Buffer.from(data)
+			: data;
 
-      const d: string = buf.toString();
-      const msg: import("./types").InboundPayload = JSON.parse(d);
+	const d: string = buf.toString();
+	const msg: import("./types").InboundPayload = JSON.parse(d);
 
-      llLog(msg);
+	llLog(msg);
 
-      const pl = { op: Constants.workerOPCodes.MESSAGE, data: Object.assign(msg, { clientID: userID }) };
+	const pl = { op: Constants.workerOPCodes.MESSAGE, data: Object.assign(msg, { clientID: userID }) };
 
-      switch (msg.op) {
-              case "play": {
-                      if (!msg.guildId || !msg.track) return;
+	switch (msg.op) {
+	case "play": {
+		if (!msg.guildId || !msg.track) return;
 
-                      const responses: Array<any> = await pool.broadcast(pl);
-                      console.log(responses);
+		const responses: Array<any> = await pool.broadcast(pl);
+		console.log(responses);
 
-                      if (!responses.includes(true)) pool.execute(pl);
+		if (!responses.includes(true)) pool.execute(pl);
 
-                      return playerMap.set(`${userID}.${msg.guildId}`, socket);
-              }
-              case "voiceUpdate": {
-                      voiceServerStates.set(`${userID}.${msg.guildId}`, { clientID: userID, guildId: msg.guildId as string, sessionId: msg.sessionId as string, event: msg.event as any });
+		void playerMap.set(`${userID}.${msg.guildId}`, socket);
+		break;
+	}
+	case "voiceUpdate": {
+		voiceServerStates.set(`${userID}.${msg.guildId}`, { clientID: userID, guildId: msg.guildId as string, sessionId: msg.sessionId as string, event: msg.event as any });
 
-                      setTimeout(() => voiceServerStates.delete(`${userID}.${msg.guildId}`), 20000);
+		setTimeout(() => voiceServerStates.delete(`${userID}.${msg.guildId}`), 20000);
 
-                      return pool.broadcast({ op: Constants.workerOPCodes.VOICE_SERVER, data: voiceServerStates.get(`${userID}.${msg.guildId}`) });
-              }
-              case "stop":
-              case "pause":
-              case "destroy":
-              case "filters": {
-                      if (!msg.guildId) return;
+		void pool.broadcast({ op: Constants.workerOPCodes.VOICE_SERVER, data: voiceServerStates.get(`${userID}.${msg.guildId}`) });
+		break;
+	}
+	case "stop":
+	case "pause":
+	case "destroy":
+	case "filters": {
+		if (!msg.guildId) return;
 
-                      return pool.broadcast(pl);
-              }
-              case "configureResuming": {
-                      if (!msg.key) return;
+		void pool.broadcast(pl);
+		break;
+	}
+	case "configureResuming": {
+		if (!msg.key) return;
 
-                      const entry = connections.get(userID);
-                      const found = entry!.find(i => i.socket === socket);
+		const entry = connections.get(userID);
+		const found = entry!.find(i => i.socket === socket);
 
-                      if (found) {
-                              found.resumeKey = msg.key as string;
-                              found.resumeTimeout = msg.timeout || 60;
-                      }
-              }
-      }
+		if (found) {
+			found.resumeKey = msg.key as string;
+			found.resumeTimeout = msg.timeout || 60;
+		}
+		break;
+	}
+	}
 }
 
 async function onClientClose(socket: WebSocket, userID: string, closeCode: number, extra: { ip: string; port: number }) {
@@ -313,7 +317,7 @@ server.get("/loadtracks", async (request, response) => {
 		playlistInfo: {},
 		tracks: [] as Array<any>
 	};
-	let playlist: boolean = false;
+	let playlist = false;
 
 	if (!identifier || typeof identifier !== "string") return Util.standardErrorHandler("Invalid or no identifier query string provided.", response, payload, llLog);
 
