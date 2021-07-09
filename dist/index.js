@@ -2,6 +2,7 @@
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
+var _a, _b, _c, _d, _e, _f;
 Object.defineProperty(exports, "__esModule", { value: true });
 const startTime = Date.now();
 const http_1 = __importDefault(require("http"));
@@ -34,9 +35,9 @@ if (fs_1.default.existsSync(configDir)) {
 else
     cfgparsed = {};
 const config = mixin_deep_1.default({}, Constants_1.default.defaultOptions, cfgparsed);
-const rootLog = config.logging.level.root === "WARN" ? Logger_1.default.warn : config.logging.level.root === "ERROR" ? Logger_1.default.error : Logger_1.default.info;
-const llLog = config.logging.level.lavalink === "WARN" ? Logger_1.default.warn : config.logging.level.lavalink === "ERROR" ? Logger_1.default.error : Logger_1.default.info;
-if (config.spring.main["banner-mode"] === "log") {
+const rootLog = (_c = Logger_1.default[(_b = (_a = config.logging.level.root) === null || _a === void 0 ? void 0 : _a.toLowerCase) === null || _b === void 0 ? void 0 : _b.call(_a)]) !== null && _c !== void 0 ? _c : Logger_1.default.info;
+const llLog = (_f = Logger_1.default[(_e = (_d = config.logging.level.lavalink) === null || _d === void 0 ? void 0 : _d.toLowerCase) === null || _e === void 0 ? void 0 : _e.call(_d)]) !== null && _f !== void 0 ? _f : Logger_1.default.info;
+if (config.spring.main["banner-mode"] === "log")
     rootLog("\n" +
         "\x1b[33m__      __   _                                \x1b[97moOOOOo\n" +
         "\x1b[33m\\ \\    / /  | |                             \x1b[97mooOOoo  oo\n" +
@@ -44,7 +45,6 @@ if (config.spring.main["banner-mode"] === "log") {
         "\x1b[33m  \\ \\/ / _ \\| |/ __/ _` | '_ \\ / _ \\      \x1b[0m/\x1b[31mV V V\x1b[0m\\\n" +
         "\x1b[33m   \\  / (_) | | (_| (_| | | | | (_) |    \x1b[0m/   \x1b[31mV   \x1b[0m\\\n" +
         "\x1b[33m    \\/ \\___/|_|\\___\\__,_|_| |_|\\___/  \x1b[0m/\\/     \x1b[31mVV  \x1b[0m\\");
-}
 rootLog(`Starting on ${os_1.default.hostname()} with PID ${process.pid} (${__filename} started by ${os_1.default.userInfo().username} in ${process.cwd()})`);
 rootLog(`Using ${cpuCount} worker threads in pool`);
 const server = express_1.default();
@@ -54,13 +54,11 @@ const connections = new Map();
 const voiceServerStates = new Map();
 const socketDeleteTimeouts = new Map();
 const playerMap = new Map();
-pool.on("message", (id, msg) => {
-    const guildID = msg.data.guildId;
-    const userID = msg.clientID;
-    const socket = playerMap.get(`${userID}.${guildID}`);
-    const entry = [...connections.values()].find(i => i.find(c => c.socket === socket));
-    const rKey = entry === null || entry === void 0 ? void 0 : entry.find(c => c.socket);
-    if (entry && rKey && rKey.resumeKey && socketDeleteTimeouts.has(rKey.resumeKey))
+pool.on("message", (_, msg) => {
+    const socket = playerMap.get(`${msg.clientID}.${msg.data.guildId}`);
+    const entry = [...connections.values()].find(i => i.some(c => c.socket === socket));
+    const rKey = entry === null || entry === void 0 ? void 0 : entry.find((c) => c.socket);
+    if ((rKey === null || rKey === void 0 ? void 0 : rKey.resumeKey) && socketDeleteTimeouts.has(rKey.resumeKey))
         socketDeleteTimeouts.get(rKey.resumeKey).events.push(msg.data);
     socket === null || socket === void 0 ? void 0 : socket.send(JSON.stringify(msg.data));
 });
@@ -102,7 +100,7 @@ async function getStats() {
 function socketHeartbeat() {
     this.isAlive = true;
 }
-function noop() { void 0; }
+function noop() { }
 ws.on("headers", (headers, request) => {
     headers.push(`Session-Resumed: ${!!request.headers["resume-key"] && socketDeleteTimeouts.has(request.headers["resume-key"])}`, "Lavalink-Major-Version: 3");
 });
@@ -110,7 +108,7 @@ http.on("upgrade", (request, socket, head) => {
     llLog(`Incoming connection from /${request.socket.remoteAddress}:${request.socket.remotePort}`);
     const temp401 = "HTTP/1.1 401 Unauthorized\r\n\r\n";
     const passwordIncorrect = (config.lavalink.server.password !== undefined && request.headers.authorization !== String(config.lavalink.server.password));
-    const invalidUserID = (!request.headers["user-id"] || Array.isArray(request.headers["user-id"]) || !request.headers["user-id"].match(/^\d+$/));
+    const invalidUserID = (!request.headers["user-id"] || Array.isArray(request.headers["user-id"]) || !/^\d+$/.test(request.headers["user-id"]));
     if (passwordIncorrect || invalidUserID)
         return socket.write(temp401, () => socket.destroy());
     const userID = request.headers["user-id"];
@@ -129,11 +127,10 @@ http.on("upgrade", (request, socket, head) => {
             }
             else
                 connections.set(userID, [{ socket: s, resumeKey: null, resumeTimeout: 60 }]);
-            for (const event of resume.events) {
+            for (const event of resume.events)
                 s.send(JSON.stringify(event));
-            }
             llLog(`Resumed session with key ${request.headers["resume-key"]}`);
-            llLog(`Replaying ${resume.events.length} events`);
+            llLog(`Replaying ${resume.events.length.toLocaleString()} events`);
             resume.events.length = 0;
             return ws.emit("connection", s, request);
         }
@@ -158,44 +155,47 @@ ws.on("connection", async (socket, request) => {
     socket.once("error", () => onClientClose(socket, userID, 1000, { ip: request.socket.remoteAddress, port: request.socket.remotePort }));
 });
 async function onClientMessage(socket, data, userID) {
-    let buf;
-    if (Array.isArray(data))
-        buf = Buffer.concat(data);
-    else if (data instanceof ArrayBuffer)
-        buf = Buffer.from(data);
-    else
-        buf = data;
+    const buf = Array.isArray(data)
+        ? Buffer.concat(data)
+        : (data instanceof ArrayBuffer)
+            ? Buffer.from(data)
+            : data;
     const d = buf.toString();
     const msg = JSON.parse(d);
     llLog(msg);
     const pl = { op: Constants_1.default.workerOPCodes.MESSAGE, data: Object.assign(msg, { clientID: userID }) };
-    if (msg.op === "play") {
-        if (!msg.guildId || !msg.track)
-            return;
-        const responses = await pool.broadcast(pl);
-        console.log(responses);
-        if (!responses.includes(true))
-            pool.execute(pl);
-        return playerMap.set(`${userID}.${msg.guildId}`, socket);
-    }
-    else if (msg.op === "voiceUpdate") {
-        voiceServerStates.set(`${userID}.${msg.guildId}`, { clientID: userID, guildId: msg.guildId, sessionId: msg.sessionId, event: msg.event });
-        setTimeout(() => voiceServerStates.delete(`${userID}.${msg.guildId}`), 20000);
-        return pool.broadcast({ op: Constants_1.default.workerOPCodes.VOICE_SERVER, data: voiceServerStates.get(`${userID}.${msg.guildId}`) });
-    }
-    else if (msg.op === "stop" || msg.op === "pause" || msg.op === "destroy" || msg.op === "filters") {
-        if (!msg.guildId)
-            return;
-        return pool.broadcast(pl);
-    }
-    else if (msg.op === "configureResuming") {
-        if (!msg.key)
-            return;
-        const entry = connections.get(userID);
-        const found = entry.find(i => i.socket === socket);
-        if (found) {
-            found.resumeKey = msg.key;
-            found.resumeTimeout = msg.timeout || 60;
+    switch (msg.op) {
+        case "play": {
+            if (!msg.guildId || !msg.track)
+                return;
+            const responses = await pool.broadcast(pl);
+            console.log(responses);
+            if (!responses.includes(true))
+                pool.execute(pl);
+            return playerMap.set(`${userID}.${msg.guildId}`, socket);
+        }
+        case "voiceUpdate": {
+            voiceServerStates.set(`${userID}.${msg.guildId}`, { clientID: userID, guildId: msg.guildId, sessionId: msg.sessionId, event: msg.event });
+            setTimeout(() => voiceServerStates.delete(`${userID}.${msg.guildId}`), 20000);
+            return pool.broadcast({ op: Constants_1.default.workerOPCodes.VOICE_SERVER, data: voiceServerStates.get(`${userID}.${msg.guildId}`) });
+        }
+        case "stop":
+        case "pause":
+        case "destroy":
+        case "filters": {
+            if (!msg.guildId)
+                return;
+            return pool.broadcast(pl);
+        }
+        case "configureResuming": {
+            if (!msg.key)
+                return;
+            const entry = connections.get(userID);
+            const found = entry.find(i => i.socket === socket);
+            if (found) {
+                found.resumeKey = msg.key;
+                found.resumeTimeout = msg.timeout || 60;
+            }
         }
     }
 }
@@ -209,8 +209,7 @@ async function onClientClose(socket, userID, closeCode, extra) {
         if (found.resumeKey) {
             llLog(`Connection closed from /${extra.ip}:${extra.port} with status CloseStatus[code=${closeCode}, reason=destroy] -- Session can be resumed within the next ${found.resumeTimeout} seconds with key ${found.resumeKey}`);
             const timeout = setTimeout(async () => {
-                const rk = entry.find(e => e.resumeKey === found.resumeKey);
-                const index = entry.indexOf(rk);
+                const index = entry.findIndex(e => e.resumeKey === found.resumeKey);
                 if (index !== -1)
                     entry.splice(index, 1);
                 socketDeleteTimeouts.delete(found.resumeKey);
@@ -220,7 +219,7 @@ async function onClientClose(socket, userID, closeCode, extra) {
                 const count = results.reduce((acc, cur) => acc + cur, 0);
                 llLog(`Shutting down ${count} playing players`);
             }, (found.resumeTimeout || 60) * 1000);
-            socketDeleteTimeouts.set(found.resumeKey, { timeout: timeout, events: [] });
+            socketDeleteTimeouts.set(found.resumeKey, { timeout, events: [] });
         }
         else {
             const index = entry.indexOf(found);
@@ -234,10 +233,9 @@ async function onClientClose(socket, userID, closeCode, extra) {
             llLog(`Shutting down ${count} playing players`);
         }
     }
-    for (const key of voiceServerStates.keys()) {
+    for (const key of voiceServerStates.keys())
         if (key.startsWith(userID))
             voiceServerStates.delete(key);
-    }
 }
 const serverLoopInterval = setInterval(async () => {
     const stats = await getStats();
@@ -289,11 +287,11 @@ server.get("/loadtracks", async (request, response) => {
         const data = await soundcloud_1.default(resource, isSoundcloudSearch).catch(e => Util_1.default.standardErrorHandler(e, response, payload, llLog));
         if (!data)
             return;
-        const tracks = data.map(info => { return { track: encoding.encode(Object.assign({ flags: 1, version: 2, source: "soundcloud" }, info, { position: BigInt(info.position), length: BigInt(Math.round(info.length)) })), info: info }; });
+        const tracks = data.map(info => ({ track: encoding.encode(Object.assign({ flags: 1, version: 2, source: "soundcloud" }, info, { position: BigInt(info.position), length: BigInt(Math.round(info.length)) })), info }));
         payload.tracks = tracks;
         if (tracks.length === 0)
             return Util_1.default.standardErrorHandler("Could not extract Soundcloud info.", response, payload, llLog, "NO_MATCHES");
-        else if (tracks.length === 1)
+        else
             llLog(`Loaded track ${tracks[0].info.title}`);
     }
     else if (url && !url.hostname.includes("youtu")) {
@@ -322,8 +320,8 @@ server.get("/loadtracks", async (request, response) => {
         const data = await youtube_1.default(resource, isYouTubeSearch).catch(e => Util_1.default.standardErrorHandler(e, response, payload, llLog));
         if (!data)
             return;
-        const infos = data.entries.map(i => { return { identifier: i.id, author: i.uploader, length: Math.round(i.duration * 1000), isStream: i.duration === 0, isSeekable: i.duration !== 0, position: 0, title: i.title, uri: `https://youtube.com/watch?v=${i.id}` }; });
-        const tracks = infos.map(info => { return { track: encoding.encode(Object.assign({ flags: 1, version: 2, source: "youtube" }, info, { position: BigInt(info.position), length: BigInt(Math.round(info.length)) })), info: info }; });
+        const infos = data.entries.map(i => ({ identifier: i.id, author: i.uploader, length: Math.round(i.duration * 1000), isStream: i.duration === 0, isSeekable: i.duration !== 0, position: 0, title: i.title, uri: `https://youtube.com/watch?v=${i.id}` }));
+        const tracks = infos.map(info => ({ track: encoding.encode(Object.assign({ flags: 1, version: 2, source: "youtube" }, info, { position: BigInt(info.position), length: BigInt(Math.round(info.length)) })), info }));
         if (data.plData) {
             payload.playlistInfo = data.plData;
             playlist = true;
@@ -343,9 +341,9 @@ server.get("/decodetracks", (request, response) => {
     const track = request.query.track;
     if (!track || !(typeof track === "string" || (Array.isArray(track) && track.every(i => typeof i === "string"))))
         return Util_1.default.standardErrorHandler("Invalid or no track query string provided.", response, {}, llLog);
-    let data = undefined;
+    let data;
     if (Array.isArray(track))
-        data = track.map(i => { return { track: i, info: convertDecodedTrackToResponse(encoding.decode(i)) }; });
+        data = track.map(i => ({ track: i, info: convertDecodedTrackToResponse(encoding.decode(i)) }));
     else
         data = convertDecodedTrackToResponse(encoding.decode(track));
     return response.status(200).send(JSON.stringify(data));
@@ -370,9 +368,8 @@ http.listen(config.server.port, config.server.address, () => {
 ws.once("close", () => {
     clearInterval(serverLoopInterval);
     rootLog("Socket server has closed.");
-    for (const child of pool.children.values()) {
+    for (const child of pool.children.values())
         child.terminate();
-    }
 });
 process.on("unhandledRejection", (reason) => Logger_1.default.error(reason));
 process.title = "Volcano";
