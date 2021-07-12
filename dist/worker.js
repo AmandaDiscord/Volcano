@@ -115,6 +115,7 @@ class Queue {
         };
     }
     _nextSong() {
+        this.seekTime = 0;
         this.tracks.shift();
         if (!this.tracks.length)
             return;
@@ -128,7 +129,6 @@ class Queue {
             if (newState.status === Discord.AudioPlayerStatus.Idle && oldState.status !== Discord.AudioPlayerStatus.Idle) {
                 this.current = null;
                 if (!this.stopping && !this.shouldntCallFinish) {
-                    this.seekTime = 0;
                     parentPort.postMessage({ op: Constants_1.default.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackEndEvent", guildId: this.guildID, reason: "FINISHED" }, clientID: this.clientID });
                 }
                 this.stopping = false;
