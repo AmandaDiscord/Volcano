@@ -2,7 +2,7 @@ import { parentPort as parentport } from "worker_threads";
 import path from "path";
 import fs from "fs";
 
-import { FFmpeg, opus } from "prism-media";
+import { FFmpeg } from "prism-media";
 const Discord: typeof import("@discordjs/voice") = require("@discordjs/voice");
 const encoding: typeof import("@lavalink/encoding") = require("@lavalink/encoding");
 import { raw as ytdl } from "youtube-dl-exec";
@@ -188,7 +188,7 @@ class Queue {
 				if (!stream) return onError(new Error("NO_STREAM"));
 				this.shouldntCallFinish = true;
 				let final: import("stream").Readable;
-				let isOpus = false;
+				let isRaw = false;
 				if (this._filters.length) { // Don't pipe through ffmpeg if not necessary
 					const toApply = ["-i", "-", "-analyzeduration", "0", "-loglevel", "0", "-f", "s16le", "-ar", "48000", "-ac", "2"];
 					if (this.state.position && !this._filters.includes("-ss")) {
@@ -207,30 +207,20 @@ class Queue {
 					const argus = toApply.concat(this._filters);
 					const transcoder = new FFmpeg({ args: argus });
 					this.applyingFilters = false;
-					const output = stream.pipe(transcoder);
-
-					const encoder = new opus.Encoder({
-						rate: 48000,
-						channels: 2,
-						frameSize: 960
-					});
-
-					final = output.pipe(encoder);
+					final = stream.pipe(transcoder);
 
 					final.once("close", () => {
 						transcoder.destroy();
-						encoder.destroy();
 					});
 					final.once("end", () => {
 						transcoder.destroy();
-						encoder.destroy();
 					});
-					isOpus = true;
+					isRaw = true;
 				} else {
 					final = stream;
 				}
 
-				if (isOpus) resolve(Discord.createAudioResource(final, { metadata: decoded, inputType: Discord.StreamType.Opus, inlineVolume: true }));
+				if (isRaw) resolve(Discord.createAudioResource(final, { metadata: decoded, inputType: Discord.StreamType.Raw, inlineVolume: true }));
 				else Discord.demuxProbe(final).then(probe => resolve(Discord.createAudioResource(probe.stream, { metadata: decoded, inputType: probe.type, inlineVolume: true }))).catch(e => onError(e));
 			};
 			if (decoded.source === "youtube") {
