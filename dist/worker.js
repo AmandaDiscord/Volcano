@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const worker_threads_1 = require("worker_threads");
 const path_1 = __importDefault(require("path"));
 const fs_1 = __importDefault(require("fs"));
+const prism_media_1 = require("prism-media");
 const Discord = require("@discordjs/voice");
 const encoding = require("@lavalink/encoding");
 const youtube_dl_exec_1 = require("youtube-dl-exec");
@@ -59,10 +60,15 @@ else {
 class Queue {
     constructor(connection, clientID, guildID) {
         this.tracks = new Array();
-        this.audioPlayer = Discord.createAudioPlayer();
         this.paused = false;
         this.current = null;
         this.stopping = false;
+        this._filters = [];
+        this._volume = 1.0;
+        this.applyingFilters = false;
+        this.shouldntCallFinish = false;
+        this.trackPausing = false;
+        this.initial = true;
         this.connection = connection;
         this.clientID = clientID;
         this.guildID = guildID;
@@ -92,57 +98,18 @@ class Queue {
                 }
                 catch {
                     if (this.connection.state.status !== Discord.VoiceConnectionStatus.Destroyed)
-                        this.stop();
+                        this.destroy();
                 }
             }
         });
-        this.audioPlayer.on("stateChange", async (oldState, newState) => {
-            if (newState.status === Discord.AudioPlayerStatus.Idle && oldState.status !== Discord.AudioPlayerStatus.Idle) {
-                this.current = null;
-                if (!this.stopping)
-                    parentPort.postMessage({ op: Constants_1.default.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackEndEvent", guildId: this.guildID, reason: "FINISHED" }, clientID: this.clientID });
-                this.stopping = false;
-                this._nextSong();
-                await new Promise((res, rej) => {
-                    let timer = void 0;
-                    const fn = () => {
-                        if (this.audioPlayer.state.status !== Discord.AudioPlayerStatus.Playing)
-                            return;
-                        if (timer)
-                            clearTimeout(timer);
-                        this.audioPlayer.removeListener("stateChange", fn);
-                        res(void 0);
-                    };
-                    timer = setTimeout(() => {
-                        if (this.current)
-                            res(void 0);
-                        else
-                            rej(new Error("TRACK_STUCK"));
-                        this.audioPlayer.removeListener("stateChange", fn);
-                    }, 20000);
-                    this.audioPlayer.on("stateChange", fn);
-                }).catch(() => {
-                    if (!this.tracks.length)
-                        return;
-                    parentPort.postMessage({ op: Constants_1.default.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackStuckEvent", guildId: this.guildID, track: this.tracks[0].track, thresholdMs: 10000 }, clientID: this.clientID });
-                    this._nextSong();
-                });
-            }
-            else if (newState.status === Discord.AudioPlayerStatus.Playing) {
-                parentPort.postMessage({ op: Constants_1.default.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackStartEvent", guildId: this.guildID, track: this.tracks[0].track }, clientID: this.clientID });
-            }
-        });
-        this.audioPlayer.on("error", (error) => {
-            parentPort.postMessage({ op: Constants_1.default.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackExceptionEvent", guildId: this.guildID, track: this.tracks[0].track, exception: error.name, message: error.message, severity: "COMMON", cause: error.stack || new Error().stack || "Unknown" }, clientID: this.clientID });
-            this._nextSong();
-        });
-        this.connection.subscribe(this.audioPlayer);
     }
     get state() {
-        var _a;
+        var _a, _b;
+        if (this.tracks[0] && this.tracks[0].end && ((_a = this.current) === null || _a === void 0 ? void 0 : _a.playbackDuration) === this.tracks[0].end)
+            this.stop(true);
         return {
             time: Date.now(),
-            position: ((_a = this.current) === null || _a === void 0 ? void 0 : _a.playbackDuration) || 0,
+            position: ((_b = this.current) === null || _b === void 0 ? void 0 : _b.playbackDuration) || 0,
             connected: this.connection.state.status === Discord.VoiceConnectionStatus.Ready
         };
     }
@@ -152,6 +119,62 @@ class Queue {
             return;
         this.play();
     }
+    _applyPlayerEvents(player) {
+        const old = this.audioPlayer;
+        old === null || old === void 0 ? void 0 : old.removeAllListeners();
+        player.on("stateChange", async (oldState, newState) => {
+            var _a;
+            if (newState.status === Discord.AudioPlayerStatus.Idle && oldState.status !== Discord.AudioPlayerStatus.Idle) {
+                this.current = null;
+                if (!this.stopping && !this.shouldntCallFinish) {
+                    parentPort.postMessage({ op: Constants_1.default.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackEndEvent", guildId: this.guildID, reason: "FINISHED" }, clientID: this.clientID });
+                }
+                this.stopping = false;
+                this._nextSong();
+                await new Promise((res, rej) => {
+                    let timer = void 0;
+                    const fn = () => {
+                        if (player.state.status !== Discord.AudioPlayerStatus.Playing)
+                            return;
+                        if (timer)
+                            clearTimeout(timer);
+                        player.removeListener("stateChange", fn);
+                        res(void 0);
+                    };
+                    timer = setTimeout(() => {
+                        if (this.current || this.paused)
+                            res(void 0);
+                        else
+                            rej(new Error("TRACK_STUCK"));
+                        player.removeListener("stateChange", fn);
+                    }, 10000);
+                    player.on("stateChange", fn);
+                }).catch(() => {
+                    if (!this.tracks.length)
+                        return;
+                    parentPort.postMessage({ op: Constants_1.default.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackStuckEvent", guildId: this.guildID, track: this.tracks[0].track, thresholdMs: 10000 }, clientID: this.clientID });
+                    this._nextSong();
+                });
+            }
+            else if (newState.status === Discord.AudioPlayerStatus.Playing) {
+                this.audioPlayer = player;
+                (_a = this.subscription) === null || _a === void 0 ? void 0 : _a.unsubscribe();
+                this.subscription = this.connection.subscribe(player);
+                old === null || old === void 0 ? void 0 : old.stop(true);
+                if (this.trackPausing)
+                    this.pause();
+                this.trackPausing = false;
+                if (!this.shouldntCallFinish || this.initial)
+                    parentPort.postMessage({ op: Constants_1.default.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackStartEvent", guildId: this.guildID, track: this.tracks[0].track }, clientID: this.clientID });
+                this.shouldntCallFinish = false;
+                this.initial = false;
+            }
+        });
+        player.on("error", (error) => {
+            parentPort.postMessage({ op: Constants_1.default.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackExceptionEvent", guildId: this.guildID, track: this.tracks[0].track, exception: error.name, message: error.message, severity: "COMMON", cause: error.stack || new Error().stack || "Unknown" }, clientID: this.clientID });
+            this._nextSong();
+        });
+    }
     async play() {
         if (!this.tracks.length)
             return;
@@ -160,24 +183,70 @@ class Queue {
         if (!decoded.uri)
             return this._nextSong();
         const resource = await new Promise(async (resolve, reject) => {
-            const onError = (error, stream, sub) => {
+            let stream = undefined;
+            const onError = (error, sub) => {
                 if (sub && !sub.killed && typeof sub.kill === "function")
                     sub.kill();
-                stream.resume();
+                stream === null || stream === void 0 ? void 0 : stream.resume();
                 return reject(error);
             };
-            const demux = (s, sub) => {
-                Discord.demuxProbe(s).then(probe => resolve(Discord.createAudioResource(probe.stream, { metadata: decoded, inputType: probe.type, inlineVolume: true }))).catch(e => onError(e, s, sub));
+            const demux = async () => {
+                if (!stream)
+                    return onError(new Error("NO_STREAM"));
+                this.shouldntCallFinish = true;
+                let final;
+                let isOpus = false;
+                if (this._filters.length) {
+                    const toApply = ["-i", "-", "-analyzeduration", "0", "-loglevel", "0", "-f", "s16le", "-ar", "48000", "-ac", "2"];
+                    if (this.state.position && !this._filters.includes("-ss"))
+                        toApply.unshift("-ss", `${this.state.position + 2000}ms`, "-accurate_seek");
+                    else if (this._filters.includes("-ss")) {
+                        const index = this._filters.indexOf("-ss");
+                        toApply.unshift(...this._filters.slice(index, index + 2));
+                        this._filters.splice(index, 3);
+                    }
+                    else if (meta.start)
+                        toApply.unshift("-ss", `${meta.start}ms`, "-accurate_seek");
+                    if (this._filters.length)
+                        toApply.push("-af");
+                    const argus = toApply.concat(this._filters);
+                    const transcoder = new prism_media_1.FFmpeg({ args: argus });
+                    this.applyingFilters = false;
+                    const output = stream.pipe(transcoder);
+                    const encoder = new prism_media_1.opus.Encoder({
+                        rate: 48000,
+                        channels: 2,
+                        frameSize: 960
+                    });
+                    final = output.pipe(encoder);
+                    final.once("close", () => {
+                        transcoder.destroy();
+                        encoder.destroy();
+                    });
+                    final.once("end", () => {
+                        transcoder.destroy();
+                        encoder.destroy();
+                    });
+                    isOpus = true;
+                }
+                else {
+                    final = stream;
+                }
+                if (isOpus)
+                    resolve(Discord.createAudioResource(final, { metadata: decoded, inputType: Discord.StreamType.Opus, inlineVolume: true }));
+                else
+                    Discord.demuxProbe(final).then(probe => resolve(Discord.createAudioResource(probe.stream, { metadata: decoded, inputType: probe.type, inlineVolume: true }))).catch(e => onError(e));
             };
             if (decoded.source === "youtube") {
                 const sub = youtube_dl_exec_1.raw(decoded.uri, { o: "-", q: "", f: "bestaudio[ext=webm+acodec=opus+asr=48000]/bestaudio", r: "100K" }, { stdio: ["ignore", "pipe", "ignore"] });
                 if (!sub.stdout)
-                    return reject(new Error("No stdout"));
-                const stream = sub.stdout;
-                sub.once("spawn", () => demux(stream, sub)).catch(e => onError(e, stream, sub));
+                    return reject(new Error("NO_YTDL_STDOUT"));
+                stream = sub.stdout;
+                sub.once("spawn", () => demux()).catch(e => onError(e, sub));
+                stream.once("close", () => sub.kill());
+                stream.once("end", () => sub.kill());
             }
             else if (decoded.source === "soundcloud") {
-                let stream;
                 const url = decoded.identifier.replace(/^O:/, "");
                 const streamURL = await soundcloud_scraper_1.default.Util.fetchSongStreamURL(url, APIKey);
                 if (url.endsWith("/hls"))
@@ -185,19 +254,19 @@ class Queue {
                 else
                     stream = await soundcloud_scraper_1.default.StreamDownloader.downloadProgressive(streamURL);
                 try {
-                    demux(stream);
+                    await demux();
                 }
                 catch (e) {
                     onError(e, stream);
                 }
             }
             else {
-                const stream = await centra_1.default(decoded.uri, "get").header(Constants_1.default.baseHTTPRequestHeaders).compress().stream().send();
+                stream = await centra_1.default(decoded.uri, "get").header(Constants_1.default.baseHTTPRequestHeaders).compress().stream().send();
                 try {
-                    demux(stream);
+                    await demux();
                 }
                 catch (e) {
-                    onError(e, stream);
+                    onError(e);
                 }
             }
         }).catch(e => {
@@ -206,10 +275,14 @@ class Queue {
         });
         if (!resource)
             return;
+        const newPlayer = Discord.createAudioPlayer();
+        this._applyPlayerEvents(newPlayer);
         this.current = resource;
-        if (meta.volume !== 100)
-            this.volume(meta.volume / 100);
-        this.audioPlayer.play(resource);
+        if (meta.volume !== 100 || this._volume !== 1.0)
+            this.volume(meta.volume !== 100 ? meta.volume / 100 : this._volume);
+        if (meta.pause)
+            this.trackPausing = true;
+        newPlayer.play(resource);
     }
     queue(track) {
         if (track.replace)
@@ -224,14 +297,17 @@ class Queue {
         this._nextSong();
     }
     pause() {
-        this.paused = this.audioPlayer.pause(true);
+        var _a;
+        this.paused = !!((_a = this.audioPlayer) === null || _a === void 0 ? void 0 : _a.pause(true));
     }
     resume() {
-        this.paused = !this.audioPlayer.unpause();
+        var _a;
+        this.paused = !((_a = this.audioPlayer) === null || _a === void 0 ? void 0 : _a.unpause());
     }
     stop(destroyed) {
+        var _a;
         this.stopping = true;
-        this.audioPlayer.stop(true);
+        (_a = this.audioPlayer) === null || _a === void 0 ? void 0 : _a.stop(true);
         if (!destroyed)
             parentPort.postMessage({ op: Constants_1.default.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackEndEvent", guildId: this.guildID, reason: "STOPPED" }, clientID: this.clientID });
     }
@@ -247,11 +323,63 @@ class Queue {
     }
     volume(amount) {
         var _a, _b;
+        this._volume = amount;
         (_b = (_a = this.current) === null || _a === void 0 ? void 0 : _a.volume) === null || _b === void 0 ? void 0 : _b.setVolume(amount);
+    }
+    seek(amount) {
+        const previousIndex = this._filters.indexOf("-ss");
+        if (previousIndex !== -1)
+            this._filters.splice(previousIndex, 2);
+        this._filters.push("-ss", `${amount || 0}ms`, "-accurate_seek");
+        if (!this.applyingFilters)
+            this.play();
+        this.applyingFilters = true;
+    }
+    filters(filters) {
+        const toApply = [];
+        if (this._filters.includes("-ss"))
+            toApply.push("-ss", this._filters[this._filters.indexOf("-ss") + 2]);
+        this._filters.length = 0;
+        if (filters.volume)
+            this.volume(filters.volume);
+        if (filters.equalizer && Array.isArray(filters.equalizer) && filters.equalizer.length) {
+            const bandSettings = Array(15).map((_, index) => ({ band: index, gain: 0.2 }));
+            for (const eq of filters.equalizer) {
+                const cur = bandSettings.find(i => i.band === eq.band);
+                if (cur)
+                    cur.gain = eq.gain;
+            }
+            toApply.push(bandSettings.map(i => `equalizer=width_type=h:gain=${Math.round(Math.log2(i.gain) * 12)}`).join(","));
+        }
+        if (filters.timescale) {
+            const rate = filters.timescale.rate || 1.0;
+            const pitch = filters.timescale.pitch || 1.0;
+            const speed = filters.timescale.speed || 1.0;
+            const speeddif = 1.0 - pitch;
+            const finalspeed = speed + speeddif;
+            const ratedif = 1.0 - rate;
+            toApply.push(`aresample=48000,asetrate=48000*${pitch + ratedif},atempo=${finalspeed},aresample=48000`);
+        }
+        if (filters.tremolo) {
+            toApply.push(`tremolo=f=${filters.tremolo.frequency || 2.0}:d=${filters.tremolo.depth || 0.5}`);
+        }
+        if (filters.vibrato) {
+            toApply.push(`vibrato=f=${filters.vibrato.frequency || 2.0}:d=${filters.vibrato.depth || 0.5}`);
+        }
+        if (filters.rotation) {
+            toApply.push(`apulsator=hz=${filters.rotation.rotationHz || 0}`);
+        }
+        if (filters.lowPass) {
+            toApply.push(`lowpass=f=${500 / filters.lowPass.smoothing}`);
+        }
+        this._filters.push(...toApply);
+        if (!this.applyingFilters)
+            this.play();
+        this.applyingFilters = true;
     }
 }
 parentPort.on("message", async (packet) => {
-    var _a, _b, _c, _d, _e;
+    var _a, _b, _c, _d, _e, _f;
     if (packet.op === Constants_1.default.workerOPCodes.STATS) {
         const qs = [...queues.values()];
         return parentPort.postMessage({ op: Constants_1.default.workerOPCodes.REPLY, data: { playingPlayers: qs.filter(q => !q.paused).length, players: queues.size }, threadID: packet.threadID });
@@ -297,15 +425,18 @@ parentPort.on("message", async (packet) => {
                 break;
             }
             case "filters": {
-                if (packet.data.volume)
-                    (_c = queues.get(`${userID}.${guildID}`)) === null || _c === void 0 ? void 0 : _c.volume(packet.data.volume);
+                (_c = queues.get(`${userID}.${guildID}`)) === null || _c === void 0 ? void 0 : _c.filters(packet.data);
+                break;
+            }
+            case "seek": {
+                (_d = queues.get(`${userID}.${guildID}`)) === null || _d === void 0 ? void 0 : _d.seek(packet.data.position);
                 break;
             }
         }
     }
     else if (packet.op === Constants_1.default.workerOPCodes.VOICE_SERVER) {
-        (_d = methodMap.get(`${packet.data.clientID}.${packet.data.guildId}`)) === null || _d === void 0 ? void 0 : _d.onVoiceStateUpdate({ channel_id: "", guild_id: packet.data.guildId, user_id: packet.data.clientID, session_id: packet.data.sessionId, deaf: false, self_deaf: false, mute: false, self_mute: false, self_video: false, suppress: false, request_to_speak_timestamp: null });
-        (_e = methodMap.get(`${packet.data.clientID}.${packet.data.guildId}`)) === null || _e === void 0 ? void 0 : _e.onVoiceServerUpdate({ guild_id: packet.data.guildId, token: packet.data.event.token, endpoint: packet.data.event.endpoint });
+        (_e = methodMap.get(`${packet.data.clientID}.${packet.data.guildId}`)) === null || _e === void 0 ? void 0 : _e.onVoiceStateUpdate({ channel_id: "", guild_id: packet.data.guildId, user_id: packet.data.clientID, session_id: packet.data.sessionId, deaf: false, self_deaf: false, mute: false, self_mute: false, self_video: false, suppress: false, request_to_speak_timestamp: null });
+        (_f = methodMap.get(`${packet.data.clientID}.${packet.data.guildId}`)) === null || _f === void 0 ? void 0 : _f.onVoiceServerUpdate({ guild_id: packet.data.guildId, token: packet.data.event.token, endpoint: packet.data.event.endpoint });
     }
     else if (packet.op === Constants_1.default.workerOPCodes.DELETE_ALL) {
         const forUser = [...queues.values()].filter(q => q.clientID === packet.data.clientID);

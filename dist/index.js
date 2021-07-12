@@ -169,7 +169,6 @@ async function onClientMessage(socket, data, userID) {
             if (!msg.guildId || !msg.track)
                 return;
             const responses = await pool.broadcast(pl);
-            console.log(responses);
             if (!responses.includes(true))
                 pool.execute(pl);
             void playerMap.set(`${userID}.${msg.guildId}`, socket);
@@ -184,6 +183,7 @@ async function onClientMessage(socket, data, userID) {
         case "stop":
         case "pause":
         case "destroy":
+        case "seek":
         case "filters": {
             if (!msg.guildId)
                 return;

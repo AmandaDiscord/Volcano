@@ -70,7 +70,6 @@ pool.on("message", (_, msg) => {
 	const rKey = entry?.find((c) => c.socket);
 
 	if (rKey?.resumeKey && socketDeleteTimeouts.has(rKey.resumeKey)) socketDeleteTimeouts.get(rKey.resumeKey)!.events.push(msg.data);
-
 	socket?.send(JSON.stringify(msg.data));
 });
 
@@ -194,7 +193,6 @@ async function onClientMessage(socket: WebSocket, data: WebSocket.Data, userID: 
 		if (!msg.guildId || !msg.track) return;
 
 		const responses: Array<any> = await pool.broadcast(pl);
-		console.log(responses);
 
 		if (!responses.includes(true)) pool.execute(pl);
 
@@ -212,6 +210,7 @@ async function onClientMessage(socket: WebSocket, data: WebSocket.Data, userID: 
 	case "stop":
 	case "pause":
 	case "destroy":
+	case "seek":
 	case "filters": {
 		if (!msg.guildId) return;
 
