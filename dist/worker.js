@@ -69,6 +69,7 @@ class Queue {
         this.shouldntCallFinish = false;
         this.trackPausing = false;
         this.initial = true;
+        this.seekTime = 0;
         this.connection = connection;
         this.clientID = clientID;
         this.guildID = guildID;
@@ -109,7 +110,7 @@ class Queue {
             this.stop(true);
         return {
             time: Date.now(),
-            position: ((_b = this.current) === null || _b === void 0 ? void 0 : _b.playbackDuration) || 0,
+            position: ((_b = this.current) === null || _b === void 0 ? void 0 : _b.playbackDuration) || 0 + this.seekTime,
             connected: this.connection.state.status === Discord.VoiceConnectionStatus.Ready
         };
     }
@@ -127,6 +128,7 @@ class Queue {
             if (newState.status === Discord.AudioPlayerStatus.Idle && oldState.status !== Discord.AudioPlayerStatus.Idle) {
                 this.current = null;
                 if (!this.stopping && !this.shouldntCallFinish) {
+                    this.seekTime = 0;
                     parentPort.postMessage({ op: Constants_1.default.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackEndEvent", guildId: this.guildID, reason: "FINISHED" }, clientID: this.clientID });
                 }
                 this.stopping = false;
@@ -198,15 +200,19 @@ class Queue {
                 let isOpus = false;
                 if (this._filters.length) {
                     const toApply = ["-i", "-", "-analyzeduration", "0", "-loglevel", "0", "-f", "s16le", "-ar", "48000", "-ac", "2"];
-                    if (this.state.position && !this._filters.includes("-ss"))
+                    if (this.state.position && !this._filters.includes("-ss")) {
                         toApply.unshift("-ss", `${this.state.position + 2000}ms`, "-accurate_seek");
+                        this.seekTime = this.state.position + 2000;
+                    }
                     else if (this._filters.includes("-ss")) {
                         const index = this._filters.indexOf("-ss");
                         toApply.unshift(...this._filters.slice(index, index + 2));
                         this._filters.splice(index, 3);
                     }
-                    else if (meta.start)
+                    else if (meta.start) {
+                        this.seekTime = meta.start;
                         toApply.unshift("-ss", `${meta.start}ms`, "-accurate_seek");
+                    }
                     if (this._filters.length)
                         toApply.push("-af");
                     const argus = toApply.concat(this._filters);
@@ -334,6 +340,7 @@ class Queue {
         if (!this.applyingFilters)
             this.play();
         this.applyingFilters = true;
+        this.seekTime = amount;
     }
     filters(filters) {
         const toApply = [];

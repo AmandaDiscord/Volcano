@@ -73,6 +73,7 @@ class Queue {
 	public trackPausing = false;
 	public initial = true;
 	public subscription: import("@discordjs/voice").PlayerSubscription | undefined;
+	public seekTime = 0;
 
 	public constructor(connection: import("@discordjs/voice").VoiceConnection, clientID: string, guildID: string) {
 		this.connection = connection;
@@ -108,7 +109,7 @@ class Queue {
 		if (this.tracks[0] && this.tracks[0].end && this.current?.playbackDuration === this.tracks[0].end) this.stop(true);
 		return {
 			time: Date.now(),
-			position: this.current?.playbackDuration || 0,
+			position: this.current?.playbackDuration || 0 + this.seekTime,
 			connected: this.connection.state.status === Discord.VoiceConnectionStatus.Ready
 		};
 	}
@@ -126,6 +127,7 @@ class Queue {
 			if (newState.status === Discord.AudioPlayerStatus.Idle && oldState.status !== Discord.AudioPlayerStatus.Idle) {
 				this.current = null;
 				if (!this.stopping && !this.shouldntCallFinish) {
+					this.seekTime = 0;
 					parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackEndEvent", guildId: this.guildID, reason: "FINISHED" }, clientID: this.clientID });
 				}
 				this.stopping = false;
@@ -189,12 +191,17 @@ class Queue {
 				let isOpus = false;
 				if (this._filters.length) { // Don't pipe through ffmpeg if not necessary
 					const toApply = ["-i", "-", "-analyzeduration", "0", "-loglevel", "0", "-f", "s16le", "-ar", "48000", "-ac", "2"];
-					if (this.state.position && !this._filters.includes("-ss")) toApply.unshift("-ss", `${this.state.position + 2000}ms`, "-accurate_seek");
-					else if (this._filters.includes("-ss")) {
+					if (this.state.position && !this._filters.includes("-ss")) {
+						toApply.unshift("-ss", `${this.state.position + 2000}ms`, "-accurate_seek");
+						this.seekTime = this.state.position + 2000;
+					} else if (this._filters.includes("-ss")) { // came from Queue.seek option. this.seekTime should be set already.
 						const index = this._filters.indexOf("-ss");
 						toApply.unshift(...this._filters.slice(index, index + 2));
 						this._filters.splice(index, 3);
-					} else if (meta.start) toApply.unshift("-ss", `${meta.start}ms`, "-accurate_seek");
+					} else if (meta.start) { // obv prefer user's pref then fallback to if the track specified a startTime
+						this.seekTime = meta.start;
+						toApply.unshift("-ss", `${meta.start}ms`, "-accurate_seek");
+					}
 					// _filters should no longer have -ss if there are other filters, then push the audio filters flag
 					if (this._filters.length) toApply.push("-af");
 					const argus = toApply.concat(this._filters);
@@ -312,6 +319,7 @@ class Queue {
 		this._filters.push("-ss", `${amount || 0}ms`, "-accurate_seek");
 		if (!this.applyingFilters) this.play();
 		this.applyingFilters = true;
+		this.seekTime = amount;
 	}
 
 	public filters(filters: import("./types").PlayerFilterOptions) {
