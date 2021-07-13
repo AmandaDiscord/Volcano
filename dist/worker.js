@@ -240,9 +240,13 @@ class Queue {
                 if (!sub.stdout)
                     return reject(new Error("NO_YTDL_STDOUT"));
                 stream = sub.stdout;
-                sub.once("spawn", () => demux()).catch(e => onError(e, sub));
-                stream.once("close", () => sub.kill());
-                stream.once("end", () => sub.kill());
+                try {
+                    await demux();
+                    stream.once("end", () => sub.kill());
+                }
+                catch (e) {
+                    return onError(e, sub);
+                }
             }
             else if (decoded.source === "soundcloud") {
                 const url = decoded.identifier.replace(/^O:/, "");
@@ -255,7 +259,7 @@ class Queue {
                     await demux();
                 }
                 catch (e) {
-                    onError(e, stream);
+                    return onError(e, stream);
                 }
             }
             else {
@@ -264,7 +268,7 @@ class Queue {
                     await demux();
                 }
                 catch (e) {
-                    onError(e);
+                    return onError(e);
                 }
             }
         }).catch(e => {

@@ -227,9 +227,12 @@ class Queue {
 				const sub = ytdl(decoded.uri as string, { o: "-", q: "", f: "bestaudio[ext=webm+acodec=opus+asr=48000]/bestaudio", r: "100K" }, { stdio: ["ignore", "pipe", "ignore"] });
 				if (!sub.stdout) return reject(new Error("NO_YTDL_STDOUT"));
 				stream = sub.stdout;
-				sub.once("spawn", () => demux()).catch(e => onError(e, sub));
-				stream.once("close", () => sub.kill());
-				stream.once("end", () => sub.kill());
+				try {
+					await demux();
+					stream.once("end", () => sub.kill());
+				} catch (e) {
+					return onError(e, sub);
+				}
 			} else if (decoded.source === "soundcloud") {
 				const url = decoded.identifier.replace(/^O:/, "");
 				const streamURL = await Soundcloud.Util.fetchSongStreamURL(url, APIKey);
@@ -238,14 +241,14 @@ class Queue {
 				try {
 					await demux();
 				} catch (e) {
-					onError(e, stream);
+					return onError(e, stream);
 				}
 			} else {
 				stream = await centra(decoded.uri as string, "get").header(Constants.baseHTTPRequestHeaders).compress().stream().send() as any;
 				try {
 					await demux();
 				} catch (e) {
-					onError(e);
+					return onError(e);
 				}
 			}
 		}).catch(e => {
