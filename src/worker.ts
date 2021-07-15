@@ -117,6 +117,7 @@ class Queue {
 	private _nextSong() {
 		this.seekTime = 0;
 		this.tracks.shift();
+              this.initial = true;
 		if (!this.tracks.length) return;
 		this.play();
 	}
@@ -158,6 +159,7 @@ class Queue {
 				old?.stop(true);
 				if (this.trackPausing) this.pause();
 				this.trackPausing = false;
+                              if(this.paused) return;
 				if (!this.shouldntCallFinish || this.initial) parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackStartEvent", guildId: this.guildID, track: this.tracks[0].track }, clientID: this.clientID });
 				this.shouldntCallFinish = false;
 				this.initial = false;
