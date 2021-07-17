@@ -8,7 +8,7 @@ LavaLink make memory usage go brrrrr. Volcano is very lightweight. Dependencies 
 Volcano makes a *best effort* towards mirroring LavaLink's protocols ~~which was actually very difficult to do granted not much info is out there regarding specific cases of LavaLink's protocols~~ while trying to efficiently memory manage and make use of a thread pool based on worker_threads for reliable and smooth playback.
 
 # Some Caveats
-Volcano only supports YouTube, Soundcloud, and http currently. Any other sources will not work. If you really want them to work with Volcano, please open a PR. I am more than happy to add features.
+Volcano only supports YouTube, Soundcloud, http, and local files currently. Any other sources will not work. If you really want them to work with Volcano, please open a PR. I am more than happy to add features.
 Volcano does not support all filter op properties. LavaLink's filters do not clearly translate logically to ffmpeg arguments (to me at least. I am nub plz no booly)
 
 # Usage

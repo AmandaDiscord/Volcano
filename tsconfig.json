@@ -21,7 +21,7 @@
 		"strictBindCallApply": true,
 		"strictNullChecks": true,
 		"target": "ES2019",
-		"types": ["node", "./typings/mixin-deep", "./typings/soundcloud-scraper"]
+		"types": ["node", "./typings/soundcloud-scraper"]
 	},
 	"include": ["./src"]
 }

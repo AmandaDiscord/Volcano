@@ -19,6 +19,7 @@ const Logger_1 = __importDefault(require("./util/Logger"));
 const ThreadPool_1 = __importDefault(require("./util/ThreadPool"));
 const Util_1 = __importDefault(require("./util/Util"));
 const http_2 = __importDefault(require("./sources/http"));
+const local_1 = __importDefault(require("./sources/local"));
 const soundcloud_1 = __importDefault(require("./sources/soundcloud"));
 const youtube_1 = __importDefault(require("./sources/youtube"));
 const cpuCount = os_1.default.cpus().length;
@@ -257,8 +258,10 @@ const serverLoopInterval = setInterval(async () => {
 }, 1000 * 60);
 const IDRegex = /(ytsearch:)?(scsearch:)?(.+)/;
 server.use((req, res, next) => {
-    if (req.path !== "/" && req.path !== "/wakemydyno.txt" && config.lavalink.server.password && (!req.headers.authorization || req.headers.authorization !== String(config.lavalink.server.password)))
+    if (req.path !== "/" && req.path !== "/wakemydyno.txt" && config.lavalink.server.password && (!req.headers.authorization || req.headers.authorization !== String(config.lavalink.server.password))) {
+        Logger_1.default.warn(`Authorization missing for ${req.socket.remoteAddress} on ${req.method.toUpperCase()} ${req.path}`);
         return res.status(401).send("Unauthorized");
+    }
     next();
 });
 const soundCloudURL = new URL(Constants_1.default.baseSoundcloudURL);
@@ -297,6 +300,17 @@ server.get("/loadtracks", async (request, response) => {
             return Util_1.default.standardErrorHandler("Could not extract Soundcloud info.", response, payload, llLog, "NO_MATCHES");
         else
             llLog(`Loaded track ${tracks[0].info.title}`);
+    }
+    else if (path_1.default.isAbsolute(resource)) {
+        if (!config.lavalink.server.sources.local)
+            return Util_1.default.standardErrorHandler("Local is not enabled.", response, payload, llLog);
+        const data = await local_1.default(resource).catch(e => Util_1.default.standardErrorHandler(e, response, payload, llLog));
+        if (!data)
+            return;
+        const encoded = encoding.encode(Object.assign({ flags: 1, version: 2, source: "local" }, data, { position: BigInt(0), length: BigInt(data.length), isStream: false, uri: resource }));
+        const track = { track: encoded, info: Object.assign({ isSeekable: true, isStream: false, uri: resource }, data) };
+        llLog(`Loaded track ${track.info.title}`);
+        payload.tracks.push(track);
     }
     else if (url && !url.hostname.includes("youtu")) {
         if (!config.lavalink.server.sources.http)

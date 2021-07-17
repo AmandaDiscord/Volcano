@@ -7,12 +7,24 @@ const Discord: typeof import("@discordjs/voice") = require("@discordjs/voice");
 const encoding: typeof import("@lavalink/encoding") = require("@lavalink/encoding");
 import { raw as ytdl } from "youtube-dl-exec";
 import Soundcloud from "soundcloud-scraper";
-import centra from "centra";
+const icy: typeof import("http") = require("icy");
+import yaml from "yaml";
+import mixin from "mixin-deep";
 
 if (!parentport) throw new Error("THREAD_IS_PARENT");
 const parentPort = parentport;
 
 import Constants from "./Constants";
+import logger from "./util/Logger";
+const configDir: string = path.join(process.cwd(), "./application.yml");
+let cfgparsed: import("./types").LavaLinkConfig;
+
+if (fs.existsSync(configDir)) {
+	const cfgyml: string = fs.readFileSync(configDir, { encoding: "utf-8" });
+	cfgparsed = yaml.parse(cfgyml);
+} else cfgparsed = {};
+
+const config: typeof Constants.defaultOptions = mixin({}, Constants.defaultOptions, cfgparsed);
 
 const queues = new Map<string, Queue>();
 const methodMap = new Map<string, import("@discordjs/voice").DiscordGatewayAdapterLibraryMethods>();
@@ -117,7 +129,7 @@ class Queue {
 	private _nextSong() {
 		this.seekTime = 0;
 		this.tracks.shift();
-              this.initial = true;
+		this.initial = true;
 		if (!this.tracks.length) return;
 		this.play();
 	}
@@ -159,7 +171,7 @@ class Queue {
 				old?.stop(true);
 				if (this.trackPausing) this.pause();
 				this.trackPausing = false;
-                              if(this.paused) return;
+				if(this.paused) return;
 				if (!this.shouldntCallFinish || this.initial) parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackStartEvent", guildId: this.guildID, track: this.tracks[0].track }, clientID: this.clientID });
 				this.shouldntCallFinish = false;
 				this.initial = false;
@@ -226,6 +238,7 @@ class Queue {
 				else Discord.demuxProbe(final).then(probe => resolve(Discord.createAudioResource(probe.stream, { metadata: decoded, inputType: probe.type, inlineVolume: true }))).catch(e => onError(e));
 			};
 			if (decoded.source === "youtube") {
+				if (!config.lavalink.server.sources.youtube) return onError(new Error("YOUTUBE_NOT_ENABLED"));
 				const sub = ytdl(decoded.uri as string, { o: "-", q: "", f: "bestaudio[ext=webm+acodec=opus+asr=48000]/bestaudio", r: "100K" }, { stdio: ["ignore", "pipe", "ignore"] });
 				if (!sub.stdout) return reject(new Error("NO_YTDL_STDOUT"));
 				stream = sub.stdout;
@@ -236,6 +249,7 @@ class Queue {
 					return onError(e, sub);
 				}
 			} else if (decoded.source === "soundcloud") {
+				if (!config.lavalink.server.sources.soundcloud) return onError(new Error("SOUNDCLOUD_NOT_ENABLED"));
 				const url = decoded.identifier.replace(/^O:/, "");
 				const streamURL = await Soundcloud.Util.fetchSongStreamURL(url, APIKey);
 				if (url.endsWith("/hls")) stream = await Soundcloud.StreamDownloader.downloadHLS(streamURL);
@@ -243,10 +257,39 @@ class Queue {
 				try {
 					await demux();
 				} catch (e) {
-					return onError(e, stream);
+					return onError(e);
+				}
+			} else if (decoded.source === "local") {
+				if (!config.lavalink.server.sources.local) return onError(new Error("LOCAL_NOT_ENABLED"));
+				try {
+					stream = fs.createReadStream(decoded.uri as string);
+					await demux();
+				} catch (e) {
+					return onError(e);
 				}
 			} else {
-				stream = await centra(decoded.uri as string, "get").header(Constants.baseHTTPRequestHeaders).compress().stream().send() as any;
+				if (!config.lavalink.server.sources.http) return onError(new Error("HTTP_NOT_ENABLED"));
+				stream = await new Promise<import("http").IncomingMessage>((res, rej) => {
+					const remote = new URL(decoded.uri as string);
+					const req = icy.get({
+						hostname: remote.host,
+						path: remote.pathname,
+						protocol: remote.protocol,
+						headers: Constants.baseHTTPRequestHeaders
+					}, response => {
+						response.once("error", e => {
+							response.destroy();
+							return rej(e);
+						});
+						res(response);
+					});
+
+					req.once("error", e => {
+						req.destroy();
+						return rej(e);
+					});
+					req.end();
+				});
 				try {
 					await demux();
 				} catch (e) {
@@ -373,13 +416,14 @@ parentPort.on("message", async (packet: { data?: import("./types").InboundPayloa
 				if (packet.broadcasted) return parentPort.postMessage({ op: Constants.workerOPCodes.REPLY, data: false, threadID: packet.threadID });
 
 				// Channel IDs are never forwarded to LavaLink and are not really necessary in code except for in the instance of sending packets
-				const voiceConnection = new Discord.VoiceConnection({ channelId: "", guildId: guildID, selfDeaf: false, selfMute: false }, { adapterCreator: voiceAdapterCreator(userID, guildID) });
+				const voiceConnection = new Discord.VoiceConnection({ channelId: "", guildId: guildID, selfDeaf: false, selfMute: false, group: "" }, { adapterCreator: voiceAdapterCreator(userID, guildID) });
 				q = new Queue(voiceConnection, userID, guildID);
 				queues.set(`${userID}.${guildID}`, q);
 				parentPort.postMessage({ op: Constants.workerOPCodes.VOICE_SERVER, data: { clientID: userID, guildId: guildID } });
 			} else {
 				if (packet.broadcasted) parentPort.postMessage({ op: Constants.workerOPCodes.REPLY, data: true, threadID: packet.threadID });
 				q = queues.get(`${userID}.${guildID}`)!;
+				if (packet.data!.noReplace === true && q.tracks.length !== 0) return logger.info("Skipping play request because of noReplace");
 			}
 
 			q.queue({ track: packet.data!.track!, start: Number(packet.data!.startTime || "0"), end: Number(packet.data!.endTime || "0"), volume: Number(packet.data!.volume || "100"), replace: !packet.data!.noReplace, pause: packet.data!.pause || false });

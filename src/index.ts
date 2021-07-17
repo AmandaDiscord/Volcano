@@ -21,6 +21,7 @@ import Util from "./util/Util";
 
 // Source getters
 import getHTTPAsSource from "./sources/http";
+import getLocalAsSource from "./sources/local";
 import getSoundCloudAsSource from "./sources/soundcloud";
 import getYoutubeAsSource from "./sources/youtube";
 
@@ -38,7 +39,7 @@ if (fs.existsSync(configDir)) {
 	cfgparsed = yaml.parse(cfgyml);
 } else cfgparsed = {};
 
-const config = mixin({}, Constants.defaultOptions, cfgparsed);
+const config: typeof Constants.defaultOptions = mixin({}, Constants.defaultOptions, cfgparsed);
 
 const rootLog: typeof logger.info = logger[config.logging.level.root?.toLowerCase?.()] ?? logger.info;
 const llLog: typeof logger.info = logger[config.logging.level.lavalink?.toLowerCase?.()] ?? logger.info;
@@ -300,7 +301,10 @@ const serverLoopInterval: NodeJS.Timeout = setInterval(async () => {
 const IDRegex = /(ytsearch:)?(scsearch:)?(.+)/;
 
 server.use((req, res, next) => {
-	if (req.path !== "/" && req.path !== "/wakemydyno.txt" && config.lavalink.server.password && (!req.headers.authorization || req.headers.authorization !== String(config.lavalink.server.password))) return res.status(401).send("Unauthorized");
+	if (req.path !== "/" && req.path !== "/wakemydyno.txt" && config.lavalink.server.password && (!req.headers.authorization || req.headers.authorization !== String(config.lavalink.server.password))) {
+		logger.warn(`Authorization missing for ${req.socket.remoteAddress} on ${req.method.toUpperCase()} ${req.path}`);
+		return res.status(401).send("Unauthorized");
+	}
 
 	next();
 });
@@ -346,6 +350,19 @@ server.get("/loadtracks", async (request, response) => {
 
 		if (tracks.length === 0) return Util.standardErrorHandler("Could not extract Soundcloud info.", response, payload, llLog, "NO_MATCHES");
 		else llLog(`Loaded track ${tracks[0].info.title}`);
+	} else if (path.isAbsolute(resource)) {
+		if (!config.lavalink.server.sources.local) return Util.standardErrorHandler("Local is not enabled.", response, payload, llLog);
+
+		const data = await getLocalAsSource(resource).catch(e => Util.standardErrorHandler(e, response, payload, llLog));
+		if (!data) return;
+
+		const encoded = encoding.encode(Object.assign({ flags: 1, version: 2, source: "local" }, data, { position: BigInt(0), length: BigInt(data.length), isStream: false, uri: resource }));
+		const track = { track: encoded, info: Object.assign({ isSeekable: true, isStream: false, uri: resource }, data) };
+
+		llLog(`Loaded track ${track.info.title}`);
+
+		payload.tracks.push(track);
+
 	} else if (url && !url.hostname.includes("youtu")) {
 		if (!config.lavalink.server.sources.http) return Util.standardErrorHandler("HTTP is not enabled.", response, payload, llLog);
 		const data = await getHTTPAsSource(resource).catch(e => Util.standardErrorHandler(e, response, payload, llLog));
@@ -421,7 +438,7 @@ function convertDecodedTrackToResponse(data: import("@lavalink/encoding").TrackI
 	};
 }
 
-http.listen(config.server.port, config.server.address, () => {
+http.listen(config.server.port as number, config.server.address, () => {
 	rootLog(`HTTP and Socket started on port ${config.server.port} binding to ${config.server.address}`);
 	rootLog(`Started in ${(Date.now() - startTime) / 1000} seconds (Node running for ${process.uptime()})`);
 });
