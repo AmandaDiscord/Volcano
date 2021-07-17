@@ -60,6 +60,7 @@ exports.OPCodes = {
     FILTERS: "filters",
     DESTROY: "destroy",
     CONFIGURE_RESUMING: "configureResuming",
+    FFMPEG: "ffmpeg",
     PLAYER_UPDATE: "playerUpdate",
     STATS: "stats",
     EVENT: "event"

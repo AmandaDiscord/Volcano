@@ -431,9 +431,16 @@ class Queue {
             this.play();
         this.applyingFilters = true;
     }
+    ffmpeg(args) {
+        this._filters.length = 0;
+        this._filters.push(...args);
+        if (!this.applyingFilters)
+            this.play();
+        this.applyingFilters = true;
+    }
 }
 parentPort.on("message", async (packet) => {
-    var _a, _b, _c, _d, _e, _f;
+    var _a, _b, _c, _d, _e, _f, _g;
     if (packet.op === Constants_1.default.workerOPCodes.STATS) {
         const qs = [...queues.values()];
         return parentPort.postMessage({ op: Constants_1.default.workerOPCodes.REPLY, data: { playingPlayers: qs.filter(q => !q.paused).length, players: queues.size }, threadID: packet.threadID });
@@ -488,11 +495,15 @@ parentPort.on("message", async (packet) => {
                 (_d = queues.get(`${userID}.${guildID}`)) === null || _d === void 0 ? void 0 : _d.seek(packet.data.position);
                 break;
             }
+            case "ffmpeg": {
+                (_e = queues.get(`${userID}.${guildID}`)) === null || _e === void 0 ? void 0 : _e.ffmpeg(packet.data.args);
+                break;
+            }
         }
     }
     else if (packet.op === Constants_1.default.workerOPCodes.VOICE_SERVER) {
-        (_e = methodMap.get(`${packet.data.clientID}.${packet.data.guildId}`)) === null || _e === void 0 ? void 0 : _e.onVoiceStateUpdate({ channel_id: "", guild_id: packet.data.guildId, user_id: packet.data.clientID, session_id: packet.data.sessionId, deaf: false, self_deaf: false, mute: false, self_mute: false, self_video: false, suppress: false, request_to_speak_timestamp: null });
-        (_f = methodMap.get(`${packet.data.clientID}.${packet.data.guildId}`)) === null || _f === void 0 ? void 0 : _f.onVoiceServerUpdate({ guild_id: packet.data.guildId, token: packet.data.event.token, endpoint: packet.data.event.endpoint });
+        (_f = methodMap.get(`${packet.data.clientID}.${packet.data.guildId}`)) === null || _f === void 0 ? void 0 : _f.onVoiceStateUpdate({ channel_id: "", guild_id: packet.data.guildId, user_id: packet.data.clientID, session_id: packet.data.sessionId, deaf: false, self_deaf: false, mute: false, self_mute: false, self_video: false, suppress: false, request_to_speak_timestamp: null });
+        (_g = methodMap.get(`${packet.data.clientID}.${packet.data.guildId}`)) === null || _g === void 0 ? void 0 : _g.onVoiceServerUpdate({ guild_id: packet.data.guildId, token: packet.data.event.token, endpoint: packet.data.event.endpoint });
     }
     else if (packet.op === Constants_1.default.workerOPCodes.DELETE_ALL) {
         const forUser = [...queues.values()].filter(q => q.clientID === packet.data.clientID);

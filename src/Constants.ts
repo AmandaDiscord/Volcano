@@ -61,6 +61,7 @@ export const OPCodes = {
 	FILTERS: "filters" as const,
 	DESTROY: "destroy" as const,
 	CONFIGURE_RESUMING: "configureResuming" as const,
+	FFMPEG: "ffmpeg" as const,
 
 	PLAYER_UPDATE: "playerUpdate" as const,
 	STATS: "stats" as const,

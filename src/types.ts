@@ -111,7 +111,7 @@ export type OutboundPayload = {
 } & Partial<Stats>;
 
 export type InboundPayload = {
-	op: OPCodes["PLAY"] | OPCodes["STOP"] | OPCodes["PAUSE"] | OPCodes["SEEK"] | OPCodes["FILTERS"] | OPCodes["DESTROY"] | OPCodes["CONFIGURE_RESUMING"] | OPCodes["VOICE_UPDATE"];
+	op: OPCodes["PLAY"] | OPCodes["STOP"] | OPCodes["PAUSE"] | OPCodes["SEEK"] | OPCodes["FILTERS"] | OPCodes["DESTROY"] | OPCodes["CONFIGURE_RESUMING"] | OPCodes["VOICE_UPDATE"] | OPCodes["FFMPEG"];
 	guildId: string;
 	sessionId?: string;
 	event?: { token: string; guild_id: string; endpoint: string };
@@ -124,6 +124,7 @@ export type InboundPayload = {
 	position?: number;
 	key?: string;
 	timeout?: number;
+	args?: Array<string>;
 
 	/** added by Volcano for workers. */
 	clientID?: string;

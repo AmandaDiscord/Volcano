@@ -14,7 +14,7 @@ async function getLocalAsSource(resource) {
     const meta = await metadata.parseStream(fs_1.default.createReadStream(resource), { size: stat.size });
     const fileEnding = path_1.default.extname(resource).replace(".", "");
     if (!fileEnding)
-        throw new Error("No file entension");
+        throw new Error("No file extension");
     return {
         identifier: resource,
         author: meta.common.artist || "Unknown artist",

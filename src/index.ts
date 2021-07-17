@@ -230,6 +230,11 @@ async function onClientMessage(socket: WebSocket, data: WebSocket.Data, userID: 
 		}
 		break;
 	}
+	case "ffmpeg": {
+		if (!msg.guildId || !msg.args || !Array.isArray(msg.args) || !msg.args.every(i => typeof i === "string")) return;
+		void pool.broadcast(pl);
+		break;
+	}
 	}
 }
 

@@ -202,6 +202,12 @@ async function onClientMessage(socket, data, userID) {
             }
             break;
         }
+        case "ffmpeg": {
+            if (!msg.guildId || !msg.args || !Array.isArray(msg.args) || !msg.args.every(i => typeof i === "string"))
+                return;
+            void pool.broadcast(pl);
+            break;
+        }
     }
 }
 async function onClientClose(socket, userID, closeCode, extra) {

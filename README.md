@@ -7,6 +7,18 @@ LavaLink make memory usage go brrrrr. Volcano is very lightweight. Dependencies 
 
 Volcano makes a *best effort* towards mirroring LavaLink's protocols ~~which was actually very difficult to do granted not much info is out there regarding specific cases of LavaLink's protocols~~ while trying to efficiently memory manage and make use of a thread pool based on worker_threads for reliable and smooth playback.
 
+# Non-compatible changes
+Volcano offers an op ffmpeg. **OP FFMPEG DOES NOT EXIST IN LavaLink AS LAVALINK DOES NOT USE FFMPEG. DO NOT TRY TO GET SUPPORT FOR OP FFMPEG IN LAVALINK'S SERVER**. Op ffmpeg accepts an Array of raw ffmpeg args. op ffmpeg overrides op filters and op seek.
+
+Example:
+```js
+{
+	"op": "ffmpeg",
+	"guildId": "497159726455455754",
+	"args": ["aresample=48000,asetrate=48000*0.7,atempo=1.3,aresample=48000"]
+}
+```
+
 # Some Caveats
 Volcano only supports YouTube, Soundcloud, http, and local files currently. Any other sources will not work. If you really want them to work with Volcano, please open a PR. I am more than happy to add features.
 Volcano does not support all filter op properties. LavaLink's filters do not clearly translate logically to ffmpeg arguments (to me at least. I am nub plz no booly)

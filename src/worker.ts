@@ -399,6 +399,13 @@ class Queue {
 		if (!this.applyingFilters) this.play();
 		this.applyingFilters = true;
 	}
+
+	public ffmpeg(args: Array<string>) {
+		this._filters.length = 0;
+		this._filters.push(...args);
+		if (!this.applyingFilters) this.play();
+		this.applyingFilters = true;
+	}
 }
 
 parentPort.on("message", async (packet: { data?: import("./types").InboundPayload; op: typeof Constants.workerOPCodes[keyof typeof Constants.workerOPCodes], threadID: number; broadcasted?: boolean }) => {
@@ -450,6 +457,10 @@ parentPort.on("message", async (packet: { data?: import("./types").InboundPayloa
 		}
 		case "seek": {
 			queues.get(`${userID}.${guildID}`)?.seek(packet.data!.position!);
+			break;
+		}
+		case "ffmpeg": {
+			queues.get(`${userID}.${guildID}`)?.ffmpeg(packet.data!.args!);
 			break;
 		}
 		}

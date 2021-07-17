@@ -11,7 +11,7 @@ async function getLocalAsSource(resource: string) {
 
 	const meta = await metadata.parseStream(fs.createReadStream(resource), { size: stat.size });
 	const fileEnding = path.extname(resource).replace(".", "");
-	if (!fileEnding) throw new Error("No file entension");
+	if (!fileEnding) throw new Error("No file extension");
 
 	return {
 		identifier: resource,
