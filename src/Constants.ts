@@ -44,12 +44,22 @@ export const baseHTTPResponseHeaders = {
 	"Lavalink-Api-Version": 3
 };
 
-export const fakeAgent = `Mozilla/5.0 (Server; NodeJS ${process.version}; rv:1.0) Magma/1.0 (KHTML, like Gecko) Volcano/1.0`;
+export const fakeAgent = `Mozilla/5.0 (Server; NodeJS ${process.version.replace("v", "")}; rv:1.0) Magma/1.0 (KHTML, like Gecko) Volcano/1.0`;
 
 export const baseHTTPRequestHeaders = {
-	"User-Agent": fakeAgent,
+	Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+	"Accept-Encoding": "gzip, deflate, br",
 	"Accept-Language": "en-US,en;q=0.5",
-	Connection: "keep-alive"
+	"Cache-Control": "no-cache",
+	Connection: "keep-alive",
+	DNT: "1",
+	Pragma: "no-cache",
+	"Sec-Fetch-Dest": "document",
+	"Sec-Fetch-Mode": "navigate",
+	"Sec-Fetch-Site": "same-site",
+	"Sec-Fetch-User": "?1",
+	"Upgrade-Insecure-Requests": "1",
+	"User-Agent": fakeAgent
 };
 
 export const OPCodes = {

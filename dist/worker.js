@@ -9,9 +9,8 @@ const fs_1 = __importDefault(require("fs"));
 const prism_media_1 = require("prism-media");
 const Discord = require("@discordjs/voice");
 const encoding = require("@lavalink/encoding");
-const youtube_dl_exec_1 = require("youtube-dl-exec");
+const ytdl_core_1 = __importDefault(require("ytdl-core"));
 const soundcloud_scraper_1 = __importDefault(require("soundcloud-scraper"));
-const icy = require("icy");
 const yaml_1 = __importDefault(require("yaml"));
 const mixin_deep_1 = __importDefault(require("mixin-deep"));
 if (!worker_threads_1.parentPort)
@@ -19,6 +18,7 @@ if (!worker_threads_1.parentPort)
 const parentPort = worker_threads_1.parentPort;
 const Constants_1 = __importDefault(require("./Constants"));
 const Logger_1 = __importDefault(require("./util/Logger"));
+const Util_1 = __importDefault(require("./util/Util"));
 const configDir = path_1.default.join(process.cwd(), "./application.yml");
 let cfgparsed;
 if (fs_1.default.existsSync(configDir)) {
@@ -136,7 +136,12 @@ class Queue {
     }
     _applyPlayerEvents(player) {
         const old = this.audioPlayer;
-        old === null || old === void 0 ? void 0 : old.removeAllListeners();
+        if (old) {
+            const stateChangeListeners = old.listeners("stateChange");
+            if (stateChangeListeners.length > 1)
+                console.log("player stateChangeListeners > 1");
+            old.removeListener("stateChange", stateChangeListeners[0]);
+        }
         player.on("stateChange", async (oldState, newState) => {
             var _a;
             if (newState.status === Discord.AudioPlayerStatus.Idle && oldState.status !== Discord.AudioPlayerStatus.Idle) {
@@ -176,12 +181,13 @@ class Queue {
                 (_a = this.subscription) === null || _a === void 0 ? void 0 : _a.unsubscribe();
                 this.subscription = this.connection.subscribe(player);
                 old === null || old === void 0 ? void 0 : old.stop(true);
+                old === null || old === void 0 ? void 0 : old.removeAllListeners();
                 if (this.trackPausing)
                     this.pause();
                 this.trackPausing = false;
                 if (this.paused)
                     return;
-                if (!this.shouldntCallFinish || this.initial)
+                if ((!this.shouldntCallFinish || this.initial) && this.tracks.length)
                     parentPort.postMessage({ op: Constants_1.default.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackStartEvent", guildId: this.guildID, track: this.tracks[0].track }, clientID: this.clientID });
                 this.shouldntCallFinish = false;
                 this.initial = false;
@@ -201,15 +207,9 @@ class Queue {
             return this._nextSong();
         const resource = await new Promise(async (resolve, reject) => {
             let stream = undefined;
-            const onError = (error, sub) => {
-                if (sub && !sub.killed && typeof sub.kill === "function")
-                    sub.kill();
-                stream === null || stream === void 0 ? void 0 : stream.resume();
-                return reject(error);
-            };
             const demux = async () => {
                 if (!stream)
-                    return onError(new Error("NO_STREAM"));
+                    return reject(new Error("NO_STREAM"));
                 this.shouldntCallFinish = true;
                 let final;
                 let isRaw = false;
@@ -248,26 +248,22 @@ class Queue {
                 if (isRaw)
                     resolve(Discord.createAudioResource(final, { metadata: decoded, inputType: Discord.StreamType.Raw, inlineVolume: true }));
                 else
-                    Discord.demuxProbe(final).then(probe => resolve(Discord.createAudioResource(probe.stream, { metadata: decoded, inputType: probe.type, inlineVolume: true }))).catch(e => onError(e));
+                    Discord.demuxProbe(final).then(probe => resolve(Discord.createAudioResource(probe.stream, { metadata: decoded, inputType: probe.type, inlineVolume: true }))).catch(reject);
             };
             if (decoded.source === "youtube") {
                 if (!config.lavalink.server.sources.youtube)
-                    return onError(new Error("YOUTUBE_NOT_ENABLED"));
-                const sub = youtube_dl_exec_1.raw(decoded.uri, { o: "-", q: "", f: "bestaudio[ext=webm+acodec=opus+asr=48000]/bestaudio", r: "100K" }, { stdio: ["ignore", "pipe", "ignore"] });
-                if (!sub.stdout)
-                    return reject(new Error("NO_YTDL_STDOUT"));
-                stream = sub.stdout;
+                    return reject(new Error("YOUTUBE_NOT_ENABLED"));
                 try {
+                    stream = ytdl_core_1.default(decoded.uri);
                     await demux();
-                    stream.once("end", () => sub.kill());
                 }
                 catch (e) {
-                    return onError(e, sub);
+                    return reject(e);
                 }
             }
             else if (decoded.source === "soundcloud") {
                 if (!config.lavalink.server.sources.soundcloud)
-                    return onError(new Error("SOUNDCLOUD_NOT_ENABLED"));
+                    return reject(new Error("SOUNDCLOUD_NOT_ENABLED"));
                 const url = decoded.identifier.replace(/^O:/, "");
                 const streamURL = await soundcloud_scraper_1.default.Util.fetchSongStreamURL(url, APIKey);
                 if (url.endsWith("/hls"))
@@ -278,48 +274,30 @@ class Queue {
                     await demux();
                 }
                 catch (e) {
-                    return onError(e);
+                    stream.destroy();
+                    return reject(e);
                 }
             }
             else if (decoded.source === "local") {
                 if (!config.lavalink.server.sources.local)
-                    return onError(new Error("LOCAL_NOT_ENABLED"));
+                    return reject(new Error("LOCAL_NOT_ENABLED"));
                 try {
                     stream = fs_1.default.createReadStream(decoded.uri);
                     await demux();
                 }
                 catch (e) {
-                    return onError(e);
+                    return reject(e);
                 }
             }
             else {
                 if (!config.lavalink.server.sources.http)
-                    return onError(new Error("HTTP_NOT_ENABLED"));
-                stream = await new Promise((res, rej) => {
-                    const remote = new URL(decoded.uri);
-                    const req = icy.get({
-                        hostname: remote.host,
-                        path: remote.pathname,
-                        protocol: remote.protocol,
-                        headers: Constants_1.default.baseHTTPRequestHeaders
-                    }, response => {
-                        response.once("error", e => {
-                            response.destroy();
-                            return rej(e);
-                        });
-                        res(response);
-                    });
-                    req.once("error", e => {
-                        req.destroy();
-                        return rej(e);
-                    });
-                    req.end();
-                });
+                    return reject(new Error("HTTP_NOT_ENABLED"));
+                stream = await Util_1.default.request(decoded.uri);
                 try {
                     await demux();
                 }
                 catch (e) {
-                    return onError(e);
+                    return reject(e);
                 }
             }
         }).catch(e => {

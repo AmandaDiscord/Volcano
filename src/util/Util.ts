@@ -1,3 +1,8 @@
+import http from "http";
+import https from "https";
+
+const icy: typeof import("http") = require("icy");
+
 import Constants from "../Constants";
 
 export function processLoad(): Promise<number> {
@@ -21,4 +26,54 @@ export function standardErrorHandler(e: Error | string, response: import("expres
 	void 0;
 }
 
-export default { processLoad, standardErrorHandler };
+const agentOptions = {
+	keepAlive: true,
+	keepAliveMsecs: 10000
+};
+
+const HTTPRequestAgent = new http.Agent(agentOptions);
+const HTTPSRequestAgent = new https.Agent(agentOptions);
+
+export function request(url: string, redirects = 0) {
+	if (redirects === 4) return Promise.reject(new Error("Too many redirects"));
+	const remote = new URL(url);
+	const reqHeaders = Object.assign({}, Constants.baseHTTPRequestHeaders, { Host: remote.host, "Alt-Used": remote.host });
+	return new Promise<import("http").IncomingMessage>((res, rej) => {
+		const req = icy.request({
+			method: "GET",
+			host: remote.hostname,
+			path: `${remote.pathname}${remote.search}`,
+			port: remote.port ? remote.port : (remote.protocol === "https:" ? "443" : "80"),
+			protocol: remote.protocol,
+			headers: reqHeaders,
+			agent: remote.protocol === "https:" ? HTTPSRequestAgent : HTTPRequestAgent
+		}, async response => {
+			response.once("error", e => {
+				response.destroy();
+				return rej(e);
+			});
+			if (response.statusCode === 302 && response.headers.location) {
+				let d: import("http").IncomingMessage;
+				try {
+					req.destroy();
+					response.destroy();
+					d = await request(response.headers.location, redirects++);
+				} catch (e) {
+					return rej(e);
+				}
+				return res(d);
+			} else res(response);
+			response.once("end", () => {
+				req.destroy();
+				response.destroy();
+			});
+		});
+		req.once("error", e => {
+			req.destroy();
+			return rej(e);
+		});
+		req.end();
+	});
+}
+
+export default { processLoad, standardErrorHandler, request };

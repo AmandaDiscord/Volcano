@@ -2,53 +2,49 @@
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
-const icy = require("icy");
 const tokenizer = require("@tokenizer/http");
 const metadata = require("music-metadata");
 const LimitedReadWriteStream_1 = __importDefault(require("../util/LimitedReadWriteStream"));
-const Constants_1 = __importDefault(require("../Constants"));
+const Util_1 = __importDefault(require("../util/Util"));
 const mimeRegex = /^(audio|video)\/(.+)$|^application\/(ogg)$/;
 async function getHTTPAsSource(resource) {
-    var _a;
-    const remote = new URL(resource);
+    var _a, _b;
     let parsed;
     let headers;
     try {
         const toke = await tokenizer.makeTokenizer(resource, { timeoutInSec: 10 }, { resolveUrl: true });
         headers = {
             "content-type": toke.fileInfo.mimeType,
-            "content-length": toke.fileInfo.size
+            "content-length": String(toke.fileInfo.size)
         };
-        parsed = await metadata.parseFromTokenizer(toke);
+        const timer = new Promise((_, rej) => setTimeout(() => rej(new Error("Timeout reached")), 7500));
+        parsed = await Promise.race([
+            timer,
+            metadata.parseFromTokenizer(toke)
+        ]).then(d => d[1]);
     }
     catch {
-        const stream = await new Promise((res, rej) => {
-            const req = icy.get({
-                hostname: remote.host,
-                path: remote.pathname,
-                protocol: remote.protocol,
-                headers: Constants_1.default.baseHTTPRequestHeaders
-            }, response => {
-                response.once("error", e => {
-                    response.destroy();
-                    return rej(e);
-                });
-                res(response);
-            });
-            req.once("error", e => {
-                req.destroy();
-                return rej(e);
-            });
-            req.end();
-        });
-        const readwrite = new LimitedReadWriteStream_1.default(20);
-        parsed = await metadata.parseStream(stream.pipe(readwrite), { mimeType: stream.headers["content-type"], size: stream.headers["content-length"] ? Number(stream.headers["content-length"]) : undefined });
-        stream.destroy();
+        const stream = await Util_1.default.request(resource);
+        const readwrite = new LimitedReadWriteStream_1.default(50);
         headers = stream.headers;
+        try {
+            parsed = await metadata.parseStream(stream.pipe(readwrite), { mimeType: stream.headers["content-type"], size: stream.headers["content-length"] ? Number(stream.headers["content-length"]) : undefined });
+            stream.destroy();
+        }
+        catch {
+            if ((_a = headers["content-type"]) === null || _a === void 0 ? void 0 : _a.match(mimeRegex)) {
+                parsed = {
+                    common: {},
+                    format: {}
+                };
+            }
+            else
+                parsed = undefined;
+        }
     }
     if (!parsed)
         throw new Error("NO_PARSED");
-    const mimeMatch = (_a = headers["content-type"]) === null || _a === void 0 ? void 0 : _a.match(mimeRegex);
+    const mimeMatch = (_b = headers["content-type"]) === null || _b === void 0 ? void 0 : _b.match(mimeRegex);
     const chunked = !!(headers["transfer-encoding"] && headers["transfer-encoding"].includes("chunked"));
     const extra = {
         stream: chunked,

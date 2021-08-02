@@ -35,7 +35,8 @@ const logger = {
         error ? console.error(value) : console.log(value);
     },
     getPrefix: (type, worker) => {
-        const scope = backtracker_1.BackTracker.stack[1].filename;
+        const first = backtracker_1.BackTracker.stack[1];
+        const scope = `${first.filename.replace(/\.js$/, "")}:${first.line}:${first.column}`;
         const color = type === "warn" ? "\x1b[93m" : type === "error" ? "\x1b[91m" : "\x1b[92m";
         return `\x1b[90m${new Date().toISOString().replace("T", " ").replace("Z", "")} ${color}${type.toUpperCase()} \x1b[35m${process.pid} \x1b[0m--- [${" ".repeat(workerNameMaxLogLength - worker.length)}${worker}] \x1b[36m${scope}${" ".repeat(scopeNameMaxLogLength - scope.length)}\x1b[0m :`;
     },

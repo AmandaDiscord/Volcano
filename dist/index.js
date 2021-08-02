@@ -79,7 +79,7 @@ async function getStats() {
     return {
         players: threadStats.reduce((acc, cur) => acc + cur.players, 0),
         playingPlayers: threadStats.reduce((acc, cur) => acc + cur.playingPlayers, 0),
-        uptime: process.uptime(),
+        uptime: process.uptime() * 1000,
         memory: {
             reservable: memory.heapTotal - free,
             used: memory.heapUsed,
@@ -334,7 +334,13 @@ server.get("/loadtracks", async (request, response) => {
             uri: resource,
         };
         llLog(`Loaded track ${info.title}`);
-        const encoded = encoding.encode(Object.assign({ flags: 1, version: 2, source: "http", probeInfo: { raw: data.extra.probe, name: data.extra.probe, parameters: null } }, info, { position: BigInt(info.position), length: BigInt(Math.round(info.length)) }));
+        let encoded;
+        try {
+            encoded = encoding.encode(Object.assign({ flags: 1, version: 2, source: "http", probeInfo: { raw: data.extra.probe, name: data.extra.probe, parameters: null } }, info, { position: BigInt(info.position), length: BigInt(Math.round(info.length)) }));
+        }
+        catch (e) {
+            return Util_1.default.standardErrorHandler(e, response, payload, llLog);
+        }
         const track = { track: encoded, info: Object.assign({ isSeekable: !info.isStream }, info) };
         payload.tracks.push(track);
     }

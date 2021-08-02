@@ -1,35 +1,31 @@
-import ytdl from "youtube-dl-exec";
+import ytdl from "ytdl-core";
+import ytsr from "ytsr";
+import ytpl from "ytpl";
 
-const ytdlOptions = {
-	quiet: true,
-	dumpSingleJson: true,
-	playlistItems: "1-100",
-	flatPlaylist: true,
-	skipDownload: true
-};
-// The options suggested by youtube-dl-exec causes ytdl to take quite a bit of time and provide a LOT of data we don't need for /loadtracks.
-// These options were taken from NewLeaf: (https://git.sr.ht/~cadence/NewLeaf/tree/main/item/extractors/search.py)
-// Thank you for everything you do, Cadence <3
-
-async function getYoutubeAsSource(resource: string, isSearch: boolean): Promise<{ entries: Array<{ ie_key: "Youtube"; description: null; id: string; view_count: number; title: string; uploader: string; url: string; _type: "url"; duration: number }>; plData?: { name: string; selectedTrack: number } }> {
+async function getYoutubeAsSource(resource: string, isSearch: boolean): Promise<{ entries: Array<{ id: string; title: string; duration: number; uploader: string }>; plData?: { name: string; selectedTrack: number } }> {
 	if (isSearch) {
-		const searchResults = await ytdl(`ytsearchall:${resource}`, ytdlOptions);
-		// @ts-ignore
-		return { entries: searchResults.entries };
+		if (ytdl.validateID(resource)) {
+			const d = await ytdl.getBasicInfo(resource);
+			return { entries: [{ id: d.videoDetails.videoId, title: d.videoDetails.title, duration: Number(d.videoDetails.lengthSeconds || 0), uploader: d.videoDetails.author.name }] };
+		}
+
+		const searchResults = await ytsr(resource);
+		// ytdl doesn't export its Video interface and typescript being funky
+		return { entries: (searchResults.items.filter(i => i.type === "video") as Array<any>).map(i => ({ id: i.id, title: i.title, duration: Number(i.duration || 0), uploader: i.author.name })) };
 	}
 
 	let url: URL | undefined = undefined;
 	if (resource.startsWith("http")) url = new URL(resource);
 	if (url && url.searchParams.get("list") && url.searchParams.get("list")!.startsWith("FL_") || resource.startsWith("FL_")) throw new Error("Favorite list playlists cannot be fetched.");
 
-	const data = await ytdl(resource, ytdlOptions);
-
 	if (url && url.searchParams.has("list") || resource.startsWith("PL")) {
-		// @ts-ignore
-		return { entries: data.entries, plData: { name: data.title, selectedTrack: url?.searchParams.get("index") ? Number(url.searchParams.get("index")) : 1 } };
+		const pl = await ytpl(resource, { limit: Infinity });
+		return { entries: pl.items.map(i => ({ id: i.id, title: i.title, duration: Number(i.duration || 0), uploader: i.author.name })), plData: { name: pl.title, selectedTrack: url?.searchParams.get("index") ? Number(url.searchParams.get("index")) : 1 } };
 	}
 
-	return { entries: [{ ie_key: "Youtube", description: null, id: data.id, view_count: data.view_count, title: data.title, uploader: data.uploader, url: data.id, _type: "url", duration: data.duration }] };
+	const data = await ytdl.getBasicInfo(resource);
+
+	return { entries: [{ id: data.videoDetails.videoId, title: data.videoDetails.title, duration: Number(data.videoDetails.lengthSeconds || 0), uploader: data.videoDetails.author.name }] };
 }
 
 export = getYoutubeAsSource;
