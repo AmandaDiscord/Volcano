@@ -12,7 +12,7 @@ async function getYoutubeAsSource(resource, isSearch) {
             return { entries: [{ id: d.videoDetails.videoId, title: d.videoDetails.title, duration: Number(d.videoDetails.lengthSeconds || 0), uploader: d.videoDetails.author.name }] };
         }
         const searchResults = await ytsr_1.default(resource);
-        return { entries: searchResults.items.filter(i => i.type === "video").map(i => ({ id: i.id, title: i.title, duration: Number(i.duration || 0), uploader: i.author.name })) };
+        return { entries: searchResults.items.filter(i => i.type === "video").map(i => ({ id: i.id, title: i.title, duration: i.duration.split(":").reduce((acc, cur, ind, arr) => acc + Math.pow(60, arr.length - ((ind + 1) || 1)) * Number(cur), 0), uploader: i.author.name })) };
     }
     let url = undefined;
     if (resource.startsWith("http"))

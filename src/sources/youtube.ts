@@ -11,7 +11,7 @@ async function getYoutubeAsSource(resource: string, isSearch: boolean): Promise<
 
 		const searchResults = await ytsr(resource);
 		// ytdl doesn't export its Video interface and typescript being funky
-		return { entries: (searchResults.items.filter(i => i.type === "video") as Array<any>).map(i => ({ id: i.id, title: i.title, duration: Number(i.duration || 0), uploader: i.author.name })) };
+		return { entries: (searchResults.items.filter(i => i.type === "video") as Array<any>).map(i => ({ id: i.id, title: i.title, duration: (i.duration as string).split(":").reduce((acc, cur, ind, arr) => acc + Math.pow(60, arr.length - ((ind + 1) || 1)) * Number(cur), 0), uploader: i.author.name })) };
 	}
 
 	let url: URL | undefined = undefined;
