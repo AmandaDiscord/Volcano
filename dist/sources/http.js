@@ -10,28 +10,30 @@ const mimeRegex = /^(audio|video)\/(.+)$|^application\/(ogg)$/;
 async function getHTTPAsSource(resource) {
     var _a, _b;
     let parsed;
-    let headers;
+    let headers = undefined;
     try {
-        const toke = await tokenizer.makeTokenizer(resource, { timeoutInSec: 10 }, { resolveUrl: true });
-        headers = {
-            "content-type": toke.fileInfo.mimeType,
-            "content-length": String(toke.fileInfo.size)
-        };
-        const timer = new Promise((_, rej) => setTimeout(() => rej(new Error("Timeout reached")), 7500));
-        parsed = await Promise.race([
-            timer,
-            metadata.parseFromTokenizer(toke)
-        ]).then(d => d[1]);
-    }
-    catch {
         const stream = await Util_1.default.request(resource);
         const readwrite = new LimitedReadWriteStream_1.default(50);
         headers = stream.headers;
+        parsed = await metadata.parseStream(stream.pipe(readwrite), { mimeType: stream.headers["content-type"], size: stream.headers["content-length"] ? Number(stream.headers["content-length"]) : undefined });
+        stream.destroy();
+    }
+    catch {
         try {
-            parsed = await metadata.parseStream(stream.pipe(readwrite), { mimeType: stream.headers["content-type"], size: stream.headers["content-length"] ? Number(stream.headers["content-length"]) : undefined });
-            stream.destroy();
+            const toke = await tokenizer.makeTokenizer(resource, { timeoutInSec: 10 }, { resolveUrl: true });
+            headers = {
+                "content-type": toke.fileInfo.mimeType,
+                "content-length": String(toke.fileInfo.size)
+            };
+            const timer = new Promise((_, rej) => setTimeout(() => rej(new Error("Timeout reached")), 7500));
+            parsed = await Promise.race([
+                timer,
+                metadata.parseFromTokenizer(toke)
+            ]).then(d => d[1]);
         }
         catch {
+            if (!headers)
+                throw new Error("MISSING_HEADERS");
             if ((_a = headers["content-type"]) === null || _a === void 0 ? void 0 : _a.match(mimeRegex)) {
                 parsed = {
                     common: {},
