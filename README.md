@@ -30,7 +30,7 @@ Starting it could be done by cding into the Volcano folder and then typing `node
 Be careful with what current working directory you end up using because Volcano will try to read your application.yml config file based on the cwd (the exact behavior of LavaLink)
 
 # Requirements
-Node 12 or above. Could probably go lower??? My dev machine is on 12 and everything works fine.
+Node 16 or above.
 FFMPEG will default to using what's installed on the machine and added to path before falling back to avconf and then using the binaries installed by ffmpeg-static.
 FFMPEG in path is preferable as it will almost always provide better performance depending on how you built it.
 
@@ -38,10 +38,10 @@ FFMPEG in path is preferable as it will almost always provide better performance
 Test Machine: 4 VCores, 8GB VALLOC memory, 200GB SSD. Running Ubuntu 20.04.2 LTS. Provided by Contabo, located in Saint Louis, Missouri.
 
 All tests with LavaLink were conducted with Java 14 LTS (openjdk-14-jre-headless).
-All tests with Volcano were conducted with Node JS 14.17.0
+All tests with Volcano were conducted with Node JS 16.6.2
 ## Boot
 LavaLink using Java 14 LTS (openjdk-14-jre-headless) took approximately 3 seconds on average to reach a post ready state.
-Volcano using Node JS 14.17.0 took approximately 0.35 seconds on average to reach a post ready state.
+Volcano using Node JS 16.6.2 took approximately 0.35 seconds on average to reach a post ready state.
 
 Below tests performance based on playing players in most metrics.
 Tested tracks are all the same across all tests. (O:https://api-v2.soundcloud.com/media/soundcloud:tracks:401256987/1593d9da-25e1-4bdb-9449-6faad4616d52/stream/hls)
