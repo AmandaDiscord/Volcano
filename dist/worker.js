@@ -27,7 +27,7 @@ if (fs_1.default.existsSync(configDir)) {
 }
 else
     cfgparsed = {};
-const config = mixin_deep_1.default({}, Constants_1.default.defaultOptions, cfgparsed);
+const config = (0, mixin_deep_1.default)({}, Constants_1.default.defaultOptions, cfgparsed);
 const queues = new Map();
 const methodMap = new Map();
 const reportInterval = setInterval(() => {
@@ -254,7 +254,7 @@ class Queue {
                 if (!config.lavalink.server.sources.youtube)
                     return reject(new Error("YOUTUBE_NOT_ENABLED"));
                 try {
-                    stream = ytdl_core_1.default(decoded.uri);
+                    stream = (0, ytdl_core_1.default)(decoded.uri);
                     await demux();
                 }
                 catch (e) {

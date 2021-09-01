@@ -4,8 +4,6 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.request = exports.standardErrorHandler = exports.processLoad = void 0;
-const http_1 = __importDefault(require("http"));
-const https_1 = __importDefault(require("https"));
 const icy = require("icy");
 const Constants_1 = __importDefault(require("../Constants"));
 function processLoad() {
@@ -28,12 +26,6 @@ function standardErrorHandler(e, response, payload, llLog, loadType = "LOAD_FAIL
     void 0;
 }
 exports.standardErrorHandler = standardErrorHandler;
-const agentOptions = {
-    keepAlive: true,
-    keepAliveMsecs: 10000
-};
-const HTTPRequestAgent = new http_1.default.Agent(agentOptions);
-const HTTPSRequestAgent = new https_1.default.Agent(agentOptions);
 function request(url, redirects = 0) {
     if (redirects === 4)
         return Promise.reject(new Error("Too many redirects"));
@@ -46,8 +38,7 @@ function request(url, redirects = 0) {
             path: `${remote.pathname}${remote.search}`,
             port: remote.port ? remote.port : (remote.protocol === "https:" ? "443" : "80"),
             protocol: remote.protocol,
-            headers: reqHeaders,
-            agent: remote.protocol === "https:" ? HTTPSRequestAgent : HTTPRequestAgent
+            headers: reqHeaders
         }, async (response) => {
             response.once("error", e => {
                 response.destroy();

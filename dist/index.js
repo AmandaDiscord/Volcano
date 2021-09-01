@@ -35,7 +35,7 @@ if (fs_1.default.existsSync(configDir)) {
 }
 else
     cfgparsed = {};
-const config = mixin_deep_1.default({}, Constants_1.default.defaultOptions, cfgparsed);
+const config = (0, mixin_deep_1.default)({}, Constants_1.default.defaultOptions, cfgparsed);
 const rootLog = (_c = Logger_1.default[(_b = (_a = config.logging.level.root) === null || _a === void 0 ? void 0 : _a.toLowerCase) === null || _b === void 0 ? void 0 : _b.call(_a)]) !== null && _c !== void 0 ? _c : Logger_1.default.info;
 const llLog = (_f = Logger_1.default[(_e = (_d = config.logging.level.lavalink) === null || _d === void 0 ? void 0 : _d.toLowerCase) === null || _e === void 0 ? void 0 : _e.call(_d)]) !== null && _f !== void 0 ? _f : Logger_1.default.info;
 if (config.spring.main["banner-mode"] === "log")
@@ -48,7 +48,7 @@ if (config.spring.main["banner-mode"] === "log")
         "\x1b[33m    \\/ \\___/|_|\\___\\__,_|_| |_|\\___/  \x1b[0m/\\/     \x1b[31mVV  \x1b[0m\\");
 rootLog(`Starting on ${os_1.default.hostname()} with PID ${process.pid} (${__filename} started by ${os_1.default.userInfo().username} in ${process.cwd()})`);
 rootLog(`Using ${cpuCount} worker threads in pool`);
-const server = express_1.default();
+const server = (0, express_1.default)();
 const http = http_1.default.createServer(server);
 const ws = new ws_1.default.Server({ noServer: true });
 const connections = new Map();
@@ -297,7 +297,7 @@ server.get("/loadtracks", async (request, response) => {
     if (isSoundcloudSearch || (url && url.hostname === soundCloudURL.hostname)) {
         if (isSoundcloudSearch && !config.lavalink.server.soundcloudSearchEnabled)
             return response.status(200).send(JSON.stringify(Object.assign(payload, { loadType: "LOAD_FAILED", exception: { message: "Soundcloud searching is not enabled.", severity: "COMMON" } })));
-        const data = await soundcloud_1.default(resource, isSoundcloudSearch).catch(e => Util_1.default.standardErrorHandler(e, response, payload, llLog));
+        const data = await (0, soundcloud_1.default)(resource, isSoundcloudSearch).catch(e => Util_1.default.standardErrorHandler(e, response, payload, llLog));
         if (!data)
             return;
         const tracks = data.map(info => ({ track: encoding.encode(Object.assign({ flags: 1, version: 2, source: "soundcloud" }, info, { position: BigInt(info.position), length: BigInt(Math.round(info.length)) })), info }));
@@ -310,7 +310,7 @@ server.get("/loadtracks", async (request, response) => {
     else if (path_1.default.isAbsolute(resource)) {
         if (!config.lavalink.server.sources.local)
             return Util_1.default.standardErrorHandler("Local is not enabled.", response, payload, llLog);
-        const data = await local_1.default(resource).catch(e => Util_1.default.standardErrorHandler(e, response, payload, llLog));
+        const data = await (0, local_1.default)(resource).catch(e => Util_1.default.standardErrorHandler(e, response, payload, llLog));
         if (!data)
             return;
         const encoded = encoding.encode(Object.assign({ flags: 1, version: 2, source: "local" }, data, { position: BigInt(0), length: BigInt(data.length), isStream: false, uri: resource }));
@@ -321,7 +321,7 @@ server.get("/loadtracks", async (request, response) => {
     else if (url && !url.hostname.includes("youtu")) {
         if (!config.lavalink.server.sources.http)
             return Util_1.default.standardErrorHandler("HTTP is not enabled.", response, payload, llLog);
-        const data = await http_2.default(resource).catch(e => Util_1.default.standardErrorHandler(e, response, payload, llLog));
+        const data = await (0, http_2.default)(resource).catch(e => Util_1.default.standardErrorHandler(e, response, payload, llLog));
         if (!data)
             return;
         const info = {
@@ -347,7 +347,7 @@ server.get("/loadtracks", async (request, response) => {
     else {
         if (isYouTubeSearch && !config.lavalink.server.youtubeSearchEnabled)
             return response.status(200).send(JSON.stringify(Object.assign(payload, { loadType: "LOAD_FAILED", exception: { message: "YouTube searching is not enabled.", severity: "COMMON" } })));
-        const data = await youtube_1.default(resource, isYouTubeSearch).catch(e => Util_1.default.standardErrorHandler(e, response, payload, llLog));
+        const data = await (0, youtube_1.default)(resource, isYouTubeSearch).catch(e => Util_1.default.standardErrorHandler(e, response, payload, llLog));
         if (!data)
             return;
         const infos = data.entries.map(i => ({ identifier: i.id, author: i.uploader, length: Math.round(i.duration * 1000), isStream: i.duration === 0, isSeekable: i.duration !== 0, position: 0, title: i.title, uri: `https://youtube.com/watch?v=${i.id}` }));

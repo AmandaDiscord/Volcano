@@ -11,7 +11,7 @@ async function getYoutubeAsSource(resource, isSearch) {
             const d = await ytdl_core_1.default.getBasicInfo(resource);
             return { entries: [{ id: d.videoDetails.videoId, title: d.videoDetails.title, duration: Number(d.videoDetails.lengthSeconds || 0), uploader: d.videoDetails.author.name }] };
         }
-        const searchResults = await ytsr_1.default(resource);
+        const searchResults = await (0, ytsr_1.default)(resource);
         return { entries: searchResults.items.filter(i => i.type === "video").map(i => ({ id: i.id, title: i.title, duration: i.duration.split(":").reduce((acc, cur, ind, arr) => acc + Math.pow(60, arr.length - ((ind + 1) || 1)) * Number(cur), 0), uploader: i.author.name })) };
     }
     let url = undefined;
@@ -20,7 +20,7 @@ async function getYoutubeAsSource(resource, isSearch) {
     if (url && url.searchParams.get("list") && url.searchParams.get("list").startsWith("FL_") || resource.startsWith("FL_"))
         throw new Error("Favorite list playlists cannot be fetched.");
     if (url && url.searchParams.has("list") || resource.startsWith("PL")) {
-        const pl = await ytpl_1.default(resource, { limit: Infinity });
+        const pl = await (0, ytpl_1.default)(resource, { limit: Infinity });
         return { entries: pl.items.map(i => ({ id: i.id, title: i.title, duration: Number(i.duration || 0), uploader: i.author.name })), plData: { name: pl.title, selectedTrack: (url === null || url === void 0 ? void 0 : url.searchParams.get("index")) ? Number(url.searchParams.get("index")) : 1 } };
     }
     const data = await ytdl_core_1.default.getBasicInfo(resource);

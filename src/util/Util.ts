@@ -1,6 +1,3 @@
-import http from "http";
-import https from "https";
-
 const icy: typeof import("http") = require("icy");
 
 import Constants from "../Constants";
@@ -26,14 +23,6 @@ export function standardErrorHandler(e: Error | string, response: import("expres
 	void 0;
 }
 
-const agentOptions = {
-	keepAlive: true,
-	keepAliveMsecs: 10000
-};
-
-const HTTPRequestAgent = new http.Agent(agentOptions);
-const HTTPSRequestAgent = new https.Agent(agentOptions);
-
 export function request(url: string, redirects = 0) {
 	if (redirects === 4) return Promise.reject(new Error("Too many redirects"));
 	const remote = new URL(url);
@@ -45,8 +34,7 @@ export function request(url: string, redirects = 0) {
 			path: `${remote.pathname}${remote.search}`,
 			port: remote.port ? remote.port : (remote.protocol === "https:" ? "443" : "80"),
 			protocol: remote.protocol,
-			headers: reqHeaders,
-			agent: remote.protocol === "https:" ? HTTPSRequestAgent : HTTPRequestAgent
+			headers: reqHeaders
 		}, async response => {
 			response.once("error", e => {
 				response.destroy();
