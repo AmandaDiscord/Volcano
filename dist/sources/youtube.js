@@ -1,18 +1,13 @@
 "use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-const ytdl_core_1 = __importDefault(require("ytdl-core"));
-const ytsr_1 = __importDefault(require("ytsr"));
-const ytpl_1 = __importDefault(require("ytpl"));
+const yt = require("play-dl");
 async function getYoutubeAsSource(resource, isSearch) {
+    var _a;
     if (isSearch) {
-        if (ytdl_core_1.default.validateID(resource)) {
-            const d = await ytdl_core_1.default.getBasicInfo(resource);
-            return { entries: [{ id: d.videoDetails.videoId, title: d.videoDetails.title, duration: Number(d.videoDetails.lengthSeconds || 0), uploader: d.videoDetails.author.name }] };
-        }
-        const searchResults = await (0, ytsr_1.default)(resource);
-        return { entries: searchResults.items.filter(i => i.type === "video").map(i => ({ id: i.id, title: i.title, duration: i.duration.split(":").reduce((acc, cur, ind, arr) => acc + Math.pow(60, arr.length - ((ind + 1) || 1)) * Number(cur), 0), uploader: i.author.name })) };
+        const searchResults = await yt.search(resource, { limit: 10, type: "video" });
+        const found = searchResults.find(v => v.id === resource);
+        if (found)
+            return { entries: [{ id: found.id, title: found.title, duration: found.durationInSec, uploader: ((_a = found.channel) === null || _a === void 0 ? void 0 : _a.name) || "Unknown author" }] };
+        return { entries: searchResults.map(i => { var _a; return ({ id: i.id, title: i.title, duration: i.durationInSec, uploader: ((_a = i.channel) === null || _a === void 0 ? void 0 : _a.name) || "Unknown author" }); }) };
     }
     let url = undefined;
     if (resource.startsWith("http"))
@@ -20,10 +15,17 @@ async function getYoutubeAsSource(resource, isSearch) {
     if (url && url.searchParams.get("list") && url.searchParams.get("list").startsWith("FL_") || resource.startsWith("FL_"))
         throw new Error("Favorite list playlists cannot be fetched.");
     if (url && url.searchParams.has("list") || resource.startsWith("PL")) {
-        const pl = await (0, ytpl_1.default)(resource, { limit: Infinity });
-        return { entries: pl.items.map(i => ({ id: i.id, title: i.title, duration: Number(i.duration || 0), uploader: i.author.name })), plData: { name: pl.title, selectedTrack: (url === null || url === void 0 ? void 0 : url.searchParams.get("index")) ? Number(url.searchParams.get("index")) : 1 } };
+        const pl = await yt.playlist_info(resource, true);
+        if (!pl)
+            throw new Error("NO_PLAYLIST");
+        await pl.fetch();
+        const entries = [];
+        for (let i = 1; i < pl.total_pages + 1; i++) {
+            entries.push(...pl.page(i));
+        }
+        return { entries: entries.map(i => { var _a; return ({ id: i.id, title: i.title, duration: i.durationInSec, uploader: ((_a = i.channel) === null || _a === void 0 ? void 0 : _a.name) || "Unknown author" }); }), plData: { name: pl.title, selectedTrack: (url === null || url === void 0 ? void 0 : url.searchParams.get("index")) ? Number(url.searchParams.get("index")) : 1 } };
     }
-    const data = await ytdl_core_1.default.getBasicInfo(resource);
-    return { entries: [{ id: data.videoDetails.videoId, title: data.videoDetails.title, duration: Number(data.videoDetails.lengthSeconds || 0), uploader: data.videoDetails.author.name }] };
+    const data = await yt.video_basic_info(resource);
+    return { entries: [{ id: data.video_details.id, title: data.video_details.title, duration: Number(data.video_details.durationInSec || 0), uploader: data.video_details.channel.name || "Unknown author" }] };
 }
 module.exports = getYoutubeAsSource;

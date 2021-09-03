@@ -5,7 +5,7 @@ import fs from "fs";
 import { FFmpeg } from "prism-media";
 const Discord: typeof import("@discordjs/voice") = require("@discordjs/voice");
 const encoding: typeof import("@lavalink/encoding") = require("@lavalink/encoding");
-import ytdl from "ytdl-core";
+const yt = require("play-dl") as typeof import("play-dl");
 import Soundcloud from "soundcloud-scraper";
 import yaml from "yaml";
 import mixin from "mixin-deep";
@@ -240,7 +240,7 @@ class Queue {
 			if (decoded.source === "youtube") {
 				if (!config.lavalink.server.sources.youtube) return reject(new Error("YOUTUBE_NOT_ENABLED"));
 				try {
-					stream = ytdl(decoded.uri as string);
+					stream = await yt.stream(decoded.uri as string).then(i => i.stream);
 					await demux();
 				} catch (e) {
 					return reject(e);

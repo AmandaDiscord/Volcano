@@ -1,17 +1,11 @@
-import ytdl from "ytdl-core";
-import ytsr from "ytsr";
-import ytpl from "ytpl";
+const yt = require("play-dl") as typeof import("play-dl");
 
 async function getYoutubeAsSource(resource: string, isSearch: boolean): Promise<{ entries: Array<{ id: string; title: string; duration: number; uploader: string }>; plData?: { name: string; selectedTrack: number } }> {
 	if (isSearch) {
-		if (ytdl.validateID(resource)) {
-			const d = await ytdl.getBasicInfo(resource);
-			return { entries: [{ id: d.videoDetails.videoId, title: d.videoDetails.title, duration: Number(d.videoDetails.lengthSeconds || 0), uploader: d.videoDetails.author.name }] };
-		}
-
-		const searchResults = await ytsr(resource);
-		// ytdl doesn't export its Video interface and typescript being funky
-		return { entries: (searchResults.items.filter(i => i.type === "video") as Array<any>).map(i => ({ id: i.id, title: i.title, duration: (i.duration as string).split(":").reduce((acc, cur, ind, arr) => acc + Math.pow(60, arr.length - ((ind + 1) || 1)) * Number(cur), 0), uploader: i.author.name })) };
+		const searchResults = await yt.search(resource, { limit: 10, type: "video" }) as Array<import("play-dl/dist/YouTube/classes/Video").Video>;
+		const found = searchResults.find(v => v.id === resource);
+		if (found) return { entries: [{ id: found.id as string, title: found.title as string, duration: found.durationInSec, uploader: found.channel?.name || "Unknown author" }] };
+		return { entries: searchResults.map(i => ({ id: i.id as string, title: i.title as string, duration: i.durationInSec, uploader: i.channel?.name || "Unknown author" })) };
 	}
 
 	let url: URL | undefined = undefined;
@@ -19,13 +13,19 @@ async function getYoutubeAsSource(resource: string, isSearch: boolean): Promise<
 	if (url && url.searchParams.get("list") && url.searchParams.get("list")!.startsWith("FL_") || resource.startsWith("FL_")) throw new Error("Favorite list playlists cannot be fetched.");
 
 	if (url && url.searchParams.has("list") || resource.startsWith("PL")) {
-		const pl = await ytpl(resource, { limit: Infinity });
-		return { entries: pl.items.map(i => ({ id: i.id, title: i.title, duration: Number(i.duration || 0), uploader: i.author.name })), plData: { name: pl.title, selectedTrack: url?.searchParams.get("index") ? Number(url.searchParams.get("index")) : 1 } };
+		const pl = await yt.playlist_info(resource, true);
+		if (!pl) throw new Error("NO_PLAYLIST");
+		await pl.fetch();
+		const entries = [] as Array<import("play-dl/dist/YouTube/classes/Video").Video>;
+		for (let i = 1; i < pl.total_pages + 1; i++) {
+			entries.push(...pl.page(i));
+		}
+		return { entries: entries.map(i => ({ id: i.id as string, title: i.title as string, duration: i.durationInSec, uploader: i.channel?.name || "Unknown author" })), plData: { name: pl.title as string, selectedTrack: url?.searchParams.get("index") ? Number(url.searchParams.get("index")) : 1 } };
 	}
 
-	const data = await ytdl.getBasicInfo(resource);
+	const data = await yt.video_basic_info(resource);
 
-	return { entries: [{ id: data.videoDetails.videoId, title: data.videoDetails.title, duration: Number(data.videoDetails.lengthSeconds || 0), uploader: data.videoDetails.author.name }] };
+	return { entries: [{ id: data.video_details.id as string, title: data.video_details.title as string, duration: Number(data.video_details.durationInSec as number || 0), uploader: data.video_details.channel.name || "Unknown author" }] };
 }
 
 export = getYoutubeAsSource;

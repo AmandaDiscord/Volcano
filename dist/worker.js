@@ -9,7 +9,7 @@ const fs_1 = __importDefault(require("fs"));
 const prism_media_1 = require("prism-media");
 const Discord = require("@discordjs/voice");
 const encoding = require("@lavalink/encoding");
-const ytdl_core_1 = __importDefault(require("ytdl-core"));
+const yt = require("play-dl");
 const soundcloud_scraper_1 = __importDefault(require("soundcloud-scraper"));
 const yaml_1 = __importDefault(require("yaml"));
 const mixin_deep_1 = __importDefault(require("mixin-deep"));
@@ -254,7 +254,7 @@ class Queue {
                 if (!config.lavalink.server.sources.youtube)
                     return reject(new Error("YOUTUBE_NOT_ENABLED"));
                 try {
-                    stream = (0, ytdl_core_1.default)(decoded.uri);
+                    stream = await yt.stream(decoded.uri).then(i => i.stream);
                     await demux();
                 }
                 catch (e) {
