@@ -342,7 +342,9 @@ class Queue {
 		const toApply: Array<string> = [];
 		if (this._filters.includes("-ss")) toApply.push("-ss", this._filters[this._filters.indexOf("-ss") + 2]);
 		this._filters.length = 0;
-		if (filters.volume) this.volume(filters.volume);
+		if (filters.volume) {
+			toApply.push(`volume=${filters.volume}`);
+		}
 		if (filters.equalizer && Array.isArray(filters.equalizer) && filters.equalizer.length) {
 			const bandSettings = Array(15).map((_, index) => ({ band: index, gain: 0.2 }));
 			for (const eq of filters.equalizer) {
@@ -395,7 +397,7 @@ parentPort.on("message", async (packet: { data?: import("./types").InboundPayloa
 		const userID = packet.data!.clientID!;
 		switch (packet.data!.op) {
 
-		case "play": {
+		case Constants.OPCodes.PLAY: {
 			let q: Queue;
 			if (!queues.has(`${userID}.${guildID}`)) {
 				if (packet.broadcasted) return parentPort.postMessage({ op: Constants.workerOPCodes.REPLY, data: false, threadID: packet.threadID });
@@ -415,30 +417,34 @@ parentPort.on("message", async (packet: { data?: import("./types").InboundPayloa
 			if (q.tracks.length === 1) q.play();
 			break;
 		}
-		case "destroy": {
+		case Constants.OPCodes.DESTROY: {
 			queues.get(`${userID}.${guildID}`)?.destroy();
 			break;
 		}
-		case "pause": {
+		case Constants.OPCodes.PAUSE: {
 			const q = queues.get(`${userID}.${guildID}`);
 			if (packet.data!.pause) q?.pause();
 			else q?.resume();
 			break;
 		}
-		case "stop": {
+		case Constants.OPCodes.STOP: {
 			queues.get(`${userID}.${guildID}`)?.stop();
 			break;
 		}
-		case "filters": {
+		case Constants.OPCodes.FILTERS: {
 			queues.get(`${userID}.${guildID}`)?.filters(packet.data!);
 			break;
 		}
-		case "seek": {
+		case Constants.OPCodes.SEEK: {
 			queues.get(`${userID}.${guildID}`)?.seek(packet.data!.position!);
 			break;
 		}
-		case "ffmpeg": {
+		case Constants.OPCodes.FFMPEG: {
 			queues.get(`${userID}.${guildID}`)?.ffmpeg(packet.data!.args!);
+			break;
+		}
+		case Constants.OPCodes.VOLUME: {
+			queues.get(`${userID}.${guildID}`)?.volume(packet.data!.volume! / 100);
 			break;
 		}
 		}

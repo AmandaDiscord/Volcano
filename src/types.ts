@@ -111,7 +111,7 @@ export type OutboundPayload = {
 } & Partial<Stats>;
 
 export type InboundPayload = {
-	op: OPCodes["PLAY"] | OPCodes["STOP"] | OPCodes["PAUSE"] | OPCodes["SEEK"] | OPCodes["FILTERS"] | OPCodes["DESTROY"] | OPCodes["CONFIGURE_RESUMING"] | OPCodes["VOICE_UPDATE"] | OPCodes["FFMPEG"];
+	op: OPCodes["PLAY"] | OPCodes["STOP"] | OPCodes["PAUSE"] | OPCodes["SEEK"] | OPCodes["FILTERS"] | OPCodes["DESTROY"] | OPCodes["CONFIGURE_RESUMING"] | OPCodes["VOICE_UPDATE"] | OPCodes["FFMPEG"] | OPCodes["VOLUME"];
 	guildId: string;
 	sessionId?: string;
 	event?: { token: string; guild_id: string; endpoint: string };

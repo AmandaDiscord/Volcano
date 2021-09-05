@@ -372,8 +372,9 @@ class Queue {
         if (this._filters.includes("-ss"))
             toApply.push("-ss", this._filters[this._filters.indexOf("-ss") + 2]);
         this._filters.length = 0;
-        if (filters.volume)
-            this.volume(filters.volume);
+        if (filters.volume) {
+            toApply.push(`volume=${filters.volume}`);
+        }
         if (filters.equalizer && Array.isArray(filters.equalizer) && filters.equalizer.length) {
             const bandSettings = Array(15).map((_, index) => ({ band: index, gain: 0.2 }));
             for (const eq of filters.equalizer) {
@@ -418,7 +419,7 @@ class Queue {
     }
 }
 parentPort.on("message", async (packet) => {
-    var _a, _b, _c, _d, _e, _f, _g;
+    var _a, _b, _c, _d, _e, _f, _g, _h;
     if (packet.op === Constants_1.default.workerOPCodes.STATS) {
         const qs = [...queues.values()];
         return parentPort.postMessage({ op: Constants_1.default.workerOPCodes.REPLY, data: { playingPlayers: qs.filter(q => !q.paused).length, players: queues.size }, threadID: packet.threadID });
@@ -427,7 +428,7 @@ parentPort.on("message", async (packet) => {
         const guildID = packet.data.guildId;
         const userID = packet.data.clientID;
         switch (packet.data.op) {
-            case "play": {
+            case Constants_1.default.OPCodes.PLAY: {
                 let q;
                 if (!queues.has(`${userID}.${guildID}`)) {
                     if (packet.broadcasted)
@@ -449,11 +450,11 @@ parentPort.on("message", async (packet) => {
                     q.play();
                 break;
             }
-            case "destroy": {
+            case Constants_1.default.OPCodes.DESTROY: {
                 (_a = queues.get(`${userID}.${guildID}`)) === null || _a === void 0 ? void 0 : _a.destroy();
                 break;
             }
-            case "pause": {
+            case Constants_1.default.OPCodes.PAUSE: {
                 const q = queues.get(`${userID}.${guildID}`);
                 if (packet.data.pause)
                     q === null || q === void 0 ? void 0 : q.pause();
@@ -461,27 +462,31 @@ parentPort.on("message", async (packet) => {
                     q === null || q === void 0 ? void 0 : q.resume();
                 break;
             }
-            case "stop": {
+            case Constants_1.default.OPCodes.STOP: {
                 (_b = queues.get(`${userID}.${guildID}`)) === null || _b === void 0 ? void 0 : _b.stop();
                 break;
             }
-            case "filters": {
+            case Constants_1.default.OPCodes.FILTERS: {
                 (_c = queues.get(`${userID}.${guildID}`)) === null || _c === void 0 ? void 0 : _c.filters(packet.data);
                 break;
             }
-            case "seek": {
+            case Constants_1.default.OPCodes.SEEK: {
                 (_d = queues.get(`${userID}.${guildID}`)) === null || _d === void 0 ? void 0 : _d.seek(packet.data.position);
                 break;
             }
-            case "ffmpeg": {
+            case Constants_1.default.OPCodes.FFMPEG: {
                 (_e = queues.get(`${userID}.${guildID}`)) === null || _e === void 0 ? void 0 : _e.ffmpeg(packet.data.args);
+                break;
+            }
+            case Constants_1.default.OPCodes.VOLUME: {
+                (_f = queues.get(`${userID}.${guildID}`)) === null || _f === void 0 ? void 0 : _f.volume(packet.data.volume / 100);
                 break;
             }
         }
     }
     else if (packet.op === Constants_1.default.workerOPCodes.VOICE_SERVER) {
-        (_f = methodMap.get(`${packet.data.clientID}.${packet.data.guildId}`)) === null || _f === void 0 ? void 0 : _f.onVoiceStateUpdate({ channel_id: "", guild_id: packet.data.guildId, user_id: packet.data.clientID, session_id: packet.data.sessionId, deaf: false, self_deaf: false, mute: false, self_mute: false, self_video: false, suppress: false, request_to_speak_timestamp: null });
-        (_g = methodMap.get(`${packet.data.clientID}.${packet.data.guildId}`)) === null || _g === void 0 ? void 0 : _g.onVoiceServerUpdate({ guild_id: packet.data.guildId, token: packet.data.event.token, endpoint: packet.data.event.endpoint });
+        (_g = methodMap.get(`${packet.data.clientID}.${packet.data.guildId}`)) === null || _g === void 0 ? void 0 : _g.onVoiceStateUpdate({ channel_id: "", guild_id: packet.data.guildId, user_id: packet.data.clientID, session_id: packet.data.sessionId, deaf: false, self_deaf: false, mute: false, self_mute: false, self_video: false, suppress: false, request_to_speak_timestamp: null });
+        (_h = methodMap.get(`${packet.data.clientID}.${packet.data.guildId}`)) === null || _h === void 0 ? void 0 : _h.onVoiceServerUpdate({ guild_id: packet.data.guildId, token: packet.data.event.token, endpoint: packet.data.event.endpoint });
     }
     else if (packet.op === Constants_1.default.workerOPCodes.DELETE_ALL) {
         const forUser = [...queues.values()].filter(q => q.clientID === packet.data.clientID);

@@ -190,7 +190,7 @@ async function onClientMessage(socket: WebSocket, data: WebSocket.Data, userID: 
 	const pl = { op: Constants.workerOPCodes.MESSAGE, data: Object.assign(msg, { clientID: userID }) };
 
 	switch (msg.op) {
-	case "play": {
+	case Constants.OPCodes.PLAY: {
 		if (!msg.guildId || !msg.track) return;
 
 		const responses: Array<any> = await pool.broadcast(pl);
@@ -200,7 +200,7 @@ async function onClientMessage(socket: WebSocket, data: WebSocket.Data, userID: 
 		void playerMap.set(`${userID}.${msg.guildId}`, socket);
 		break;
 	}
-	case "voiceUpdate": {
+	case Constants.OPCodes.VOICE_UPDATE: {
 		voiceServerStates.set(`${userID}.${msg.guildId}`, { clientID: userID, guildId: msg.guildId as string, sessionId: msg.sessionId as string, event: msg.event as any });
 
 		setTimeout(() => voiceServerStates.delete(`${userID}.${msg.guildId}`), 20000);
@@ -208,17 +208,18 @@ async function onClientMessage(socket: WebSocket, data: WebSocket.Data, userID: 
 		void pool.broadcast({ op: Constants.workerOPCodes.VOICE_SERVER, data: voiceServerStates.get(`${userID}.${msg.guildId}`) });
 		break;
 	}
-	case "stop":
-	case "pause":
-	case "destroy":
-	case "seek":
-	case "filters": {
+	case Constants.OPCodes.STOP:
+	case Constants.OPCodes.PAUSE:
+	case Constants.OPCodes.DESTROY:
+	case Constants.OPCodes.SEEK:
+	case Constants.OPCodes.VOLUME:
+	case Constants.OPCodes.FILTERS: {
 		if (!msg.guildId) return;
 
 		void pool.broadcast(pl);
 		break;
 	}
-	case "configureResuming": {
+	case Constants.OPCodes.CONFIGURE_RESUMING: {
 		if (!msg.key) return;
 
 		const entry = connections.get(userID);
@@ -230,7 +231,7 @@ async function onClientMessage(socket: WebSocket, data: WebSocket.Data, userID: 
 		}
 		break;
 	}
-	case "ffmpeg": {
+	case Constants.OPCodes.FFMPEG: {
 		if (!msg.guildId || !msg.args || !Array.isArray(msg.args) || !msg.args.every(i => typeof i === "string")) return;
 		void pool.broadcast(pl);
 		break;

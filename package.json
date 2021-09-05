@@ -32,7 +32,7 @@
     "icy": "^2.1.0",
     "mixin-deep": "^2.0.1",
     "music-metadata": "^7.11.4",
-    "play-dl": "^0.7.8",
+    "play-dl": "^0.8.0",
     "soundcloud-scraper": "^5.0.2",
     "tweetnacl": "^1.0.3",
     "ws": "^8.2.1",

@@ -166,7 +166,7 @@ async function onClientMessage(socket, data, userID) {
     llLog(msg);
     const pl = { op: Constants_1.default.workerOPCodes.MESSAGE, data: Object.assign(msg, { clientID: userID }) };
     switch (msg.op) {
-        case "play": {
+        case Constants_1.default.OPCodes.PLAY: {
             if (!msg.guildId || !msg.track)
                 return;
             const responses = await pool.broadcast(pl);
@@ -175,23 +175,24 @@ async function onClientMessage(socket, data, userID) {
             void playerMap.set(`${userID}.${msg.guildId}`, socket);
             break;
         }
-        case "voiceUpdate": {
+        case Constants_1.default.OPCodes.VOICE_UPDATE: {
             voiceServerStates.set(`${userID}.${msg.guildId}`, { clientID: userID, guildId: msg.guildId, sessionId: msg.sessionId, event: msg.event });
             setTimeout(() => voiceServerStates.delete(`${userID}.${msg.guildId}`), 20000);
             void pool.broadcast({ op: Constants_1.default.workerOPCodes.VOICE_SERVER, data: voiceServerStates.get(`${userID}.${msg.guildId}`) });
             break;
         }
-        case "stop":
-        case "pause":
-        case "destroy":
-        case "seek":
-        case "filters": {
+        case Constants_1.default.OPCodes.STOP:
+        case Constants_1.default.OPCodes.PAUSE:
+        case Constants_1.default.OPCodes.DESTROY:
+        case Constants_1.default.OPCodes.SEEK:
+        case Constants_1.default.OPCodes.VOLUME:
+        case Constants_1.default.OPCodes.FILTERS: {
             if (!msg.guildId)
                 return;
             void pool.broadcast(pl);
             break;
         }
-        case "configureResuming": {
+        case Constants_1.default.OPCodes.CONFIGURE_RESUMING: {
             if (!msg.key)
                 return;
             const entry = connections.get(userID);
@@ -202,7 +203,7 @@ async function onClientMessage(socket, data, userID) {
             }
             break;
         }
-        case "ffmpeg": {
+        case Constants_1.default.OPCodes.FFMPEG: {
             if (!msg.guildId || !msg.args || !Array.isArray(msg.args) || !msg.args.every(i => typeof i === "string"))
                 return;
             void pool.broadcast(pl);
