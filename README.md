@@ -38,7 +38,8 @@ FFMPEG in path is preferable as it will almost always provide better performance
 Test Machine: 4 VCores, 8GB VALLOC memory, 200GB SSD. Running Ubuntu 20.04.2 LTS. Provided by Contabo, located in Saint Louis, Missouri.
 
 All tests with LavaLink were conducted with Java 14 LTS (openjdk-14-jre-headless).
-All tests with Volcano were conducted with Node JS 16.6.2
+All tests with Volcano were conducted with Node JS 16.6.
+
 ## Boot
 LavaLink using Java 14 LTS (openjdk-14-jre-headless) took approximately 3 seconds on average to reach a post ready state.
 Volcano using Node JS 16.6.2 took approximately 0.35 seconds on average to reach a post ready state.
