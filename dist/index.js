@@ -267,13 +267,13 @@ const IDRegex = /(ytsearch:)?(scsearch:)?(.+)/;
 server.use((req, res, next) => {
     if (req.path !== "/" && req.path !== "/wakemydyno.txt" && config.lavalink.server.password && (!req.headers.authorization || req.headers.authorization !== String(config.lavalink.server.password))) {
         Logger_1.default.warn(`Authorization missing for ${req.socket.remoteAddress} on ${req.method.toUpperCase()} ${req.path}`);
-        return res.status(401).send("Unauthorized");
+        return res.status(401).header("Content-Type", "text/plain").send("Unauthorized");
     }
     next();
 });
 const soundCloudURL = new URL(Constants_1.default.baseSoundcloudURL);
-server.get("/", (req, res) => res.status(200).send("Ok boomer."));
-server.get("/wakemydyno.txt", (req, res) => res.status(200).send("Hi. Thank you :)"));
+server.get("/", (req, res) => res.status(200).header("Content-Type", "text/plain").send("Ok boomer."));
+server.get("/wakemydyno.txt", (req, res) => res.status(200).header("Content-Type", "text/plain").send("Hi. Thank you :)"));
 server.get("/loadtracks", async (request, response) => {
     const identifier = request.query.identifier;
     const payload = {
@@ -297,7 +297,7 @@ server.get("/loadtracks", async (request, response) => {
         url = new URL(resource);
     if (isSoundcloudSearch || (url && url.hostname === soundCloudURL.hostname)) {
         if (isSoundcloudSearch && !config.lavalink.server.soundcloudSearchEnabled)
-            return response.status(200).send(JSON.stringify(Object.assign(payload, { loadType: "LOAD_FAILED", exception: { message: "Soundcloud searching is not enabled.", severity: "COMMON" } })));
+            return response.status(200).header(Constants_1.default.baseHTTPResponseHeaders).send(JSON.stringify(Object.assign(payload, { loadType: "LOAD_FAILED", exception: { message: "Soundcloud searching is not enabled.", severity: "COMMON" } })));
         const data = await (0, soundcloud_1.default)(resource, isSoundcloudSearch).catch(e => Util_1.default.standardErrorHandler(e, response, payload, llLog));
         if (!data)
             return;
@@ -347,7 +347,7 @@ server.get("/loadtracks", async (request, response) => {
     }
     else {
         if (isYouTubeSearch && !config.lavalink.server.youtubeSearchEnabled)
-            return response.status(200).send(JSON.stringify(Object.assign(payload, { loadType: "LOAD_FAILED", exception: { message: "YouTube searching is not enabled.", severity: "COMMON" } })));
+            return response.status(200).header(Constants_1.default.baseHTTPResponseHeaders).send(JSON.stringify(Object.assign(payload, { loadType: "LOAD_FAILED", exception: { message: "YouTube searching is not enabled.", severity: "COMMON" } })));
         const data = await (0, youtube_1.default)(resource, isYouTubeSearch).catch(e => Util_1.default.standardErrorHandler(e, response, payload, llLog));
         if (!data)
             return;
@@ -366,7 +366,7 @@ server.get("/loadtracks", async (request, response) => {
     }
     if (payload.tracks.length === 0)
         return Util_1.default.standardErrorHandler("No matches.", response, payload, llLog, "NO_MATCHES");
-    return response.status(200).send(JSON.stringify(Object.assign({ loadType: payload.tracks.length > 1 && (isYouTubeSearch || isSoundcloudSearch) ? "SEARCH_RESULT" : playlist ? "PLAYLIST_LOADED" : "TRACK_LOADED" }, payload)));
+    return response.status(200).header(Constants_1.default.baseHTTPResponseHeaders).send(JSON.stringify(Object.assign({ loadType: payload.tracks.length > 1 && (isYouTubeSearch || isSoundcloudSearch) ? "SEARCH_RESULT" : playlist ? "PLAYLIST_LOADED" : "TRACK_LOADED" }, payload)));
 });
 server.get("/decodetracks", (request, response) => {
     const track = request.query.track;
@@ -377,7 +377,7 @@ server.get("/decodetracks", (request, response) => {
         data = track.map(i => ({ track: i, info: convertDecodedTrackToResponse(encoding.decode(i)) }));
     else
         data = convertDecodedTrackToResponse(encoding.decode(track));
-    return response.status(200).send(JSON.stringify(data));
+    return response.status(200).header(Constants_1.default.baseHTTPResponseHeaders).send(JSON.stringify(data));
 });
 function convertDecodedTrackToResponse(data) {
     return {

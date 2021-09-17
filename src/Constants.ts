@@ -41,7 +41,8 @@ export const defaultOptions = {
 };
 
 export const baseHTTPResponseHeaders = {
-	"Lavalink-Api-Version": 3
+	"Lavalink-Api-Version": 3,
+	"Content-Type": "application/json"
 };
 
 export const fakeAgent = `Mozilla/5.0 (Server; NodeJS ${process.version.replace("v", "")}; rv:1.0) Magma/1.0 (KHTML, like Gecko) Volcano/1.0`;
