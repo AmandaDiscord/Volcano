@@ -8,7 +8,6 @@ const LimitedReadWriteStream_1 = __importDefault(require("../util/LimitedReadWri
 const Util_1 = __importDefault(require("../util/Util"));
 const mimeRegex = /^(audio|video)\/(.+)$|^application\/(ogg)$/;
 async function getHTTPAsSource(resource) {
-    var _a, _b;
     let parsed;
     let headers = undefined;
     try {
@@ -34,7 +33,7 @@ async function getHTTPAsSource(resource) {
         catch {
             if (!headers)
                 throw new Error("MISSING_HEADERS");
-            if ((_a = headers["content-type"]) === null || _a === void 0 ? void 0 : _a.match(mimeRegex)) {
+            if (headers["content-type"]?.match(mimeRegex)) {
                 parsed = {
                     common: {},
                     format: {}
@@ -46,7 +45,7 @@ async function getHTTPAsSource(resource) {
     }
     if (!parsed)
         throw new Error("NO_PARSED");
-    const mimeMatch = (_b = headers["content-type"]) === null || _b === void 0 ? void 0 : _b.match(mimeRegex);
+    const mimeMatch = headers["content-type"]?.match(mimeRegex);
     const chunked = !!(headers["transfer-encoding"] && headers["transfer-encoding"].includes("chunked"));
     const extra = {
         stream: chunked,

@@ -2,7 +2,6 @@
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
-var _a, _b, _c, _d, _e, _f;
 Object.defineProperty(exports, "__esModule", { value: true });
 const startTime = Date.now();
 const http_1 = __importDefault(require("http"));
@@ -36,8 +35,8 @@ if (fs_1.default.existsSync(configDir)) {
 else
     cfgparsed = {};
 const config = (0, mixin_deep_1.default)({}, Constants_1.default.defaultOptions, cfgparsed);
-const rootLog = (_c = Logger_1.default[(_b = (_a = config.logging.level.root) === null || _a === void 0 ? void 0 : _a.toLowerCase) === null || _b === void 0 ? void 0 : _b.call(_a)]) !== null && _c !== void 0 ? _c : Logger_1.default.info;
-const llLog = (_f = Logger_1.default[(_e = (_d = config.logging.level.lavalink) === null || _d === void 0 ? void 0 : _d.toLowerCase) === null || _e === void 0 ? void 0 : _e.call(_d)]) !== null && _f !== void 0 ? _f : Logger_1.default.info;
+const rootLog = Logger_1.default[config.logging.level.root?.toLowerCase?.()] ?? Logger_1.default.info;
+const llLog = Logger_1.default[config.logging.level.lavalink?.toLowerCase?.()] ?? Logger_1.default.info;
 if (config.spring.main["banner-mode"] === "log")
     rootLog("\n" +
         "\x1b[33m__      __   _                                \x1b[97moOOOOo\n" +
@@ -58,10 +57,10 @@ const playerMap = new Map();
 pool.on("message", (_, msg) => {
     const socket = playerMap.get(`${msg.clientID}.${msg.data.guildId}`);
     const entry = [...connections.values()].find(i => i.some(c => c.socket === socket));
-    const rKey = entry === null || entry === void 0 ? void 0 : entry.find((c) => c.socket);
-    if ((rKey === null || rKey === void 0 ? void 0 : rKey.resumeKey) && socketDeleteTimeouts.has(rKey.resumeKey))
+    const rKey = entry?.find((c) => c.socket);
+    if (rKey?.resumeKey && socketDeleteTimeouts.has(rKey.resumeKey))
         socketDeleteTimeouts.get(rKey.resumeKey).events.push(msg.data);
-    socket === null || socket === void 0 ? void 0 : socket.send(JSON.stringify(msg.data));
+    socket?.send(JSON.stringify(msg.data));
 });
 pool.on("datareq", (op, data) => {
     if (op === Constants_1.default.workerOPCodes.VOICE_SERVER) {
@@ -207,6 +206,10 @@ async function onClientMessage(socket, data, userID) {
             if (!msg.guildId || !msg.args || !Array.isArray(msg.args) || !msg.args.every(i => typeof i === "string"))
                 return;
             void pool.broadcast(pl);
+            break;
+        }
+        case Constants_1.default.OPCodes.DUMP: {
+            pool.dump();
             break;
         }
     }

@@ -1,5 +1,9 @@
 import { Worker } from "worker_threads";
 import { EventEmitter } from "events";
+import fs from "fs";
+import path from "path";
+
+import logger from "./Logger";
 
 import Constants from "../Constants";
 
@@ -128,6 +132,16 @@ class ThreadPool extends ThreadBasedReplier {
 		});
 	}
 
+	public async dump(): Promise<void> {
+		await Promise.all([...this.children.values()].map(async child => {
+			const stream = await child.getHeapSnapshot().catch(e => logger.error(e));
+			if (stream) {
+				const write = fs.createWriteStream(path.join("../../", `worker-${child.threadId}-snapshot-${Date.now()}.heapsnapshot`));
+				stream.pipe(write);
+			}
+		}));
+	}
+
 	public send(id: string, message: ThreadMessage) {
 		if (!this.children.get(id)) throw new Error("THREAD_NOT_IN_POOL");
 		return this.baseRequest(message.op, message.data, (d) => this.children.get(id)!.postMessage(d));
@@ -160,10 +174,26 @@ class ThreadPool extends ThreadBasedReplier {
 }
 
 async function onWorkerExit(id: string, worker: Worker, pool: ThreadPool) {
-	worker.removeAllListeners();
-	await worker.terminate();
+	let timer: NodeJS.Timeout | undefined;
+	try {
+		await Promise.race([
+			worker.terminate(),
+			new Promise((_, rej) => {
+				timer = setTimeout(() => rej(new Error("Timer reached")), 5000);
+			})
+		]);
+	} catch {
+		const stream = await worker.getHeapSnapshot().catch(e => logger.error(e));
+		if (stream) {
+			const write = fs.createWriteStream(path.join("../../", `worker-${id}-snapshot-${Date.now()}.heapsnapshot`));
+			stream.pipe(write);
+		}
+		return logger.error("Worker did not terminate in time. Heap snapshot written", id);
+	}
+	if (timer) clearTimeout(timer);
 	pool.taskSizeMap.delete(id);
 	pool.children.delete(id);
+	worker.removeAllListeners();
 	pool.emit("death", id);
 }
 

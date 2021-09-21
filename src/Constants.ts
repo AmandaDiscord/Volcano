@@ -13,10 +13,7 @@ export const defaultOptions = {
 			password: "youshallnotpass",
 			sources: {
 				youtube: true,
-				bandcamp: true,
 				soundcloud: true,
-				twitch: true,
-				vimeo: true,
 				http: false,
 				local: false
 			},
@@ -74,6 +71,7 @@ export const OPCodes = {
 	CONFIGURE_RESUMING: "configureResuming" as const,
 	FFMPEG: "ffmpeg" as const,
 	VOLUME: "volume" as const,
+	DUMP: "dump" as const,
 
 	PLAYER_UPDATE: "playerUpdate" as const,
 	STATS: "stats" as const,

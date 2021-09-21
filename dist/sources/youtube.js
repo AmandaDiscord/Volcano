@@ -1,13 +1,12 @@
 "use strict";
 const yt = require("play-dl");
 async function getYoutubeAsSource(resource, isSearch) {
-    var _a;
     if (isSearch) {
         const searchResults = await yt.search(resource, { limit: 10, type: "video" });
         const found = searchResults.find(v => v.id === resource);
         if (found)
-            return { entries: [{ id: found.id, title: found.title, duration: found.durationInSec, uploader: ((_a = found.channel) === null || _a === void 0 ? void 0 : _a.name) || "Unknown author" }] };
-        return { entries: searchResults.map(i => { var _a; return ({ id: i.id, title: i.title, duration: i.durationInSec, uploader: ((_a = i.channel) === null || _a === void 0 ? void 0 : _a.name) || "Unknown author" }); }) };
+            return { entries: [{ id: found.id, title: found.title, duration: found.durationInSec, uploader: found.channel?.name || "Unknown author" }] };
+        return { entries: searchResults.map(i => ({ id: i.id, title: i.title, duration: i.durationInSec, uploader: i.channel?.name || "Unknown author" })) };
     }
     let url = undefined;
     if (resource.startsWith("http"))
@@ -23,7 +22,7 @@ async function getYoutubeAsSource(resource, isSearch) {
         for (let i = 1; i < pl.total_pages + 1; i++) {
             entries.push(...pl.page(i));
         }
-        return { entries: entries.map(i => { var _a; return ({ id: i.id, title: i.title, duration: i.durationInSec, uploader: ((_a = i.channel) === null || _a === void 0 ? void 0 : _a.name) || "Unknown author" }); }), plData: { name: pl.title, selectedTrack: (url === null || url === void 0 ? void 0 : url.searchParams.get("index")) ? Number(url.searchParams.get("index")) : 1 } };
+        return { entries: entries.map(i => ({ id: i.id, title: i.title, duration: i.durationInSec, uploader: i.channel?.name || "Unknown author" })), plData: { name: pl.title, selectedTrack: url?.searchParams.get("index") ? Number(url.searchParams.get("index")) : 1 } };
     }
     const data = await yt.video_basic_info(resource);
     return { entries: [{ id: data.video_details.id, title: data.video_details.title, duration: Number(data.video_details.durationInSec || 0), uploader: data.video_details.channel.name || "Unknown author" }] };

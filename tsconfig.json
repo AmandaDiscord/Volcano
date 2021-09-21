@@ -20,7 +20,7 @@
 		"strictFunctionTypes": true,
 		"strictBindCallApply": true,
 		"strictNullChecks": true,
-		"target": "ES2019",
+		"target": "ES2020",
 		"types": ["node", "./typings/soundcloud-scraper"]
 	},
 	"include": ["./src"]

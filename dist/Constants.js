@@ -16,10 +16,7 @@ exports.defaultOptions = {
             password: "youshallnotpass",
             sources: {
                 youtube: true,
-                bandcamp: true,
                 soundcloud: true,
-                twitch: true,
-                vimeo: true,
                 http: false,
                 local: false
             },
@@ -73,6 +70,7 @@ exports.OPCodes = {
     CONFIGURE_RESUMING: "configureResuming",
     FFMPEG: "ffmpeg",
     VOLUME: "volume",
+    DUMP: "dump",
     PLAYER_UPDATE: "playerUpdate",
     STATS: "stats",
     EVENT: "event"

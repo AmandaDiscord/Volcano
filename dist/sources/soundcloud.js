@@ -7,21 +7,20 @@ const path_1 = __importDefault(require("path"));
 const soundcloud_scraper_1 = __importDefault(require("soundcloud-scraper"));
 const playlistRegex = /\/sets\//;
 const keyDir = path_1.default.join(__dirname, "../../soundcloud.txt");
-let APIKey;
 let client;
-if (fs_1.default.existsSync(keyDir)) {
-    APIKey = fs_1.default.readFileSync(keyDir, { encoding: "utf-8" });
-    client = new soundcloud_scraper_1.default.Client(APIKey, { fetchAPIKey: false });
-}
-else {
+function keygen() {
     soundcloud_scraper_1.default.keygen(true).then(key => {
         if (!key)
             throw new Error("SOUNDCLOUD_KEY_NO_CREATE");
-        client = new soundcloud_scraper_1.default.Client(key, { fetchAPIKey: false });
-        APIKey = key;
         fs_1.default.writeFileSync(keyDir, key, { encoding: "utf-8" });
     });
 }
+if (fs_1.default.existsSync(keyDir)) {
+    if (Date.now() - fs_1.default.statSync(keyDir).mtime.getTime() >= (1000 * 60 * 60 * 24 * 7))
+        keygen();
+}
+else
+    keygen();
 function songResultToTrack(i) {
     if (!i.streams.hls && !i.streams.progressive)
         throw new Error("NO_SOUNDCLOUD_SONG_STREAM_URL");

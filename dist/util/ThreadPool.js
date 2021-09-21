@@ -4,6 +4,9 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 const worker_threads_1 = require("worker_threads");
 const events_1 = require("events");
+const fs_1 = __importDefault(require("fs"));
+const path_1 = __importDefault(require("path"));
+const Logger_1 = __importDefault(require("./Logger"));
 const Constants_1 = __importDefault(require("../Constants"));
 class SingleUseMap extends Map {
     use(key) {
@@ -96,6 +99,15 @@ class ThreadPool extends ThreadBasedReplier {
             worker.once("exit", () => onWorkerExit(newID, worker, this));
         });
     }
+    async dump() {
+        await Promise.all([...this.children.values()].map(async (child) => {
+            const stream = await child.getHeapSnapshot().catch(e => Logger_1.default.error(e));
+            if (stream) {
+                const write = fs_1.default.createWriteStream(path_1.default.join("../../", `worker-${child.threadId}-snapshot-${Date.now()}.heapsnapshot`));
+                stream.pipe(write);
+            }
+        }));
+    }
     send(id, message) {
         if (!this.children.get(id))
             throw new Error("THREAD_NOT_IN_POOL");
@@ -129,10 +141,28 @@ class ThreadPool extends ThreadBasedReplier {
     }
 }
 async function onWorkerExit(id, worker, pool) {
-    worker.removeAllListeners();
-    await worker.terminate();
+    let timer;
+    try {
+        await Promise.race([
+            worker.terminate(),
+            new Promise((_, rej) => {
+                timer = setTimeout(() => rej(new Error("Timer reached")), 5000);
+            })
+        ]);
+    }
+    catch {
+        const stream = await worker.getHeapSnapshot().catch(e => Logger_1.default.error(e));
+        if (stream) {
+            const write = fs_1.default.createWriteStream(path_1.default.join("../../", `worker-${id}-snapshot-${Date.now()}.heapsnapshot`));
+            stream.pipe(write);
+        }
+        return Logger_1.default.error("Worker did not terminate in time. Heap snapshot written", id);
+    }
+    if (timer)
+        clearTimeout(timer);
     pool.taskSizeMap.delete(id);
     pool.children.delete(id);
+    worker.removeAllListeners();
     pool.emit("death", id);
 }
 module.exports = ThreadPool;

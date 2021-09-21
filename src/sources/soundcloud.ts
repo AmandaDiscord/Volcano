@@ -6,20 +6,19 @@ import Scraper from "soundcloud-scraper";
 const playlistRegex = /\/sets\//;
 
 const keyDir = path.join(__dirname, "../../soundcloud.txt");
-let APIKey: string;
 let client: Scraper.Client;
 
-if (fs.existsSync(keyDir)) {
-	APIKey = fs.readFileSync(keyDir, { encoding: "utf-8" });
-	client = new Scraper.Client(APIKey, { fetchAPIKey: false });
-} else {
+function keygen() {
 	Scraper.keygen(true).then(key => {
 		if (!key) throw new Error("SOUNDCLOUD_KEY_NO_CREATE");
-		client = new Scraper.Client(key, { fetchAPIKey: false });
-		APIKey = key;
 		fs.writeFileSync(keyDir, key, { encoding: "utf-8" });
 	});
 }
+
+if (fs.existsSync(keyDir)) {
+	if (Date.now() - fs.statSync(keyDir).mtime.getTime() >= (1000 * 60 * 60 * 24 * 7)) keygen();
+} else keygen();
+
 
 function songResultToTrack(i: Scraper.Song) {
 	if (!i.streams.hls && !i.streams.progressive) throw new Error("NO_SOUNDCLOUD_SONG_STREAM_URL");

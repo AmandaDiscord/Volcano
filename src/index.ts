@@ -236,6 +236,10 @@ async function onClientMessage(socket: WebSocket, data: WebSocket.Data, userID: 
 		void pool.broadcast(pl);
 		break;
 	}
+	case Constants.OPCodes.DUMP: {
+		pool.dump();
+		break;
+	}
 	}
 }
 

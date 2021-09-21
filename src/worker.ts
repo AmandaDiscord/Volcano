@@ -59,9 +59,7 @@ const codeReasons = {
 const keyDir = path.join(__dirname, "../soundcloud.txt");
 let APIKey: string;
 
-if (fs.existsSync(keyDir)) {
-	APIKey = fs.readFileSync(keyDir, { encoding: "utf-8" });
-} else {
+function keygen() {
 	Soundcloud.keygen(true).then(key => {
 		if (!key) throw new Error("SOUNDCLOUD_KEY_NO_CREATE");
 		APIKey = key;
@@ -69,12 +67,19 @@ if (fs.existsSync(keyDir)) {
 	});
 }
 
+if (fs.existsSync(keyDir)) {
+	if (Date.now() - fs.statSync(keyDir).mtime.getTime() >= (1000 * 60 * 60 * 24 * 7)) keygen();
+	else APIKey = fs.readFileSync(keyDir, { encoding: "utf-8" });
+} else {
+	keygen();
+}
+
 class Queue {
 	public connection: import("@discordjs/voice").VoiceConnection;
 	public clientID: string;
 	public guildID: string;
 	public tracks = new Array<{ track: string; start: number; end: number; volume: number; pause: boolean }>();
-	public audioPlayer: import("@discordjs/voice").AudioPlayer | undefined;
+	public player = Discord.createAudioPlayer();
 	public paused = false;
 	public current: import("@discordjs/voice").AudioResource<import("@lavalink/encoding").TrackInfo> | null = null;
 	public stopping = false;
@@ -84,26 +89,24 @@ class Queue {
 	public shouldntCallFinish = false;
 	public trackPausing = false;
 	public initial = true;
-	public subscription: import("@discordjs/voice").PlayerSubscription | undefined;
 	public seekTime = 0;
 
-	public constructor(connection: import("@discordjs/voice").VoiceConnection, clientID: string, guildID: string) {
-		this.connection = connection;
+	public constructor(clientID: string, guildID: string) {
+		this.connection = Discord.getVoiceConnection(guildID, clientID)!;
+		this.connection.subscribe(this.player);
 		this.clientID = clientID;
 		this.guildID = guildID;
 
-		connection.on("stateChange", async (oldState, newState) => {
+		this.connection.on("stateChange", async (oldState, newState) => {
 			if (newState.status === Discord.VoiceConnectionStatus.Disconnected) {
-				if (newState.reason === Discord.VoiceConnectionDisconnectReason.WebSocketClose && newState.closeCode === 4014) {
-					try {
-						await Discord.entersState(this.connection, Discord.VoiceConnectionStatus.Connecting, 5000);
-					} catch {
-						parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: "event", type: "WebSocketClosedEvent", guildId: this.guildID, code: newState.closeCode, reason: "Disconnected.", byRemote: true }, clientID: this.clientID });
-						this.destroy();
-					}
-				} else {
+				try {
+					await Promise.race([
+						Discord.entersState(this.connection, Discord.VoiceConnectionStatus.Signalling, 5000),
+						Discord.entersState(this.connection, Discord.VoiceConnectionStatus.Connecting, 5000)
+					]);
+				} catch {
 					if (newState.reason === Discord.VoiceConnectionDisconnectReason.WebSocketClose) parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: "event", type: "WebSocketClosedEvent", guildId: this.guildID, code: newState.closeCode, reason: codeReasons[newState.closeCode], byRemote: true }, clientID: this.clientID });
-					this.stop();
+					this.destroy();
 				}
 			} else if (newState.status === Discord.VoiceConnectionStatus.Destroyed) {
 				this.stop();
@@ -115,13 +118,57 @@ class Queue {
 				}
 			}
 		});
+
+		this.player.on("stateChange", async (oldState, newState) => {
+			if (newState.status === Discord.AudioPlayerStatus.Idle && oldState.status !== Discord.AudioPlayerStatus.Idle) {
+				if (this.current) {
+					this.current.playStream.emit("end");
+					this.current.playStream.destroy();
+					this.current.audioPlayer = undefined;
+					// @ts-ignore Completely unreference the resource from the audio player
+					this.current._state = { status: Discord.AudioPlayerStatus.Idle };
+				}
+				this.current = null;
+				if (!this.stopping && !this.shouldntCallFinish) parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackEndEvent", guildId: this.guildID, reason: "FINISHED" }, clientID: this.clientID });
+				this.stopping = false;
+				await new Promise((res, rej) => {
+					let timer: NodeJS.Timeout | undefined = void 0;
+					const fn = () => {
+						if (this.player.state.status !== Discord.AudioPlayerStatus.Playing) return;
+						if (timer) clearTimeout(timer);
+						timer = void 0;
+						this.player.removeListener("stateChange", fn);
+						res(void 0);
+					};
+					timer = setTimeout(() => {
+						this.player.removeListener("stateChange", fn);
+						if (this.current || this.paused) res(void 0);
+						else rej(new Error("TRACK_STUCK"));
+					}, 10000);
+					this.player.on("stateChange", fn);
+				}).catch(() => {
+					if (!this.tracks.length) return;
+					parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackStuckEvent", guildId: this.guildID, track: this.tracks[0].track, thresholdMs: 10000 }, clientID: this.clientID });
+				});
+			} else if (newState.status === Discord.AudioPlayerStatus.Playing) {
+				if (this.trackPausing) this.pause();
+				this.trackPausing = false;
+				if ((!this.shouldntCallFinish || this.initial) && this.tracks.length) parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackStartEvent", guildId: this.guildID, track: this.tracks[0].track }, clientID: this.clientID });
+				this.shouldntCallFinish = false;
+				this.initial = false;
+			}
+		});
+
+		this.player.on("error", (error) => {
+			parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackExceptionEvent", guildId: this.guildID, track: this.tracks[0].track, exception: error.name, message: error.message, severity: "COMMON", cause: error.stack || new Error().stack || "Unknown" }, clientID: this.clientID });
+		});
 	}
 
 	public get state(): { time: number; position: number; connected: boolean } {
 		if (this.tracks[0] && this.tracks[0].end && this.current?.playbackDuration === this.tracks[0].end) this.stop(true);
 		return {
 			time: Date.now(),
-			position: this.current?.playbackDuration || 0 + this.seekTime,
+			position: (this.current?.playbackDuration || 0) + this.seekTime,
 			connected: this.connection.state.status === Discord.VoiceConnectionStatus.Ready
 		};
 	}
@@ -134,74 +181,19 @@ class Queue {
 		this.play();
 	}
 
-	private _applyPlayerEvents(player: import("@discordjs/voice").AudioPlayer) {
-		const old = this.audioPlayer;
-		if (old) {
-			const stateChangeListeners = old.listeners("stateChange"); // all player listeners internally in djs voice should be added already unless something weird happens where they're added on another tick
-			if (stateChangeListeners.length > 1) console.log("player stateChangeListeners > 1");
-			old.removeListener("stateChange", stateChangeListeners[0]); // no listeners should be added in the constructor. This method is called in the next tick
-		}
-		player.on("stateChange", async (oldState, newState) => {
-			if (newState.status === Discord.AudioPlayerStatus.Idle && oldState.status !== Discord.AudioPlayerStatus.Idle) {
-				this.current = null;
-				if (!this.stopping && !this.shouldntCallFinish) {
-					parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackEndEvent", guildId: this.guildID, reason: "FINISHED" }, clientID: this.clientID });
-				}
-				this.stopping = false;
-				this._nextSong();
-				await new Promise((res, rej) => {
-					let timer: NodeJS.Timeout | undefined = void 0;
-					const fn = () => {
-						if (player.state.status !== Discord.AudioPlayerStatus.Playing) return;
-						if (timer) clearTimeout(timer);
-						player.removeListener("stateChange", fn);
-						res(void 0);
-					};
-					timer = setTimeout(() => {
-						if (this.current || this.paused) res(void 0);
-						else rej(new Error("TRACK_STUCK"));
-						player.removeListener("stateChange", fn);
-					}, 10000);
-					player.on("stateChange", fn);
-				}).catch(() => {
-					if (!this.tracks.length) return;
-					parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackStuckEvent", guildId: this.guildID, track: this.tracks[0].track, thresholdMs: 10000 }, clientID: this.clientID });
-					this._nextSong();
-				});
-			} else if (newState.status === Discord.AudioPlayerStatus.Playing) {
-				this.audioPlayer = player;
-				this.subscription?.unsubscribe();
-				this.subscription = this.connection.subscribe(player);
-				old?.stop(true);
-				old?.removeAllListeners();
-				if (this.trackPausing) this.pause();
-				this.trackPausing = false;
-				if(this.paused) return;
-				if ((!this.shouldntCallFinish || this.initial) && this.tracks.length) parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackStartEvent", guildId: this.guildID, track: this.tracks[0].track }, clientID: this.clientID });
-				this.shouldntCallFinish = false;
-				this.initial = false;
-			}
-		});
-
-		player.on("error", (error) => {
-			parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackExceptionEvent", guildId: this.guildID, track: this.tracks[0].track, exception: error.name, message: error.message, severity: "COMMON", cause: error.stack || new Error().stack || "Unknown" }, clientID: this.clientID });
-			this._nextSong();
-		});
-	}
-
 	public async play() {
 		if (!this.tracks.length) return;
 
 		const meta = this.tracks[0];
 		const decoded = encoding.decode(meta.track);
-		if (!decoded.uri) return this._nextSong();
+		if (!decoded.uri) return;
+		let final: import("stream").Readable | undefined = undefined;
 		// eslint-disable-next-line no-async-promise-executor
 		const resource = await new Promise<import("@discordjs/voice").AudioResource<import("@lavalink/encoding").TrackInfo>>(async (resolve, reject) => {
 			let stream: import("stream").Readable | undefined = undefined;
 			const demux = async () => {
 				if (!stream) return reject(new Error("NO_STREAM"));
 				this.shouldntCallFinish = true;
-				let final: import("stream").Readable;
 				let isRaw = false;
 				if (this._filters.length) { // Don't pipe through ffmpeg if not necessary
 					const toApply = ["-i", "-", "-analyzeduration", "0", "-loglevel", "0", "-f", "s16le", "-ar", "48000", "-ac", "2"];
@@ -234,14 +226,23 @@ class Queue {
 					final = stream;
 				}
 
+				final.once("end", () => {
+					if (stream) {
+						stream.emit("end");
+						stream.destroy();
+						stream.removeAllListeners();
+					}
+				});
+
 				if (isRaw) resolve(Discord.createAudioResource(final, { metadata: decoded, inputType: Discord.StreamType.Raw, inlineVolume: true }));
 				else Discord.demuxProbe(final).then(probe => resolve(Discord.createAudioResource(probe.stream, { metadata: decoded, inputType: probe.type, inlineVolume: true }))).catch(reject);
 			};
 			if (decoded.source === "youtube") {
 				if (!config.lavalink.server.sources.youtube) return reject(new Error("YOUTUBE_NOT_ENABLED"));
 				try {
-					stream = await yt.stream(decoded.uri as string).then(i => i.stream);
+					stream = await yt.stream(decoded.uri as string).then(i => i);
 					await demux();
+					return;
 				} catch (e) {
 					return reject(e);
 				}
@@ -253,6 +254,7 @@ class Queue {
 				else stream = await Soundcloud.StreamDownloader.downloadProgressive(streamURL);
 				try {
 					await demux();
+					return;
 				} catch (e) {
 					stream.destroy();
 					return reject(e);
@@ -262,6 +264,7 @@ class Queue {
 				try {
 					stream = fs.createReadStream(decoded.uri as string);
 					await demux();
+					return;
 				} catch (e) {
 					return reject(e);
 				}
@@ -270,57 +273,61 @@ class Queue {
 				stream = await Util.request(decoded.uri as string);
 				try {
 					await demux();
+					return;
 				} catch (e) {
 					return reject(e);
 				}
 			}
 		}).catch(e => {
-			console.log(e);
-			this._nextSong();
+			console.error(e);
 		});
 		if (!resource) return;
-		const newPlayer = Discord.createAudioPlayer();
-		this._applyPlayerEvents(newPlayer);
+		if (final) {
+			resource.playStream.once("end", () => {
+				final!.emit("end");
+				final!.destroy();
+			});
+		}
 		this.current = resource;
 		if (meta.volume !== 100 || this._volume !== 1.0) this.volume(meta.volume !== 100 ? meta.volume / 100 : this._volume);
 		if (meta.pause) this.trackPausing = true;
-		newPlayer.play(resource);
+		this.player.play(resource);
 	}
 
-	public queue(track: { track: string; start: number; end: number; volume: number; pause: boolean; replace?: boolean }) {
-		if (track.replace) this.tracks.length = 0;
-		delete track.replace;
+	public queue(track: { track: string; start: number; end: number; volume: number; pause: boolean; }) {
 		this.tracks.push(track);
-		if (track.replace) this.replace();
+		this.replace();
 	}
 
 	public replace() {
-		parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackEndEvent", guildId: this.guildID, reason: "REPLACED" }, clientID: this.clientID });
+		if (this.tracks.length === 2) parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackEndEvent", guildId: this.guildID, reason: "REPLACED" }, clientID: this.clientID });
 		this._nextSong();
 	}
 
 	public pause() {
-		this.paused = !!this.audioPlayer?.pause(true);
+		this.paused = this.player.pause(true);
 	}
 
 	public resume() {
-		this.paused = !this.audioPlayer?.unpause();
+		this.paused = !this.player.unpause();
 	}
 
 	public stop(destroyed?: boolean) {
 		this.stopping = true;
-		this.audioPlayer?.stop(true);
+		this.player.stop(true);
 		if (!destroyed) parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackEndEvent", guildId: this.guildID, reason: "STOPPED" }, clientID: this.clientID });
 	}
 
 	public destroy() {
 		this.tracks.length = 0;
 		this.stop(true);
-		this.connection.destroy();
+		this.connection.destroy(true);
 		queues.delete(`${this.clientID}.${this.guildID}`);
 		if (queues.size === 0) {
 			clearInterval(reportInterval);
 			parentPort.postMessage({ op: Constants.workerOPCodes.CLOSE });
+			parentPort.close();
+			parentPort.removeAllListeners();
 		}
 	}
 
@@ -395,56 +402,62 @@ parentPort.on("message", async (packet: { data?: import("./types").InboundPayloa
 	} else if (packet.op === Constants.workerOPCodes.MESSAGE) {
 		const guildID = packet.data!.guildId;
 		const userID = packet.data!.clientID!;
+		const key = `${userID}.${guildID}`;
 		switch (packet.data!.op) {
 
 		case Constants.OPCodes.PLAY: {
 			let q: Queue;
-			if (!queues.has(`${userID}.${guildID}`)) {
+			if (!queues.has(key)) {
 				if (packet.broadcasted) return parentPort.postMessage({ op: Constants.workerOPCodes.REPLY, data: false, threadID: packet.threadID });
 
-				// Channel IDs are never forwarded to LavaLink and are not really necessary in code except for in the instance of sending packets
-				const voiceConnection = new Discord.VoiceConnection({ channelId: "", guildId: guildID, selfDeaf: false, selfMute: false, group: "" }, { adapterCreator: voiceAdapterCreator(userID, guildID) });
-				q = new Queue(voiceConnection, userID, guildID);
-				queues.set(`${userID}.${guildID}`, q);
+				// Channel IDs are never forwarded to LavaLink and are not really necessary in code except for in the instance of sending packets which isn't applicable.
+				Discord.joinVoiceChannel({
+					channelId: "",
+					guildId: guildID,
+					group: userID,
+					adapterCreator: voiceAdapterCreator(userID, guildID)
+				});
+				q = new Queue(userID, guildID);
+				queues.set(key, q);
 				parentPort.postMessage({ op: Constants.workerOPCodes.VOICE_SERVER, data: { clientID: userID, guildId: guildID } });
+				q.tracks.push({ track: packet.data!.track!, start: Number(packet.data!.startTime || "0"), end: Number(packet.data!.endTime || "0"), volume: Number(packet.data!.volume || "100"), pause: packet.data!.pause || false });
+				q.play();
 			} else {
 				if (packet.broadcasted) parentPort.postMessage({ op: Constants.workerOPCodes.REPLY, data: true, threadID: packet.threadID });
-				q = queues.get(`${userID}.${guildID}`)!;
+				q = queues.get(key)!;
 				if (packet.data!.noReplace === true && q.tracks.length !== 0) return logger.info("Skipping play request because of noReplace");
+				q.queue({ track: packet.data!.track!, start: Number(packet.data!.startTime || "0"), end: Number(packet.data!.endTime || "0"), volume: Number(packet.data!.volume || "100"), pause: packet.data!.pause || false });
 			}
-
-			q.queue({ track: packet.data!.track!, start: Number(packet.data!.startTime || "0"), end: Number(packet.data!.endTime || "0"), volume: Number(packet.data!.volume || "100"), replace: !packet.data!.noReplace, pause: packet.data!.pause || false });
-			if (q.tracks.length === 1) q.play();
 			break;
 		}
 		case Constants.OPCodes.DESTROY: {
-			queues.get(`${userID}.${guildID}`)?.destroy();
+			queues.get(key)?.destroy();
 			break;
 		}
 		case Constants.OPCodes.PAUSE: {
-			const q = queues.get(`${userID}.${guildID}`);
+			const q = queues.get(key);
 			if (packet.data!.pause) q?.pause();
 			else q?.resume();
 			break;
 		}
 		case Constants.OPCodes.STOP: {
-			queues.get(`${userID}.${guildID}`)?.stop();
+			queues.get(key)?.stop();
 			break;
 		}
 		case Constants.OPCodes.FILTERS: {
-			queues.get(`${userID}.${guildID}`)?.filters(packet.data!);
+			queues.get(key)?.filters(packet.data!);
 			break;
 		}
 		case Constants.OPCodes.SEEK: {
-			queues.get(`${userID}.${guildID}`)?.seek(packet.data!.position!);
+			queues.get(key)?.seek(packet.data!.position!);
 			break;
 		}
 		case Constants.OPCodes.FFMPEG: {
-			queues.get(`${userID}.${guildID}`)?.ffmpeg(packet.data!.args!);
+			queues.get(key)?.ffmpeg(packet.data!.args!);
 			break;
 		}
 		case Constants.OPCodes.VOLUME: {
-			queues.get(`${userID}.${guildID}`)?.volume(packet.data!.volume! / 100);
+			queues.get(key)?.volume(packet.data!.volume! / 100);
 			break;
 		}
 		}
@@ -461,14 +474,15 @@ parentPort.on("message", async (packet: { data?: import("./types").InboundPayloa
 });
 
 function voiceAdapterCreator(userID: string, guildID: string): import("@discordjs/voice").DiscordGatewayAdapterCreator {
+	const key = `${userID}.${guildID}`;
 	return methods => {
-		methodMap.set(`${userID}.${guildID}`, methods);
+		methodMap.set(key, methods);
 		return {
 			sendPayload: payload => {
 				return !!payload;
 			},
 			destroy: () => {
-				methodMap.delete(`${userID}.${guildID}`);
+				methodMap.delete(key);
 			}
 		};
 	};
