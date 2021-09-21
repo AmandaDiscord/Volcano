@@ -13,11 +13,16 @@ function keygen() {
         if (!key)
             throw new Error("SOUNDCLOUD_KEY_NO_CREATE");
         fs_1.default.writeFileSync(keyDir, key, { encoding: "utf-8" });
+        client = new soundcloud_scraper_1.default.Client(key, { fetchAPIKey: false });
     });
 }
 if (fs_1.default.existsSync(keyDir)) {
     if (Date.now() - fs_1.default.statSync(keyDir).mtime.getTime() >= (1000 * 60 * 60 * 24 * 7))
         keygen();
+    else {
+        const APIKey = fs_1.default.readFileSync(keyDir, { encoding: "utf-8" });
+        client = new soundcloud_scraper_1.default.Client(APIKey, { fetchAPIKey: false });
+    }
 }
 else
     keygen();

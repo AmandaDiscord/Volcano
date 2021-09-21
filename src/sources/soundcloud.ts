@@ -12,11 +12,16 @@ function keygen() {
 	Scraper.keygen(true).then(key => {
 		if (!key) throw new Error("SOUNDCLOUD_KEY_NO_CREATE");
 		fs.writeFileSync(keyDir, key, { encoding: "utf-8" });
+		client = new Scraper.Client(key, { fetchAPIKey: false });
 	});
 }
 
 if (fs.existsSync(keyDir)) {
 	if (Date.now() - fs.statSync(keyDir).mtime.getTime() >= (1000 * 60 * 60 * 24 * 7)) keygen();
+	else {
+		const APIKey = fs.readFileSync(keyDir, { encoding: "utf-8" });
+		client = new Scraper.Client(APIKey, { fetchAPIKey: false });
+	}
 } else keygen();
 
 
