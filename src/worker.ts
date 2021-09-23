@@ -120,7 +120,22 @@ class Queue {
 				if (!this.stopping && !this.shouldntCallFinish) parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackEndEvent", guildId: this.guildID, reason: "FINISHED" }, clientID: this.clientID });
 				this.stopping = false;
 				try {
-					await Discord.entersState(this.player, Discord.AudioPlayerStatus.Playing, 10000);
+					await new Promise((res, rej) => {
+						if (this.player.state.status === Discord.AudioPlayerStatus.Playing) return res(void 0);
+						let timer: NodeJS.Timeout | undefined = void 0;
+						const fn = () => {
+							if (this.player.state.status !== Discord.AudioPlayerStatus.Playing) return;
+							if (timer) clearTimeout(timer);
+							this.player.removeListener("stateChange", fn);
+							res(void 0);
+						};
+						timer = setTimeout(() => {
+							rej(new Error("TRACK_STUCK"));
+							this.stop(true);
+							this.player.removeListener("stateChange", fn);
+						}, 10000);
+						this.player.on("stateChange", fn);
+					});
 				} catch {
 					if (!this.tracks.length) return;
 					this.stop(true);
