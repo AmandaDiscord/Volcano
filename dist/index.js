@@ -127,8 +127,9 @@ http.on("upgrade", (request, socket, head) => {
             }
             else
                 connections.set(userID, [{ socket: s, resumeKey: null, resumeTimeout: 60 }]);
-            for (const event of resume.events)
+            for (const event of resume.events) {
                 s.send(JSON.stringify(event));
+            }
             llLog(`Resumed session with key ${request.headers["resume-key"]}`);
             llLog(`Replaying ${resume.events.length.toLocaleString()} events`);
             resume.events.length = 0;
@@ -279,10 +280,7 @@ server.get("/", (req, res) => res.status(200).header("Content-Type", "text/plain
 server.get("/wakemydyno.txt", (req, res) => res.status(200).header("Content-Type", "text/plain").send("Hi. Thank you :)"));
 server.get("/loadtracks", async (request, response) => {
     const identifier = request.query.identifier;
-    const payload = {
-        playlistInfo: {},
-        tracks: []
-    };
+    const payload = { playlistInfo: {}, tracks: [] };
     let playlist = false;
     if (!identifier || typeof identifier !== "string")
         return Util_1.default.standardErrorHandler("Invalid or no identifier query string provided.", response, payload, llLog);
@@ -402,8 +400,9 @@ http.listen(config.server.port, config.server.address, () => {
 ws.once("close", () => {
     clearInterval(serverLoopInterval);
     rootLog("Socket server has closed.");
-    for (const child of pool.children.values())
+    for (const child of pool.children.values()) {
         child.terminate();
+    }
 });
 process.on("unhandledRejection", (reason) => Logger_1.default.error(reason));
 process.title = "Volcano";

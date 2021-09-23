@@ -20,10 +20,7 @@ async function getHTTPAsSource(resource) {
     catch {
         try {
             const toke = await tokenizer.makeTokenizer(resource, { timeoutInSec: 10 }, { resolveUrl: true });
-            headers = {
-                "content-type": toke.fileInfo.mimeType,
-                "content-length": String(toke.fileInfo.size)
-            };
+            headers = { "content-type": toke.fileInfo.mimeType, "content-length": String(toke.fileInfo.size) };
             const timer = new Promise((_, rej) => setTimeout(() => rej(new Error("Timeout reached")), 7500));
             parsed = await Promise.race([
                 timer,
@@ -34,10 +31,7 @@ async function getHTTPAsSource(resource) {
             if (!headers)
                 throw new Error("MISSING_HEADERS");
             if (headers["content-type"]?.match(mimeRegex)) {
-                parsed = {
-                    common: {},
-                    format: {}
-                };
+                parsed = { common: {}, format: {} };
             }
             else
                 parsed = undefined;
@@ -47,10 +41,7 @@ async function getHTTPAsSource(resource) {
         throw new Error("NO_PARSED");
     const mimeMatch = headers["content-type"]?.match(mimeRegex);
     const chunked = !!(headers["transfer-encoding"] && headers["transfer-encoding"].includes("chunked"));
-    const extra = {
-        stream: chunked,
-        probe: mimeMatch ? (mimeMatch[3] ? mimeMatch[3] : mimeMatch[2]) : parsed.format.container.toLowerCase()
-    };
+    const extra = { stream: chunked, probe: mimeMatch ? (mimeMatch[3] ? mimeMatch[3] : mimeMatch[2]) : parsed.format.container.toLowerCase() };
     if (headers["icy-description"])
         extra.title = headers["icy-description"];
     if (headers["icy-name"])

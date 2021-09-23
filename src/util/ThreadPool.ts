@@ -128,6 +128,8 @@ class ThreadPool extends ThreadBasedReplier {
 				if (msg.op === Constants.workerOPCodes.MESSAGE) return this.emit("message", worker.threadId, msg);
 			});
 
+			worker.on("error", e => logger.error(e));
+
 			worker.once("exit", () => onWorkerExit(newID, worker, this));
 		});
 	}

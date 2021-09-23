@@ -144,8 +144,9 @@ http.on("upgrade", (request: HTTP.IncomingMessage, socket: import("net").Socket,
 				else exist.push({ socket: s, resumeKey: null, resumeTimeout: 60 });
 			} else connections.set(userID, [{ socket: s, resumeKey: null, resumeTimeout: 60 }]);
 
-			for (const event of resume.events)
+			for (const event of resume.events) {
 				s.send(JSON.stringify(event));
+			}
 
 			llLog(`Resumed session with key ${request.headers["resume-key"]}`);
 			llLog(`Replaying ${resume.events.length.toLocaleString()} events`);
@@ -326,10 +327,7 @@ server.get("/wakemydyno.txt", (req, res) => res.status(200).header("Content-Type
 
 server.get("/loadtracks", async (request, response) => {
 	const identifier = request.query.identifier as string | undefined;
-	const payload = {
-		playlistInfo: {},
-		tracks: [] as Array<any>
-	};
+	const payload = { playlistInfo: {}, tracks: [] as Array<any> };
 	let playlist = false;
 
 	if (!identifier || typeof identifier !== "string") return Util.standardErrorHandler("Invalid or no identifier query string provided.", response, payload, llLog);
@@ -463,8 +461,9 @@ ws.once("close", () => {
 
 	rootLog("Socket server has closed.");
 
-	for (const child of pool.children.values())
+	for (const child of pool.children.values()) {
 		child.terminate();
+	}
 });
 
 process.on("unhandledRejection", (reason) => logger.error(reason));

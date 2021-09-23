@@ -1,4 +1,23 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    Object.defineProperty(o, k2, { enumerable: true, get: function() { return m[k]; } });
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -6,7 +25,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const worker_threads_1 = require("worker_threads");
 const path_1 = __importDefault(require("path"));
 const fs_1 = __importDefault(require("fs"));
-const prism_media_1 = require("prism-media");
+const prism = __importStar(require("prism-media"));
 const Discord = require("@discordjs/voice");
 const encoding = require("@lavalink/encoding");
 const yt = require("play-dl");
@@ -39,9 +58,7 @@ const reportInterval = setInterval(() => {
             parentPort.postMessage({ op: Constants_1.default.workerOPCodes.MESSAGE, data: { op: Constants_1.default.OPCodes.PLAYER_UPDATE, guildId: queue.guildID, state: state }, clientID: queue.clientID });
     }
 }, 5000);
-parentPort.once("close", () => {
-    clearInterval(reportInterval);
-});
+parentPort.once("close", () => clearInterval(reportInterval));
 const codeReasons = {
     4001: "You sent an invalid opcode.",
     4002: "You sent a invalid payload in your identifying to the Gateway.",
@@ -72,9 +89,8 @@ if (fs_1.default.existsSync(keyDir)) {
     else
         APIKey = fs_1.default.readFileSync(keyDir, { encoding: "utf-8" });
 }
-else {
+else
     keygen();
-}
 class Queue {
     constructor(clientID, guildID) {
         this.tracks = new Array();
@@ -107,55 +123,32 @@ class Queue {
                     this.destroy();
                 }
             }
-            else if (newState.status === Discord.VoiceConnectionStatus.Destroyed) {
-                this.stop();
-            }
+            else if (newState.status === Discord.VoiceConnectionStatus.Destroyed)
+                this.destroy();
             else if (newState.status === Discord.VoiceConnectionStatus.Connecting || newState.status === Discord.VoiceConnectionStatus.Signalling) {
                 try {
                     await Discord.entersState(this.connection, Discord.VoiceConnectionStatus.Ready, 20000);
                 }
                 catch {
-                    if (this.connection.state.status !== Discord.VoiceConnectionStatus.Destroyed)
-                        this.destroy();
+                    this.destroy();
                 }
             }
         });
         this.player.on("stateChange", async (oldState, newState) => {
             if (newState.status === Discord.AudioPlayerStatus.Idle && oldState.status !== Discord.AudioPlayerStatus.Idle) {
-                if (this.current) {
-                    this.current.playStream.emit("end");
-                    this.current.playStream.destroy();
-                    this.current.audioPlayer = undefined;
-                    this.current._state = { status: Discord.AudioPlayerStatus.Idle };
-                }
                 this.current = null;
                 if (!this.stopping && !this.shouldntCallFinish)
                     parentPort.postMessage({ op: Constants_1.default.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackEndEvent", guildId: this.guildID, reason: "FINISHED" }, clientID: this.clientID });
                 this.stopping = false;
-                await new Promise((res, rej) => {
-                    let timer = void 0;
-                    const fn = () => {
-                        if (this.player.state.status !== Discord.AudioPlayerStatus.Playing)
-                            return;
-                        if (timer)
-                            clearTimeout(timer);
-                        timer = void 0;
-                        this.player.removeListener("stateChange", fn);
-                        res(void 0);
-                    };
-                    timer = setTimeout(() => {
-                        this.player.removeListener("stateChange", fn);
-                        if (this.current || this.paused)
-                            res(void 0);
-                        else
-                            rej(new Error("TRACK_STUCK"));
-                    }, 10000);
-                    this.player.on("stateChange", fn);
-                }).catch(() => {
+                try {
+                    await Discord.entersState(this.player, Discord.AudioPlayerStatus.Playing, 10000);
+                }
+                catch {
                     if (!this.tracks.length)
                         return;
+                    this.stop(true);
                     parentPort.postMessage({ op: Constants_1.default.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackStuckEvent", guildId: this.guildID, track: this.tracks[0].track, thresholdMs: 10000 }, clientID: this.clientID });
-                });
+                }
             }
             else if (newState.status === Discord.AudioPlayerStatus.Playing) {
                 if (this.trackPausing)
@@ -168,11 +161,12 @@ class Queue {
             }
         });
         this.player.on("error", (error) => {
+            this.stop(true);
             parentPort.postMessage({ op: Constants_1.default.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackExceptionEvent", guildId: this.guildID, track: this.tracks[0].track, exception: error.name, message: error.message, severity: "COMMON", cause: error.stack || new Error().stack || "Unknown" }, clientID: this.clientID });
         });
     }
     get state() {
-        if (this.tracks[0] && this.tracks[0].end && this.current?.playbackDuration === this.tracks[0].end)
+        if (this.tracks[0] && this.tracks[0].end && (this.current?.playbackDuration || 0) >= this.tracks[0].end)
             this.stop(true);
         return {
             time: Date.now(),
@@ -180,7 +174,7 @@ class Queue {
             connected: this.connection.state.status === Discord.VoiceConnectionStatus.Ready
         };
     }
-    _nextSong() {
+    nextSong() {
         this.seekTime = 0;
         this.tracks.shift();
         this.initial = true;
@@ -195,14 +189,13 @@ class Queue {
         const decoded = encoding.decode(meta.track);
         if (!decoded.uri)
             return;
-        let final = undefined;
         const resource = await new Promise(async (resolve, reject) => {
             let stream = undefined;
             const demux = async () => {
                 if (!stream)
                     return reject(new Error("NO_STREAM"));
                 this.shouldntCallFinish = true;
-                let isRaw = false;
+                let final = undefined;
                 if (this._filters.length) {
                     const toApply = ["-i", "-", "-analyzeduration", "0", "-loglevel", "0", "-f", "s16le", "-ar", "48000", "-ac", "2"];
                     if (this.state.position && !this._filters.includes("-ss")) {
@@ -221,39 +214,36 @@ class Queue {
                     if (this._filters.length)
                         toApply.push("-af");
                     const argus = toApply.concat(this._filters);
-                    const transcoder = new prism_media_1.FFmpeg({ args: argus });
+                    const transcoder = new prism.FFmpeg({ args: argus });
+                    const encoder = new prism.opus.Encoder({ rate: 48000, channels: 2, frameSize: 960 });
                     this.applyingFilters = false;
-                    final = stream.pipe(transcoder);
-                    final.once("close", () => {
+                    stream.pipe(transcoder);
+                    final = transcoder.pipe(encoder);
+                    function onEnd() {
                         transcoder.destroy();
-                    });
-                    final.once("end", () => {
-                        transcoder.destroy();
-                    });
-                    isRaw = true;
-                }
-                else {
-                    final = stream;
-                }
-                final.once("end", () => {
-                    if (stream) {
-                        stream.emit("end");
-                        stream.destroy();
-                        stream.removeAllListeners();
+                        encoder.destroy();
                     }
-                });
-                if (isRaw)
-                    resolve(Discord.createAudioResource(final, { metadata: decoded, inputType: Discord.StreamType.Raw, inlineVolume: true }));
+                    stream.once("close", onEnd);
+                    stream.once("end", onEnd);
+                }
                 else
-                    Discord.demuxProbe(final).then(probe => resolve(Discord.createAudioResource(probe.stream, { metadata: decoded, inputType: probe.type, inlineVolume: true }))).catch(reject);
+                    final = stream;
+                if (this._filters.length)
+                    return resolve(Discord.createAudioResource(final, { metadata: decoded, inputType: Discord.StreamType.Opus }));
+                try {
+                    await Discord.demuxProbe(final).then(probe => resolve(Discord.createAudioResource(probe.stream, { metadata: decoded, inputType: probe.type })));
+                }
+                catch (e) {
+                    Logger_1.default.error("There was an error when demuxing");
+                    console.error(e);
+                }
             };
             if (decoded.source === "youtube") {
                 if (!config.lavalink.server.sources.youtube)
                     return reject(new Error("YOUTUBE_NOT_ENABLED"));
                 try {
-                    stream = await yt.stream(decoded.uri).then(i => i);
+                    stream = await yt.stream(decoded.uri).then(i => i.stream);
                     await demux();
-                    return;
                 }
                 catch (e) {
                     return reject(e);
@@ -270,7 +260,6 @@ class Queue {
                     stream = await soundcloud_scraper_1.default.StreamDownloader.downloadProgressive(streamURL);
                 try {
                     await demux();
-                    return;
                 }
                 catch (e) {
                     stream.destroy();
@@ -283,7 +272,6 @@ class Queue {
                 try {
                     stream = fs_1.default.createReadStream(decoded.uri);
                     await demux();
-                    return;
                 }
                 catch (e) {
                     return reject(e);
@@ -295,26 +283,15 @@ class Queue {
                 stream = await Util_1.default.request(decoded.uri);
                 try {
                     await demux();
-                    return;
                 }
                 catch (e) {
                     return reject(e);
                 }
             }
-        }).catch(e => {
-            console.error(e);
-        });
+        }).catch(e => Logger_1.default.error(e));
         if (!resource)
             return;
-        if (final) {
-            resource.playStream.once("end", () => {
-                final.emit("end");
-                final.destroy();
-            });
-        }
         this.current = resource;
-        if (meta.volume !== 100 || this._volume !== 1.0)
-            this.volume(meta.volume !== 100 ? meta.volume / 100 : this._volume);
         if (meta.pause)
             this.trackPausing = true;
         this.player.play(resource);
@@ -326,7 +303,7 @@ class Queue {
     replace() {
         if (this.tracks.length === 2)
             parentPort.postMessage({ op: Constants_1.default.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackEndEvent", guildId: this.guildID, reason: "REPLACED" }, clientID: this.clientID });
-        this._nextSong();
+        this.nextSong();
     }
     pause() {
         this.paused = this.player.pause(true);
@@ -334,10 +311,10 @@ class Queue {
     resume() {
         this.paused = !this.player.unpause();
     }
-    stop(destroyed) {
+    stop(shouldntError) {
         this.stopping = true;
         this.player.stop(true);
-        if (!destroyed)
+        if (!shouldntError)
             parentPort.postMessage({ op: Constants_1.default.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackEndEvent", guildId: this.guildID, reason: "STOPPED" }, clientID: this.clientID });
     }
     destroy() {
@@ -354,7 +331,17 @@ class Queue {
     }
     volume(amount) {
         this._volume = amount;
-        this.current?.volume?.setVolume(amount);
+        const found = this._filters.find(i => i.match(/^volume=/));
+        if (found) {
+            const index = this._filters.indexOf(found);
+            if (index === -1)
+                return Logger_1.default.error("Somehow, the index of a filter entry found using .find isn't there anymore. IDK");
+            this._filters.splice(index, 1);
+        }
+        this._filters.push(`volume=${amount}`);
+        if (!this.applyingFilters)
+            this.play();
+        this.applyingFilters = true;
     }
     seek(amount) {
         const previousIndex = this._filters.indexOf("-ss");
@@ -371,9 +358,8 @@ class Queue {
         if (this._filters.includes("-ss"))
             toApply.push("-ss", this._filters[this._filters.indexOf("-ss") + 2]);
         this._filters.length = 0;
-        if (filters.volume) {
+        if (filters.volume)
             toApply.push(`volume=${filters.volume}`);
-        }
         if (filters.equalizer && Array.isArray(filters.equalizer) && filters.equalizer.length) {
             const bandSettings = Array(15).map((_, index) => ({ band: index, gain: 0.2 }));
             for (const eq of filters.equalizer) {
@@ -392,18 +378,14 @@ class Queue {
             const ratedif = 1.0 - rate;
             toApply.push(`aresample=48000,asetrate=48000*${pitch + ratedif},atempo=${finalspeed},aresample=48000`);
         }
-        if (filters.tremolo) {
+        if (filters.tremolo)
             toApply.push(`tremolo=f=${filters.tremolo.frequency || 2.0}:d=${filters.tremolo.depth || 0.5}`);
-        }
-        if (filters.vibrato) {
+        if (filters.vibrato)
             toApply.push(`vibrato=f=${filters.vibrato.frequency || 2.0}:d=${filters.vibrato.depth || 0.5}`);
-        }
-        if (filters.rotation) {
+        if (filters.rotation)
             toApply.push(`apulsator=hz=${filters.rotation.rotationHz || 0}`);
-        }
-        if (filters.lowPass) {
+        if (filters.lowPass)
             toApply.push(`lowpass=f=${500 / filters.lowPass.smoothing}`);
-        }
         this._filters.push(...toApply);
         if (!this.applyingFilters)
             this.play();
@@ -432,17 +414,12 @@ parentPort.on("message", async (packet) => {
                 if (!queues.has(key)) {
                     if (packet.broadcasted)
                         return parentPort.postMessage({ op: Constants_1.default.workerOPCodes.REPLY, data: false, threadID: packet.threadID });
-                    Discord.joinVoiceChannel({
-                        channelId: "",
-                        guildId: guildID,
-                        group: userID,
-                        adapterCreator: voiceAdapterCreator(userID, guildID)
-                    });
+                    Discord.joinVoiceChannel({ channelId: "", guildId: guildID, group: userID, adapterCreator: voiceAdapterCreator(userID, guildID) });
                     q = new Queue(userID, guildID);
                     queues.set(key, q);
                     parentPort.postMessage({ op: Constants_1.default.workerOPCodes.VOICE_SERVER, data: { clientID: userID, guildId: guildID } });
                     q.tracks.push({ track: packet.data.track, start: Number(packet.data.startTime || "0"), end: Number(packet.data.endTime || "0"), volume: Number(packet.data.volume || "100"), pause: packet.data.pause || false });
-                    q.play();
+                    q.play().catch(Logger_1.default.error);
                 }
                 else {
                     if (packet.broadcasted)
