@@ -2,7 +2,16 @@
 const yt = require("play-dl");
 async function getYoutubeAsSource(resource, isSearch) {
     if (isSearch) {
-        const searchResults = await yt.search(resource, { limit: 10, type: "video" });
+        try {
+            if (!resource.match(/^[a-zA-Z]+$/))
+                throw new Error("RESOURCE_NOT_ID");
+            const ID = yt.extractID(resource);
+            const d = await yt.video_basic_info(ID);
+            return { entries: [{ id: d.video_details.id, title: d.video_details.title, duration: Number(d.video_details.durationInSec || 0), uploader: d.video_details.channel?.name || "Unknown author" }] };
+        }
+        catch {
+        }
+        const searchResults = await yt.search(resource, { limit: 10, source: { youtube: "video" } });
         const found = searchResults.find(v => v.id === resource);
         if (found)
             return { entries: [{ id: found.id, title: found.title, duration: found.durationInSec, uploader: found.channel?.name || "Unknown author" }] };
@@ -14,7 +23,7 @@ async function getYoutubeAsSource(resource, isSearch) {
     if (url && url.searchParams.get("list") && url.searchParams.get("list").startsWith("FL_") || resource.startsWith("FL_"))
         throw new Error("Favorite list playlists cannot be fetched.");
     if (url && url.searchParams.has("list") || resource.startsWith("PL")) {
-        const pl = await yt.playlist_info(resource, true);
+        const pl = await yt.playlist_info(resource);
         if (!pl)
             throw new Error("NO_PLAYLIST");
         await pl.fetch();
@@ -25,6 +34,6 @@ async function getYoutubeAsSource(resource, isSearch) {
         return { entries: entries.map(i => ({ id: i.id, title: i.title, duration: i.durationInSec, uploader: i.channel?.name || "Unknown author" })), plData: { name: pl.title, selectedTrack: url?.searchParams.get("index") ? Number(url.searchParams.get("index")) : 1 } };
     }
     const data = await yt.video_basic_info(resource);
-    return { entries: [{ id: data.video_details.id, title: data.video_details.title, duration: Number(data.video_details.durationInSec || 0), uploader: data.video_details.channel.name || "Unknown author" }] };
+    return { entries: [{ id: data.video_details.id, title: data.video_details.title, duration: Number(data.video_details.durationInSec || 0), uploader: data.video_details.channel?.name || "Unknown author" }] };
 }
 module.exports = getYoutubeAsSource;

@@ -8,7 +8,7 @@ LavaLink make memory usage go brrrrr. Volcano is very lightweight. Dependencies 
 Volcano makes a *best effort* towards mirroring LavaLink's protocols ~~which was actually very difficult to do granted not much info is out there regarding specific cases of LavaLink's protocols~~ while trying to efficiently memory manage and make use of a thread pool based on worker_threads for reliable and smooth playback.
 
 # Non-compatible changes
-Volcano offers an op ffmpeg. **OP FFMPEG DOES NOT EXIST IN LavaLink AS LAVALINK DOES NOT USE FFMPEG. DO NOT TRY TO GET SUPPORT FOR OP FFMPEG IN LAVALINK'S SERVER**. Op ffmpeg accepts an Array of raw ffmpeg args. op ffmpeg overrides op filters and op seek.
+Volcano offers an op ffmpeg. **OP FFMPEG DOES NOT EXIST IN LAVALINK AS LAVALINK DOES NOT USE FFMPEG. DO NOT TRY TO GET SUPPORT FOR OP FFMPEG IN LAVALINK'S SERVER**. Op ffmpeg accepts an Array of raw ffmpeg args. op ffmpeg overrides op filters and op seek.
 
 Example:
 ```js
@@ -53,10 +53,10 @@ idle occupied 162MB stable.
 1 player without filters used 200MB consistently.
 Volcano:
 idle occupied 15.3MB stable.
-1 player without filters used 76MB consistently.
+1 player without filters used 76MB consistently. (The large jump is because the worker_thread has a bit of overhead as module require cache is not shared with the main thread)
 
 ## Networking
-I don't have a consistent way to measure networking in either scenario, however, I can describe that while getting tracks from any source, only essential data is fetched in the form of streams. This keeps possible bandwidth waste low and memory usage lower. Currently in Volcano while getting track info from the HTTP source, only 20 chunks of 16KB (320KB total) are allowed to be piped. After that, the stream is forcibly closed and the HTTP connection is destroyed. This limit is more than sufficient to allow for the stream to have key metadata properties identified such as track duration and possible author/track name in some encodings which support metadata embedding such as opus.
+When getting tracks, only essential data is fetched in the form of streams. While getting track info from the HTTP source, only 50 chunks of 16KB (800KB total at max) are allowed to be piped, but it usually identifies the track before it reaches the end of the 50 chunks. After that, the stream is forcibly closed and the HTTP connection is destroyed. The biggest network and memory "hog" is YouTube tracks which has a highWaterMark of 10MB. The author of the YouTube lib insists that it doesn't always occupy that amount, but that is the theoretical max buffer size to account for network instability. Other track streaming usage sits around 2MB per track.
 
 No assumptions are made in regards to track metadata including streams.
 
