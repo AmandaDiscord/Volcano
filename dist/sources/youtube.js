@@ -3,7 +3,7 @@ const yt = require("play-dl");
 async function getYoutubeAsSource(resource, isSearch) {
     if (isSearch) {
         try {
-            if (!resource.match(/^[a-zA-Z]+$/))
+            if (!resource.match(/^[a-zA-Z\d]+$/))
                 throw new Error("RESOURCE_NOT_ID");
             const ID = yt.extractID(resource);
             const d = await yt.video_basic_info(ID);

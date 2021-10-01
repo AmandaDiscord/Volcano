@@ -3,7 +3,7 @@ const yt = require("play-dl") as typeof import("play-dl");
 async function getYoutubeAsSource(resource: string, isSearch: boolean): Promise<{ entries: Array<{ id: string; title: string; duration: number; uploader: string }>; plData?: { name: string; selectedTrack: number } }> {
 	if (isSearch) {
 		try {
-			if (!resource.match(/^[a-zA-Z]+$/)) throw new Error("RESOURCE_NOT_ID");
+			if (!resource.match(/^[a-zA-Z\d]+$/)) throw new Error("RESOURCE_NOT_ID");
 			const ID = yt.extractID(resource);
 			const d = await yt.video_basic_info(ID);
 			return { entries: [{ id: d.video_details.id as string, title: d.video_details.title as string, duration: Number(d.video_details.durationInSec as number || 0), uploader: d.video_details.channel?.name || "Unknown author" }] };
