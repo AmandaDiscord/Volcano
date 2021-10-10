@@ -115,28 +115,29 @@ class Queue {
 		});
 
 		this.player.on("stateChange", async (oldState, newState) => {
+			const instance = this.player;
 			if (newState.status === Discord.AudioPlayerStatus.Idle && oldState.status !== Discord.AudioPlayerStatus.Idle) {
 				this.current = null;
 				if (!this.stopping && !this.shouldntCallFinish) parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackEndEvent", guildId: this.guildID, reason: "FINISHED" }, clientID: this.clientID });
 				this.stopping = false;
 				try {
 					await new Promise((res, rej) => {
-						if (this.player.state.status === Discord.AudioPlayerStatus.Playing) return res(void 0);
+						if (instance.state.status === Discord.AudioPlayerStatus.Playing) return res(void 0);
 						let timer: NodeJS.Timeout | undefined = void 0;
 						function fn() {
-							if (this.player.state.status !== Discord.AudioPlayerStatus.Playing) return;
+							if (instance.state.status !== Discord.AudioPlayerStatus.Playing) return;
 							if (timer) clearTimeout(timer);
-							if (fn) this.player.removeListener("stateChange", fn);
+							if (fn) instance.removeListener("stateChange", fn);
 							else logger.error("Somehow, the fn to remove from the player was undefined");
 							res(void 0);
 						}
 						timer = setTimeout(() => {
 							rej(new Error("TRACK_STUCK"));
 							this.stop(true);
-							if (fn) this.player.removeListener("stateChange", fn);
+							if (fn) instance.removeListener("stateChange", fn);
 							else logger.error("Somehow, the fn to remove from the player was undefined");
 						}, 10000);
-						this.player.on("stateChange", fn);
+						instance.on("stateChange", fn);
 					});
 				} catch {
 					if (!this.tracks.length) return;
@@ -172,7 +173,7 @@ class Queue {
 		this.tracks.shift();
 		this.initial = true;
 		if (!this.tracks.length) return;
-		this.play();
+		this.play().catch(() => logger.error("There was an error when calling play through nextSong"));
 	}
 
 	public async play() {

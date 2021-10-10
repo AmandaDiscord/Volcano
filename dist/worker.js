@@ -135,6 +135,7 @@ class Queue {
             }
         });
         this.player.on("stateChange", async (oldState, newState) => {
+            const instance = this.player;
             if (newState.status === Discord.AudioPlayerStatus.Idle && oldState.status !== Discord.AudioPlayerStatus.Idle) {
                 this.current = null;
                 if (!this.stopping && !this.shouldntCallFinish)
@@ -142,16 +143,16 @@ class Queue {
                 this.stopping = false;
                 try {
                     await new Promise((res, rej) => {
-                        if (this.player.state.status === Discord.AudioPlayerStatus.Playing)
+                        if (instance.state.status === Discord.AudioPlayerStatus.Playing)
                             return res(void 0);
                         let timer = void 0;
                         function fn() {
-                            if (this.player.state.status !== Discord.AudioPlayerStatus.Playing)
+                            if (instance.state.status !== Discord.AudioPlayerStatus.Playing)
                                 return;
                             if (timer)
                                 clearTimeout(timer);
                             if (fn)
-                                this.player.removeListener("stateChange", fn);
+                                instance.removeListener("stateChange", fn);
                             else
                                 Logger_1.default.error("Somehow, the fn to remove from the player was undefined");
                             res(void 0);
@@ -160,11 +161,11 @@ class Queue {
                             rej(new Error("TRACK_STUCK"));
                             this.stop(true);
                             if (fn)
-                                this.player.removeListener("stateChange", fn);
+                                instance.removeListener("stateChange", fn);
                             else
                                 Logger_1.default.error("Somehow, the fn to remove from the player was undefined");
                         }, 10000);
-                        this.player.on("stateChange", fn);
+                        instance.on("stateChange", fn);
                     });
                 }
                 catch {
@@ -204,7 +205,7 @@ class Queue {
         this.initial = true;
         if (!this.tracks.length)
             return;
-        this.play();
+        this.play().catch(() => Logger_1.default.error("There was an error when calling play through nextSong"));
     }
     async play() {
         if (!this.tracks.length)
