@@ -33,7 +33,7 @@
     "libsodium-wrappers": "^0.7.9",
     "mixin-deep": "^2.0.1",
     "music-metadata": "^7.11.4",
-    "play-dl": "^1.0.6",
+    "play-dl": "^1.1.0",
     "prism-media": "^1.3.2",
     "soundcloud-scraper": "^5.0.2",
     "ws": "^8.2.3",

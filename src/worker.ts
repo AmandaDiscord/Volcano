@@ -123,16 +123,18 @@ class Queue {
 					await new Promise((res, rej) => {
 						if (this.player.state.status === Discord.AudioPlayerStatus.Playing) return res(void 0);
 						let timer: NodeJS.Timeout | undefined = void 0;
-						const fn = () => {
+						function fn() {
 							if (this.player.state.status !== Discord.AudioPlayerStatus.Playing) return;
 							if (timer) clearTimeout(timer);
-							this.player.removeListener("stateChange", fn);
+							if (fn) this.player.removeListener("stateChange", fn);
+							else logger.error("Somehow, the fn to remove from the player was undefined");
 							res(void 0);
-						};
+						}
 						timer = setTimeout(() => {
 							rej(new Error("TRACK_STUCK"));
 							this.stop(true);
-							this.player.removeListener("stateChange", fn);
+							if (fn) this.player.removeListener("stateChange", fn);
+							else logger.error("Somehow, the fn to remove from the player was undefined");
 						}, 10000);
 						this.player.on("stateChange", fn);
 					});
