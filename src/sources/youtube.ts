@@ -4,21 +4,28 @@ async function getYoutubeAsSource(resource: string, isSearch: boolean): Promise<
 	if (isSearch) {
 		const validated = yt.yt_validate(resource);
 		if (validated) {
-			const ID = yt.extractID(resource);
-			if (validated === "video") {
-				const d = await yt.video_basic_info(ID);
-				return { entries: [{ id: d.video_details.id as string, title: d.video_details.title as string, duration: Number(d.video_details.durationInSec as number || 0), uploader: d.video_details.channel?.name || "Unknown author" }] };
-			} else {
-				const d = await yt.playlist_info(resource);
-				if (!d) throw new Error("NO_PLAYLIST");
-				await d.fetch();
-				const entries = [] as Array<import("play-dl/dist/YouTube/classes/Video").YouTubeVideo>;
-				for (let i = 1; i < d.total_pages + 1; i++) {
-					entries.push(...d.page(i));
+			try {
+				const ID = yt.extractID(resource);
+				if (validated === "video") {
+					const d = await yt.video_basic_info(ID);
+					return { entries: [{ id: d.video_details.id as string, title: d.video_details.title as string, duration: Number(d.video_details.durationInSec as number || 0), uploader: d.video_details.channel?.name || "Unknown author" }] };
+				} else {
+					const d = await yt.playlist_info(resource);
+					if (!d) throw new Error("NO_PLAYLIST");
+					await d.fetch();
+					const entries = [] as Array<import("play-dl/dist/YouTube/classes/Video").YouTubeVideo>;
+					for (let i = 1; i < d.total_pages + 1; i++) {
+						entries.push(...d.page(i));
+					}
+					return { entries: entries.map(i => ({ id: i.id as string, title: i.title as string, duration: i.durationInSec, uploader: i.channel?.name || "Unknown author" })), plData: { name: d.title as string, selectedTrack: 1 } };
 				}
-				return { entries: entries.map(i => ({ id: i.id as string, title: i.title as string, duration: i.durationInSec, uploader: i.channel?.name || "Unknown author" })), plData: { name: d.title as string, selectedTrack: 1 } };
+			} catch {
+				return doSearch();
 			}
-		} else {
+		} else return doSearch();
+
+		// eslint-disable-next-line no-inner-declarations
+		async function doSearch() {
 			const searchResults = await yt.search(resource, { limit: 10, source: { youtube: "video" } }) as Array<import("play-dl/dist/YouTube/classes/Video").YouTubeVideo>;
 			const found = searchResults.find(v => v.id === resource);
 			if (found) return { entries: [{ id: found.id as string, title: found.title as string, duration: found.durationInSec, uploader: found.channel?.name || "Unknown author" }] };
