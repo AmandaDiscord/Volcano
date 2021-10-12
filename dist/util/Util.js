@@ -22,7 +22,7 @@ function processLoad() {
 exports.processLoad = processLoad;
 function standardErrorHandler(e, response, payload, llLog, loadType = "LOAD_FAILED", severity = "COMMON") {
     llLog(`Load failed\n${e}`);
-    response.status(200).header(Constants_1.default.baseHTTPResponseHeaders).send(JSON.stringify(Object.assign(payload, { loadType: loadType, exception: { message: (typeof e === "string" ? e : e.message).split("\n").slice(-1)[0].replace(/(Error|ERROR):? ?/, ""), severity: severity } })));
+    response.status(200).header(Constants_1.default.baseHTTPResponseHeaders).send(JSON.stringify(Object.assign(payload, { loadType: loadType, exception: { message: (typeof e === "string" ? e : e.message || "").split("\n").slice(-1)[0].replace(/(Error|ERROR):? ?/, ""), severity: severity } })));
     void 0;
 }
 exports.standardErrorHandler = standardErrorHandler;

@@ -19,7 +19,7 @@ export function processLoad(): Promise<number> {
 
 export function standardErrorHandler(e: Error | string, response: import("express").Response, payload: any, llLog: typeof import("./Logger").info, loadType: "LOAD_FAILED" | "NO_MATCHES" = "LOAD_FAILED", severity = "COMMON") {
 	llLog(`Load failed\n${e}`);
-	response.status(200).header(Constants.baseHTTPResponseHeaders).send(JSON.stringify(Object.assign(payload, { loadType: loadType, exception: { message: (typeof e === "string" ? e : e.message).split("\n").slice(-1)[0].replace(/(Error|ERROR):? ?/, ""), severity: severity } })));
+	response.status(200).header(Constants.baseHTTPResponseHeaders).send(JSON.stringify(Object.assign(payload, { loadType: loadType, exception: { message: (typeof e === "string" ? e : e.message || "").split("\n").slice(-1)[0].replace(/(Error|ERROR):? ?/, ""), severity: severity } })));
 	void 0;
 }
 
