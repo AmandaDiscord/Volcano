@@ -296,10 +296,10 @@ server.get("/loadtracks", async (request, response) => {
     let url;
     if (resource.startsWith("http"))
         url = new URL(resource);
-    if (isSoundcloudSearch || (url && url.hostname === soundCloudURL.hostname)) {
-        if (isSoundcloudSearch && !config.lavalink.server.soundcloudSearchEnabled)
+    async function doSoundCloudSearch() {
+        if ((isSoundcloudSearch || isYouTubeSearch) && !config.lavalink.server.soundcloudSearchEnabled)
             return response.status(200).header(Constants_1.default.baseHTTPResponseHeaders).send(JSON.stringify(Object.assign(payload, { loadType: "LOAD_FAILED", exception: { message: "Soundcloud searching is not enabled.", severity: "COMMON" } })));
-        const data = await (0, soundcloud_1.default)(resource, isSoundcloudSearch).catch(e => Util_1.default.standardErrorHandler(e, response, payload, llLog));
+        const data = await (0, soundcloud_1.default)(resource, isSoundcloudSearch || isYouTubeSearch).catch(e => Util_1.default.standardErrorHandler(e, response, payload, llLog));
         if (!data)
             return;
         const tracks = data.map(info => ({ track: encoding.encode(Object.assign({ flags: 1, version: 2, source: "soundcloud" }, info, { position: BigInt(info.position), length: BigInt(Math.round(info.length)) })), info }));
@@ -308,6 +308,11 @@ server.get("/loadtracks", async (request, response) => {
             return Util_1.default.standardErrorHandler("Could not extract Soundcloud info.", response, payload, llLog, "NO_MATCHES");
         else
             llLog(`Loaded track ${tracks[0].info.title}`);
+    }
+    if ((isSoundcloudSearch || (url && url.hostname === soundCloudURL.hostname))) {
+        if (!config.lavalink.server.sources.soundcloud)
+            return response.status(200).header(Constants_1.default.baseHTTPResponseHeaders).send(JSON.stringify(Object.assign(payload, { loadType: "LOAD_FAILED", exception: { message: "Soundcloud is not enabled.", severity: "COMMON" } })));
+        await doSoundCloudSearch();
     }
     else if (path_1.default.isAbsolute(resource)) {
         if (!config.lavalink.server.sources.local)
@@ -349,21 +354,27 @@ server.get("/loadtracks", async (request, response) => {
     else {
         if (isYouTubeSearch && !config.lavalink.server.youtubeSearchEnabled)
             return response.status(200).header(Constants_1.default.baseHTTPResponseHeaders).send(JSON.stringify(Object.assign(payload, { loadType: "LOAD_FAILED", exception: { message: "YouTube searching is not enabled.", severity: "COMMON" } })));
-        const data = await (0, youtube_1.default)(resource, isYouTubeSearch).catch(e => Util_1.default.standardErrorHandler(e, response, payload, llLog));
-        if (!data)
-            return;
-        const infos = data.entries.map(i => ({ identifier: i.id, author: i.uploader, length: Math.round(i.duration * 1000), isStream: i.duration === 0, isSeekable: i.duration !== 0, position: 0, title: i.title, uri: `https://youtube.com/watch?v=${i.id}` }));
-        const tracks = infos.map(info => ({ track: encoding.encode(Object.assign({ flags: 1, version: 2, source: "youtube" }, info, { position: BigInt(info.position), length: BigInt(Math.round(info.length)) })), info }));
-        if (data.plData) {
-            payload.playlistInfo = data.plData;
-            playlist = true;
-            llLog(`Loaded playlist ${data.plData.name}`);
+        if (!config.lavalink.server.sources.youtube && config.lavalink.server.sources.soundcloud)
+            await doSoundCloudSearch();
+        else {
+            if (!config.lavalink.server.sources.youtube)
+                return response.status(200).header(Constants_1.default.baseHTTPResponseHeaders).send(JSON.stringify(Object.assign(payload, { loadType: "LOAD_FAILED", exception: { message: "YouTube is not enabled.", severity: "COMMON" } })));
+            const data = await (0, youtube_1.default)(resource, isYouTubeSearch).catch(e => Util_1.default.standardErrorHandler(e, response, payload, llLog));
+            if (!data)
+                return;
+            const infos = data.entries.map(i => ({ identifier: i.id, author: i.uploader, length: Math.round(i.duration * 1000), isStream: i.duration === 0, isSeekable: i.duration !== 0, position: 0, title: i.title, uri: `https://youtube.com/watch?v=${i.id}` }));
+            const tracks = infos.map(info => ({ track: encoding.encode(Object.assign({ flags: 1, version: 2, source: "youtube" }, info, { position: BigInt(info.position), length: BigInt(Math.round(info.length)) })), info }));
+            if (data.plData) {
+                payload.playlistInfo = data.plData;
+                playlist = true;
+                llLog(`Loaded playlist ${data.plData.name}`);
+            }
+            payload.tracks = tracks;
+            if (tracks.length === 0)
+                return Util_1.default.standardErrorHandler("Could not extract Soundcloud info.", response, payload, llLog, "NO_MATCHES");
+            else if (tracks.length === 1 && !data.plData)
+                llLog(`Loaded track ${tracks[0].info.title}`);
         }
-        payload.tracks = tracks;
-        if (tracks.length === 0)
-            return Util_1.default.standardErrorHandler("Could not extract Soundcloud info.", response, payload, llLog, "NO_MATCHES");
-        else if (tracks.length === 1 && !data.plData)
-            llLog(`Loaded track ${tracks[0].info.title}`);
     }
     if (payload.tracks.length === 0)
         return Util_1.default.standardErrorHandler("No matches.", response, payload, llLog, "NO_MATCHES");
