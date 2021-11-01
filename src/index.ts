@@ -404,7 +404,10 @@ server.get("/loadtracks", async (request, response) => {
 
 		payload.tracks.push(track);
 	} else {
-		if (isYouTubeSearch && !config.lavalink.server.youtubeSearchEnabled) return response.status(200).header(Constants.baseHTTPResponseHeaders).send(JSON.stringify(Object.assign(payload, { loadType: "LOAD_FAILED", exception: { message: "YouTube searching is not enabled.", severity: "COMMON" } })));
+		if (isYouTubeSearch && !config.lavalink.server.youtubeSearchEnabled) {
+			// can fallback to sc?
+			if (!config.lavalink.server.soundcloudSearchEnabled || !config.lavalink.server.sources.soundcloud) return response.status(200).header(Constants.baseHTTPResponseHeaders).send(JSON.stringify(Object.assign(payload, { loadType: "LOAD_FAILED", exception: { message: "YouTube searching is not enabled.", severity: "COMMON" } })));
+		}
 		if (!config.lavalink.server.sources.youtube && config.lavalink.server.sources.soundcloud) await doSoundCloudSearch();
 		else {
 			if (!config.lavalink.server.sources.youtube) return response.status(200).header(Constants.baseHTTPResponseHeaders).send(JSON.stringify(Object.assign(payload, { loadType: "LOAD_FAILED", exception: { message: "YouTube is not enabled.", severity: "COMMON" } })));

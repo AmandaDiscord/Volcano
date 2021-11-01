@@ -154,7 +154,7 @@ class Queue {
                             if (fn)
                                 instance.removeListener("stateChange", fn);
                             else
-                                Logger_1.default.error("Somehow, the fn to remove from the player was undefined");
+                                logEr("Somehow, the fn to remove from the player was undefined");
                             res(void 0);
                         }
                         timer = setTimeout(() => {
@@ -163,7 +163,7 @@ class Queue {
                             if (fn)
                                 instance.removeListener("stateChange", fn);
                             else
-                                Logger_1.default.error("Somehow, the fn to remove from the player was undefined");
+                                logEr("Somehow, the fn to remove from the player was undefined");
                         }, 10000);
                         instance.on("stateChange", fn);
                     });
@@ -205,7 +205,7 @@ class Queue {
         this.initial = true;
         if (!this.tracks.length)
             return;
-        this.play().catch(() => Logger_1.default.error("There was an error when calling play through nextSong"));
+        this.play().catch(() => logEr("There was an error when calling play through nextSong"));
     }
     async play() {
         if (!this.tracks.length)
@@ -259,7 +259,7 @@ class Queue {
                     await Discord.demuxProbe(final).then(probe => resolve(Discord.createAudioResource(probe.stream, { metadata: decoded, inputType: probe.type })));
                 }
                 catch (e) {
-                    Logger_1.default.error("There was an error when demuxing");
+                    logEr("There was an error when demuxing");
                     console.error(e);
                 }
             };
@@ -313,7 +313,7 @@ class Queue {
                     return reject(e);
                 }
             }
-        }).catch(e => Logger_1.default.error(e));
+        }).catch(e => logEr(e));
         if (!resource)
             return;
         this.current = resource;
@@ -360,7 +360,7 @@ class Queue {
         if (found) {
             const index = this._filters.indexOf(found);
             if (index === -1)
-                return Logger_1.default.error("Somehow, the index of a filter entry found using .find isn't there anymore. IDK");
+                return logEr("Somehow, the index of a filter entry found using .find isn't there anymore. IDK");
             this._filters.splice(index, 1);
         }
         this._filters.push(`volume=${amount}`);
@@ -444,7 +444,7 @@ parentPort.on("message", async (packet) => {
                     queues.set(key, q);
                     parentPort.postMessage({ op: Constants_1.default.workerOPCodes.VOICE_SERVER, data: { clientID: userID, guildId: guildID } });
                     q.tracks.push({ track: packet.data.track, start: Number(packet.data.startTime || "0"), end: Number(packet.data.endTime || "0"), volume: Number(packet.data.volume || "100"), pause: packet.data.pause || false });
-                    q.play().catch(Logger_1.default.error);
+                    q.play().catch(logEr);
                 }
                 else {
                     if (packet.broadcasted)
@@ -517,3 +517,19 @@ function voiceAdapterCreator(userID, guildID) {
     };
 }
 parentPort.postMessage({ op: Constants_1.default.workerOPCodes.READY });
+function logEr(e) {
+    let final;
+    if (e instanceof Error)
+        final = e;
+    else if (typeof e === "string")
+        final = new Error(e);
+    else if (e && !e.stack) {
+        e.stack = new Error().stack;
+        final = e;
+    }
+    else
+        final = new Error("Unknown error occurred");
+    Logger_1.default.error(`${final.message}\n${final.stack}`);
+}
+process.on("unhandledRejection", logEr);
+process.on("uncaughtException", logEr);
