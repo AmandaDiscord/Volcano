@@ -206,19 +206,19 @@ class Queue {
 					if (this._filters.length) toApply.push("-af");
 					const argus = toApply.concat(this._filters);
 					const transcoder = new prism.FFmpeg({ args: argus });
-					const encoder = new prism.opus.Encoder({ rate: 48000, channels: 2, frameSize: 960 });
 					this.applyingFilters = false;
-					stream.pipe(transcoder);
-					final = transcoder.pipe(encoder);
+					final = stream.pipe(transcoder);
+					let destroyed = false;
 
 					// eslint-disable-next-line no-inner-declarations
 					function onEnd() {
+						if (destroyed) return;
+						destroyed = true;
 						transcoder.destroy();
-						encoder.destroy();
 					}
 
-					stream.once("close", onEnd);
-					stream.once("end", onEnd);
+					final.once("close", onEnd);
+					final.once("end", onEnd);
 				} else final = stream;
 
 				if (this._filters.length) return resolve(Discord.createAudioResource(final, { metadata: decoded, inputType: Discord.StreamType.OggOpus }));
