@@ -254,7 +254,7 @@ class Queue {
                 else
                     final = stream;
                 if (this._filters.length)
-                    return resolve(Discord.createAudioResource(final, { metadata: decoded, inputType: Discord.StreamType.Opus }));
+                    return resolve(Discord.createAudioResource(final, { metadata: decoded, inputType: Discord.StreamType.OggOpus }));
                 try {
                     await Discord.demuxProbe(final).then(probe => resolve(Discord.createAudioResource(probe.stream, { metadata: decoded, inputType: probe.type })));
                 }
