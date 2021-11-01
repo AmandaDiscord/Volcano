@@ -222,7 +222,7 @@ class Queue {
                 this.shouldntCallFinish = true;
                 let final = undefined;
                 if (this._filters.length) {
-                    const toApply = ["-i", "-", "-analyzeduration", "0", "-loglevel", "0", "-f", "s16le", "-ar", "48000", "-ac", "2"];
+                    const toApply = ["-i", "-", "-analyzeduration", "0", "-loglevel", "0", "-f", "s16le", "-acodec", "libopus", "-f", "opus", "-ar", "48000", "-ac", "2"];
                     if (this.state.position && !this._filters.includes("-ss")) {
                         toApply.unshift("-ss", `${this.state.position + 2000}ms`, "-accurate_seek");
                         this.seekTime = this.state.position + 2000;
