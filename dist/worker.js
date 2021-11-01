@@ -105,6 +105,7 @@ class Queue {
         this.trackPausing = false;
         this.initial = true;
         this.seekTime = 0;
+        this._destroyed = false;
         this.connection = Discord.getVoiceConnection(guildID, clientID);
         this.connection.subscribe(this.player);
         this.clientID = clientID;
@@ -344,6 +345,8 @@ class Queue {
             parentPort.postMessage({ op: Constants_1.default.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackEndEvent", guildId: this.guildID, reason: "STOPPED" }, clientID: this.clientID });
     }
     destroy() {
+        if (this._destroyed)
+            return;
         this.tracks.length = 0;
         this.stop(true);
         this.connection.destroy(true);
@@ -354,6 +357,7 @@ class Queue {
             parentPort.close();
             parentPort.removeAllListeners();
         }
+        this._destroyed = true;
     }
     volume(amount) {
         this._volume = amount;

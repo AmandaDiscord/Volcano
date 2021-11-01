@@ -86,6 +86,7 @@ class Queue {
 	public trackPausing = false;
 	public initial = true;
 	public seekTime = 0;
+	public _destroyed = false;
 
 	public constructor(clientID: string, guildID: string) {
 		this.connection = Discord.getVoiceConnection(guildID, clientID)!;
@@ -299,6 +300,7 @@ class Queue {
 	}
 
 	public destroy() {
+		if (this._destroyed) return;
 		this.tracks.length = 0;
 		this.stop(true);
 		this.connection.destroy(true);
@@ -309,6 +311,7 @@ class Queue {
 			parentPort.close();
 			parentPort.removeAllListeners();
 		}
+		this._destroyed = true;
 	}
 
 	public volume(amount: number) {
