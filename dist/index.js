@@ -1,4 +1,23 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    Object.defineProperty(o, k2, { enumerable: true, get: function() { return m[k]; } });
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -12,7 +31,7 @@ const yaml_1 = __importDefault(require("yaml"));
 const express_1 = __importDefault(require("express"));
 const ws_1 = __importDefault(require("ws"));
 const mixin_deep_1 = __importDefault(require("mixin-deep"));
-const encoding = require("@lavalink/encoding");
+const encoding = __importStar(require("@lavalink/encoding"));
 const Constants_1 = __importDefault(require("./Constants"));
 const Logger_1 = __importDefault(require("./util/Logger"));
 const ThreadPool_1 = __importDefault(require("./util/ThreadPool"));
@@ -23,7 +42,7 @@ const soundcloud_1 = __importDefault(require("./sources/soundcloud"));
 const youtube_1 = __importDefault(require("./sources/youtube"));
 const cpuCount = os_1.default.cpus().length;
 const pool = new ThreadPool_1.default({
-    size: cpuCount,
+    size: Infinity,
     dir: path_1.default.join(__dirname, "./worker.js")
 });
 const configDir = path_1.default.join(process.cwd(), "./application.yml");
@@ -46,7 +65,7 @@ if (config.spring.main["banner-mode"] === "log")
         "\x1b[33m   \\  / (_) | | (_| (_| | | | | (_) |    \x1b[0m/   \x1b[31mV   \x1b[0m\\\n" +
         "\x1b[33m    \\/ \\___/|_|\\___\\__,_|_| |_|\\___/  \x1b[0m/\\/     \x1b[31mVV  \x1b[0m\\");
 rootLog(`Starting on ${os_1.default.hostname()} with PID ${process.pid} (${__filename} started by ${os_1.default.userInfo().username} in ${process.cwd()})`);
-rootLog(`Using ${cpuCount} worker threads in pool`);
+rootLog("Using infinite worker threads in pool. THIS IS TEMPORARY. READ THE README");
 const server = (0, express_1.default)();
 const http = http_1.default.createServer(server);
 const ws = new ws_1.default.Server({ noServer: true });

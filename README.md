@@ -2,6 +2,11 @@
 
 Volcano is a (Mostly) LavaLink compatible replacement which is written in TypeScript for the Node JS runtime.
 
+# PLEASE READ THIS
+Volcano will currently use an Infinite amount of threads. **This is only a temporary change** because worker_threads are their own v8 instance. This is relevant because there is currently a memory leak in the opus encoding library which I have tried and failed to fix myself. When an op destroy is sent, the thread related to that guild_id will be destroyed and the memory leak will be "fixed". This is super hacky and doesn't work if the destroy op is never sent. Please always send destroy ops when you're not using that Queue!!!
+
+Like I said, this is temporary until the opus encoding library is fixed. I cannot give an ETA because I do not maintain that lib. I'm sorry. This is the tradeoff I want to make instead of having a fixed number of threads with a theoretically infinite number of Queues on all of those threads and them having theoretical infinite uptime as long as queues are being created on that thread and increasing the stack size for that thread.
+
 # Why not just use LavaLink
 LavaLink make memory usage go brrrrr. Volcano is very lightweight. Dependencies have been carefully chosen with a tendency towards a lower level approach as compared to installing a collection of high level and bloated libs, wrapping it in a web server whilst breaking protocols and calling it a day. I have also had my fair share of troubleshooting and fixing memory leaks and I've done my best to not include those as a "feature". Yw. If you find a flaw in my logic, please open an issue or a PR and we'll sort things out.
 

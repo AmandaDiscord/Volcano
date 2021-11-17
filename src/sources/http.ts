@@ -1,5 +1,5 @@
-const tokenizer: typeof import("@tokenizer/http") = require("@tokenizer/http");
-const metadata: typeof import("music-metadata") = require("music-metadata");
+import * as tokenizer from "@tokenizer/http";
+import * as metadata from "music-metadata";
 
 import LimitedReadWriteStream from "../util/LimitedReadWriteStream";
 import Util from "../util/Util";

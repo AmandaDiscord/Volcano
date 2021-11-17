@@ -3,9 +3,9 @@ import path from "path";
 import fs from "fs";
 
 import * as prism from "prism-media";
-const Discord: typeof import("@discordjs/voice") = require("@discordjs/voice");
-const encoding: typeof import("@lavalink/encoding") = require("@lavalink/encoding");
-const yt = require("play-dl") as typeof import("play-dl");
+import * as Discord from "@discordjs/voice";
+import * as encoding from "@lavalink/encoding";
+import * as yt from "play-dl";
 import Soundcloud from "soundcloud-scraper";
 import yaml from "yaml";
 import mixin from "mixin-deep";
@@ -16,6 +16,7 @@ const parentPort = parentport;
 import Constants from "./Constants";
 import logger from "./util/Logger";
 import Util from "./util/Util";
+import LimitedReadWriteStream from "./util/LimitedReadWriteStream";
 const configDir: string = path.join(process.cwd(), "./application.yml");
 let cfgparsed: import("./types").LavaLinkConfig;
 
@@ -33,7 +34,7 @@ const reportInterval = setInterval(() => {
 	if (!queues.size) return;
 	for (const queue of queues.values()) {
 		const state = queue.state;
-		if (!queue.paused) parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: Constants.OPCodes.PLAYER_UPDATE, guildId: queue.guildID, state: state }, clientID: queue.clientID });
+		if (!queue.current?.playStream.isPaused) parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: Constants.OPCodes.PLAYER_UPDATE, guildId: queue.guildID, state: state }, clientID: queue.clientID });
 	}
 }, 5000);
 
@@ -74,9 +75,8 @@ class Queue {
 	public connection: import("@discordjs/voice").VoiceConnection;
 	public clientID: string;
 	public guildID: string;
-	public tracks = new Array<{ track: string; start: number; end: number; volume: number; pause: boolean }>();
-	public player = Discord.createAudioPlayer();
-	public paused = false;
+	public track: { track: string; start: number; end: number; volume: number; pause: boolean } | undefined = undefined;
+	public player = Discord.createAudioPlayer({ behaviors: { noSubscriber: Discord.NoSubscriberBehavior.Stop } });
 	public current: import("@discordjs/voice").AudioResource<import("@lavalink/encoding").TrackInfo> | null = null;
 	public stopping = false;
 	public _filters: Array<string> = [];
@@ -103,14 +103,13 @@ class Queue {
 					]);
 				} catch {
 					if (newState.reason === Discord.VoiceConnectionDisconnectReason.WebSocketClose) parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: "event", type: "WebSocketClosedEvent", guildId: this.guildID, code: newState.closeCode, reason: codeReasons[newState.closeCode], byRemote: true }, clientID: this.clientID });
-					this.destroy();
 				}
-			} else if (newState.status === Discord.VoiceConnectionStatus.Destroyed) this.destroy();
+			} else if (newState.status === Discord.VoiceConnectionStatus.Destroyed && !this._destroyed) parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: "event", type: "WebSocketClosedEvent", guildId: this.guildID, code: 4000, reason: "IDK what happened. All I know is that the connection was destroyed prematurely", byRemote: true }, clientID: this.clientID });
 			else if (newState.status === Discord.VoiceConnectionStatus.Connecting || newState.status === Discord.VoiceConnectionStatus.Signalling) {
 				try {
-					await Discord.entersState(this.connection, Discord.VoiceConnectionStatus.Ready, 20000);
+					await Discord.entersState(this.connection, Discord.VoiceConnectionStatus.Ready, Constants.VoiceConnectionConnectThresholdMS);
 				} catch {
-					this.destroy();
+					parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: "event", type: "WebSocketClosedEvent", guildId: this.guildID, code: 4000, reason: `Couldn't connect in time (${Constants.VoiceConnectionConnectThresholdMS}ms)`, byRemote: false }, clientID: this.clientID });
 				}
 			}
 		});
@@ -119,6 +118,7 @@ class Queue {
 			const instance = this.player;
 			if (newState.status === Discord.AudioPlayerStatus.Idle && oldState.status !== Discord.AudioPlayerStatus.Idle) {
 				this.current = null;
+				// Do not log if stopping. Queue.stop will send its own STOPPED reason instead of FINISHED. Do not log if shouldntCallFinish obviously.
 				if (!this.stopping && !this.shouldntCallFinish) parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackEndEvent", guildId: this.guildID, reason: "FINISHED" }, clientID: this.clientID });
 				this.stopping = false;
 				try {
@@ -134,34 +134,31 @@ class Queue {
 						}
 						timer = setTimeout(() => {
 							rej(new Error("TRACK_STUCK"));
-							this.stop(true);
 							if (fn) instance.removeListener("stateChange", fn);
 							else logEr("Somehow, the fn to remove from the player was undefined");
-						}, 10000);
+						}, Constants.PlayerStuckThresholdMS);
 						instance.on("stateChange", fn);
 					});
 				} catch {
-					if (!this.tracks.length) return;
+					if (!this.track) return;
 					this.stop(true);
-					parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackStuckEvent", guildId: this.guildID, track: this.tracks[0].track, thresholdMs: 10000 }, clientID: this.clientID });
+					parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackStuckEvent", guildId: this.guildID, track: this.track.track, thresholdMs: Constants.PlayerStuckThresholdMS }, clientID: this.clientID });
 				}
 			} else if (newState.status === Discord.AudioPlayerStatus.Playing) {
 				if (this.trackPausing) this.pause();
 				this.trackPausing = false;
-				if ((!this.shouldntCallFinish || this.initial) && this.tracks.length) parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackStartEvent", guildId: this.guildID, track: this.tracks[0].track }, clientID: this.clientID });
-				this.shouldntCallFinish = false;
+				if ((!this.shouldntCallFinish || this.initial) && this.track) parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackStartEvent", guildId: this.guildID, track: this.track.track }, clientID: this.clientID });
 				this.initial = false;
 			}
 		});
 
 		this.player.on("error", (error) => {
-			this.stop(true);
-			parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackExceptionEvent", guildId: this.guildID, track: this.tracks[0].track, exception: error.name, message: error.message, severity: "COMMON", cause: error.stack || new Error().stack || "Unknown" }, clientID: this.clientID });
+			parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackExceptionEvent", guildId: this.guildID, track: this.track?.track || "UNKNOWN", exception: error.name, message: error.message, severity: "COMMON", cause: error.stack || new Error().stack || "Unknown" }, clientID: this.clientID });
 		});
 	}
 
 	public get state(): { time: number; position: number; connected: boolean } {
-		if (this.tracks[0] && this.tracks[0].end && (this.current?.playbackDuration || 0) >= this.tracks[0].end) this.stop(true);
+		if (this.track && this.track.end && ((this.current?.playbackDuration || 0) + this.seekTime) >= this.track.end) this.stop(true);
 		return {
 			time: Date.now(),
 			position: (this.current?.playbackDuration || 0) + this.seekTime,
@@ -171,16 +168,15 @@ class Queue {
 
 	public nextSong() {
 		this.seekTime = 0;
-		this.tracks.shift();
 		this.initial = true;
-		if (!this.tracks.length) return;
-		this.play().catch(() => logEr("There was an error when calling play through nextSong"));
+		if (!this.track) return;
+		this.play().catch(logEr);
 	}
 
 	public async play() {
-		if (!this.tracks.length) return;
+		if (!this.track) return;
 
-		const meta = this.tracks[0];
+		const meta = this.track;
 		const decoded = encoding.decode(meta.track);
 		if (!decoded.uri) return;
 		// eslint-disable-next-line no-async-promise-executor
@@ -188,9 +184,9 @@ class Queue {
 			let stream: import("stream").Readable | undefined = undefined;
 			const demux = async () => {
 				if (!stream) return reject(new Error("NO_STREAM"));
-				this.shouldntCallFinish = true;
 				let final: import("stream").Readable | undefined = undefined;
-				if (this._filters.length) { // Don't pipe through ffmpeg if not necessary
+				if (this._filters.length || meta.start) { // Don't pipe through ffmpeg if not necessary
+					this.shouldntCallFinish = true;
 					const toApply = ["-i", "-", "-analyzeduration", "0", "-loglevel", "0", "-f", "s16le", "-acodec", "libopus", "-f", "opus", "-ar", "48000", "-ac", "2"];
 					if (this.state.position && !this._filters.includes("-ss")) {
 						toApply.unshift("-ss", `${this.state.position + 2000}ms`, "-accurate_seek");
@@ -207,28 +203,25 @@ class Queue {
 					if (this._filters.length) toApply.push("-af");
 					const argus = toApply.concat(this._filters);
 					const transcoder = new prism.FFmpeg({ args: argus });
+					stream.pipe(transcoder.process.stdin!);
 					this.applyingFilters = false;
-					final = stream.pipe(transcoder);
-					let destroyed = false;
-
-					// eslint-disable-next-line no-inner-declarations
-					function onEnd() {
-						if (destroyed) return;
-						destroyed = true;
-						transcoder.destroy();
-					}
-
-					final.once("close", onEnd);
-					final.once("end", onEnd);
+					// act as a proxy instead of directly passing the transcoder stdout to the voice lib.
+					// If I did, it would throw WRITE_EPIPE and PREMATURE_CLOSE which I don't want to ignore other errors.
+					const rw = new LimitedReadWriteStream();
+					rw.once("end", () => {
+						stream?.destroy();
+						transcoder.process.kill();
+					});
+					final = transcoder.process.stdout!.pipe(rw);
 				} else final = stream;
 
-				if (this._filters.length) return resolve(Discord.createAudioResource(final, { metadata: decoded, inputType: Discord.StreamType.OggOpus }));
-
 				try {
-					await Discord.demuxProbe(final!).then(probe => resolve(Discord.createAudioResource(probe.stream, { metadata: decoded, inputType: probe.type })));
+					const probe = await Discord.demuxProbe(final!);
+					const res = Discord.createAudioResource(probe.stream, { metadata: decoded, inputType: probe.type, inlineVolume: true });
+					resolve(res);
 				} catch (e) {
 					logEr("There was an error when demuxing");
-					console.error(e);
+					logEr(e);
 				}
 			};
 			if (decoded.source === "youtube") {
@@ -270,38 +263,45 @@ class Queue {
 			}
 		}).catch(e => logEr(e));
 		if (!resource) return;
+		if (this.applyingFilters) return resource.playStream.destroy();
+		if (this.player.state.status === Discord.AudioPlayerStatus.Playing) this.stop(true);
 		this.current = resource;
 		if (meta.pause) this.trackPausing = true;
 		this.player.play(resource);
+		if (meta.volume && meta.volume !== (this._volume * 100)) this.volume(meta.volume / 100);
 	}
 
 	public queue(track: { track: string; start: number; end: number; volume: number; pause: boolean; }) {
-		this.tracks.push(track);
+		this.track = track;
 		this.replace();
 	}
 
 	public replace() {
-		if (this.tracks.length === 2) parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackEndEvent", guildId: this.guildID, reason: "REPLACED" }, clientID: this.clientID });
+		if (this.player.state.status === Discord.AudioPlayerStatus.Playing) {
+			this.stop(true);
+			parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackEndEvent", guildId: this.guildID, reason: "REPLACED" }, clientID: this.clientID });
+		}
 		this.nextSong();
 	}
 
 	public pause() {
-		this.paused = this.player.pause(true);
+		this.player.pause(true);
 	}
 
 	public resume() {
-		this.paused = !this.player.unpause();
+		this.player.unpause();
 	}
 
-	public stop(shouldntError?: boolean) {
+	public stop(shouldntPost?: boolean) {
 		this.stopping = true;
 		this.player.stop(true);
-		if (!shouldntError) parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackEndEvent", guildId: this.guildID, reason: "STOPPED" }, clientID: this.clientID });
+		if (!shouldntPost) parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackEndEvent", guildId: this.guildID, reason: "STOPPED" }, clientID: this.clientID });
 	}
 
 	public destroy() {
 		if (this._destroyed) return;
-		this.tracks.length = 0;
+		this._destroyed = true;
+		this.track = undefined;
 		this.stop(true);
 		this.connection.destroy(true);
 		queues.delete(`${this.clientID}.${this.guildID}`);
@@ -311,22 +311,11 @@ class Queue {
 			parentPort.close();
 			parentPort.removeAllListeners();
 		}
-		this._destroyed = true;
 	}
 
 	public volume(amount: number) {
 		this._volume = amount;
-
-		const found = this._filters.find(i => i.match(/^volume=/));
-		if (found) {
-			const index = this._filters.indexOf(found);
-			if (index === -1) return logEr("Somehow, the index of a filter entry found using .find isn't there anymore. IDK");
-			this._filters.splice(index, 1);
-		}
-
-		this._filters.push(`volume=${amount}`);
-		if (!this.applyingFilters) this.play();
-		this.applyingFilters = true;
+		this.current?.volume?.setVolume(amount);
 	}
 
 	public seek(amount: number) {
@@ -382,7 +371,7 @@ class Queue {
 parentPort.on("message", async (packet: { data?: import("./types").InboundPayload; op: typeof Constants.workerOPCodes[keyof typeof Constants.workerOPCodes], threadID: number; broadcasted?: boolean }) => {
 	if (packet.op === Constants.workerOPCodes.STATS) {
 		const qs = [...queues.values()];
-		return parentPort.postMessage({ op: Constants.workerOPCodes.REPLY, data: { playingPlayers: qs.filter(q => !q.paused).length, players: queues.size }, threadID: packet.threadID });
+		return parentPort.postMessage({ op: Constants.workerOPCodes.REPLY, data: { playingPlayers: qs.filter(q => !q.current?.playStream.isPaused).length, players: queues.size }, threadID: packet.threadID });
 	} else if (packet.op === Constants.workerOPCodes.MESSAGE) {
 		const guildID = packet.data!.guildId;
 		const userID = packet.data!.clientID!;
@@ -399,12 +388,11 @@ parentPort.on("message", async (packet: { data?: import("./types").InboundPayloa
 				q = new Queue(userID, guildID);
 				queues.set(key, q);
 				parentPort.postMessage({ op: Constants.workerOPCodes.VOICE_SERVER, data: { clientID: userID, guildId: guildID } });
-				q.tracks.push({ track: packet.data!.track!, start: Number(packet.data!.startTime || "0"), end: Number(packet.data!.endTime || "0"), volume: Number(packet.data!.volume || "100"), pause: packet.data!.pause || false });
-				q.play().catch(logEr);
+				q.queue({ track: packet.data!.track!, start: Number(packet.data!.startTime || "0"), end: Number(packet.data!.endTime || "0"), volume: Number(packet.data!.volume || "100"), pause: packet.data!.pause || false });
 			} else {
 				if (packet.broadcasted) parentPort.postMessage({ op: Constants.workerOPCodes.REPLY, data: true, threadID: packet.threadID });
 				q = queues.get(key)!;
-				if (packet.data!.noReplace === true && q.tracks.length !== 0) return logger.info("Skipping play request because of noReplace");
+				if (packet.data!.noReplace === true && q.player.state.status === Discord.AudioPlayerStatus.Playing) return logger.info("Skipping play request because of noReplace");
 				q.queue({ track: packet.data!.track!, start: Number(packet.data!.startTime || "0"), end: Number(packet.data!.endTime || "0"), volume: Number(packet.data!.volume || "100"), pause: packet.data!.pause || false });
 			}
 			break;

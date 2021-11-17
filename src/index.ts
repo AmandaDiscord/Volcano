@@ -11,7 +11,7 @@ import yaml from "yaml";
 import express from "express";
 import WebSocket from "ws";
 import mixin from "mixin-deep";
-const encoding: typeof import("@lavalink/encoding") = require("@lavalink/encoding");
+import * as encoding from "@lavalink/encoding";
 
 // Local modules
 import Constants from "./Constants";
@@ -25,9 +25,9 @@ import getLocalAsSource from "./sources/local";
 import getSoundCloudAsSource from "./sources/soundcloud";
 import getYoutubeAsSource from "./sources/youtube";
 
-const cpuCount: number = os.cpus().length;
+const cpuCount = os.cpus().length;
 const pool = new ThreadPool({
-	size: cpuCount,
+	size: Infinity,
 	dir: path.join(__dirname, "./worker.js")
 });
 
@@ -54,7 +54,7 @@ if (config.spring.main["banner-mode"] === "log")
 					"\x1b[33m    \\/ \\___/|_|\\___\\__,_|_| |_|\\___/  \x1b[0m/\\/     \x1b[31mVV  \x1b[0m\\");
 
 rootLog(`Starting on ${os.hostname()} with PID ${process.pid} (${__filename} started by ${os.userInfo().username} in ${process.cwd()})`);
-rootLog(`Using ${cpuCount} worker threads in pool`);
+rootLog("Using infinite worker threads in pool. THIS IS TEMPORARY. READ THE README");
 
 const server = express();
 const http: HTTP.Server = HTTP.createServer(server);

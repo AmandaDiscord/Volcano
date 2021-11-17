@@ -1,4 +1,4 @@
-const yt = require("play-dl") as typeof import("play-dl");
+import * as yt from "play-dl";
 
 async function getYoutubeAsSource(resource: string, isSearch: boolean): Promise<{ entries: Array<{ id: string; title: string; duration: number; uploader: string }>; plData?: { name: string; selectedTrack: number } }> {
 	if (isSearch) {

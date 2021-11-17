@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 
-const metadata: typeof import("music-metadata") = require("music-metadata");
+import * as metadata from "music-metadata";
 
 async function getLocalAsSource(resource: string) {
 	if (!fs.existsSync(resource)) throw new Error("FILE_NOT_EXISTS");

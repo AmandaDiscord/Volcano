@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.baseSoundcloudURL = exports.OKStatusCodes = exports.workerOPCodes = exports.defaultFilterValues = exports.OPCodes = exports.baseHTTPRequestHeaders = exports.fakeAgent = exports.baseHTTPResponseHeaders = exports.defaultOptions = void 0;
+exports.PlayerStuckThresholdMS = exports.VoiceConnectionConnectThresholdMS = exports.baseSoundcloudURL = exports.OKStatusCodes = exports.workerOPCodes = exports.defaultFilterValues = exports.OPCodes = exports.baseHTTPRequestHeaders = exports.fakeAgent = exports.baseHTTPResponseHeaders = exports.defaultOptions = void 0;
 exports.defaultOptions = {
     spring: {
         main: {
@@ -137,13 +137,6 @@ exports.workerOPCodes = {
 };
 exports.OKStatusCodes = [200, 201, 204, 304];
 exports.baseSoundcloudURL = "https://soundcloud.com";
-exports.default = {
-    defaultOptions: exports.defaultOptions,
-    baseHTTPResponseHeaders: exports.baseHTTPResponseHeaders,
-    OPCodes: exports.OPCodes,
-    defaultFilterValues: exports.defaultFilterValues,
-    workerOPCodes: exports.workerOPCodes,
-    baseHTTPRequestHeaders: exports.baseHTTPRequestHeaders,
-    OKStatusCodes: exports.OKStatusCodes,
-    baseSoundcloudURL: exports.baseSoundcloudURL
-};
+exports.VoiceConnectionConnectThresholdMS = 20000;
+exports.PlayerStuckThresholdMS = 10000;
+exports.default = module.exports;

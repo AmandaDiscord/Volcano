@@ -144,13 +144,8 @@ export const OKStatusCodes = [200, 201, 204, 304];
 
 export const baseSoundcloudURL = "https://soundcloud.com";
 
-export default {
-	defaultOptions,
-	baseHTTPResponseHeaders,
-	OPCodes,
-	defaultFilterValues,
-	workerOPCodes,
-	baseHTTPRequestHeaders,
-	OKStatusCodes,
-	baseSoundcloudURL
-};
+export const VoiceConnectionConnectThresholdMS = 20000;
+
+export const PlayerStuckThresholdMS = 10000;
+
+export default module.exports as typeof import("./Constants");
