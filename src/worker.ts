@@ -34,7 +34,7 @@ const reportInterval = setInterval(() => {
 	if (!queues.size) return;
 	for (const queue of queues.values()) {
 		const state = queue.state;
-		if (!queue.current?.playStream.isPaused) parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: Constants.OPCodes.PLAYER_UPDATE, guildId: queue.guildID, state: state }, clientID: queue.clientID });
+		if (!queue.current?.playStream.isPaused()) parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: Constants.OPCodes.PLAYER_UPDATE, guildId: queue.guildID, state: state }, clientID: queue.clientID });
 	}
 }, 5000);
 
@@ -268,7 +268,8 @@ class Queue {
 		this.current = resource;
 		if (meta.pause) this.trackPausing = true;
 		this.player.play(resource);
-		if (meta.volume && meta.volume !== (this._volume * 100)) this.volume(meta.volume / 100);
+		if (meta.volume && meta.volume !== 100) this.volume(meta.volume / 100);
+		else if (this._volume !== 1.0) this.volume(this._volume);
 	}
 
 	public queue(track: { track: string; start: number; end: number; volume: number; pause: boolean; }) {
@@ -371,7 +372,7 @@ class Queue {
 parentPort.on("message", async (packet: { data?: import("./types").InboundPayload; op: typeof Constants.workerOPCodes[keyof typeof Constants.workerOPCodes], threadID: number; broadcasted?: boolean }) => {
 	if (packet.op === Constants.workerOPCodes.STATS) {
 		const qs = [...queues.values()];
-		return parentPort.postMessage({ op: Constants.workerOPCodes.REPLY, data: { playingPlayers: qs.filter(q => !q.current?.playStream.isPaused).length, players: queues.size }, threadID: packet.threadID });
+		return parentPort.postMessage({ op: Constants.workerOPCodes.REPLY, data: { playingPlayers: qs.filter(q => !q.current?.playStream.isPaused()).length, players: queues.size }, threadID: packet.threadID });
 	} else if (packet.op === Constants.workerOPCodes.MESSAGE) {
 		const guildID = packet.data!.guildId;
 		const userID = packet.data!.clientID!;

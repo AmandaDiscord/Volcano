@@ -55,7 +55,7 @@ const reportInterval = setInterval(() => {
         return;
     for (const queue of queues.values()) {
         const state = queue.state;
-        if (!queue.current?.playStream.isPaused)
+        if (!queue.current?.playStream.isPaused())
             parentPort.postMessage({ op: Constants_1.default.workerOPCodes.MESSAGE, data: { op: Constants_1.default.OPCodes.PLAYER_UPDATE, guildId: queue.guildID, state: state }, clientID: queue.clientID });
     }
 }, 5000);
@@ -318,8 +318,10 @@ class Queue {
         if (meta.pause)
             this.trackPausing = true;
         this.player.play(resource);
-        if (meta.volume && meta.volume !== (this._volume * 100))
+        if (meta.volume && meta.volume !== 100)
             this.volume(meta.volume / 100);
+        else if (this._volume !== 1.0)
+            this.volume(this._volume);
     }
     queue(track) {
         this.track = track;
@@ -422,7 +424,7 @@ class Queue {
 parentPort.on("message", async (packet) => {
     if (packet.op === Constants_1.default.workerOPCodes.STATS) {
         const qs = [...queues.values()];
-        return parentPort.postMessage({ op: Constants_1.default.workerOPCodes.REPLY, data: { playingPlayers: qs.filter(q => !q.current?.playStream.isPaused).length, players: queues.size }, threadID: packet.threadID });
+        return parentPort.postMessage({ op: Constants_1.default.workerOPCodes.REPLY, data: { playingPlayers: qs.filter(q => !q.current?.playStream.isPaused()).length, players: queues.size }, threadID: packet.threadID });
     }
     else if (packet.op === Constants_1.default.workerOPCodes.MESSAGE) {
         const guildID = packet.data.guildId;

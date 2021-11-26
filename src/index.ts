@@ -27,7 +27,7 @@ import getYoutubeAsSource from "./sources/youtube";
 
 const cpuCount = os.cpus().length;
 const pool = new ThreadPool({
-	size: Infinity,
+	size: cpuCount,
 	dir: path.join(__dirname, "./worker.js")
 });
 
@@ -44,6 +44,13 @@ const config: typeof Constants.defaultOptions = mixin({}, Constants.defaultOptio
 const rootLog: typeof logger.info = logger[config.logging.level.root?.toLowerCase?.()] ?? logger.info;
 const llLog: typeof logger.info = logger[config.logging.level.lavalink?.toLowerCase?.()] ?? logger.info;
 
+let username: string;
+try {
+	username = os.userInfo().username;
+} catch {
+	username = "unknown user";
+}
+
 if (config.spring.main["banner-mode"] === "log")
 	rootLog("\n" +
 					"\x1b[33m__      __   _                                \x1b[97moOOOOo\n" +
@@ -53,8 +60,8 @@ if (config.spring.main["banner-mode"] === "log")
 					"\x1b[33m   \\  / (_) | | (_| (_| | | | | (_) |    \x1b[0m/   \x1b[31mV   \x1b[0m\\\n" +
 					"\x1b[33m    \\/ \\___/|_|\\___\\__,_|_| |_|\\___/  \x1b[0m/\\/     \x1b[31mVV  \x1b[0m\\");
 
-rootLog(`Starting on ${os.hostname()} with PID ${process.pid} (${__filename} started by ${os.userInfo().username} in ${process.cwd()})`);
-rootLog("Using infinite worker threads in pool. THIS IS TEMPORARY. READ THE README");
+rootLog(`Starting on ${os.hostname()} with PID ${process.pid} (${__filename} started by ${username} in ${process.cwd()})`);
+rootLog(`Using ${cpuCount} worker threads in pool`);
 
 const server = express();
 const http: HTTP.Server = HTTP.createServer(server);
@@ -118,7 +125,7 @@ function socketHeartbeat(): void {
 function noop(): void { void 0; }
 
 ws.on("headers", (headers, request) => {
-	headers.push(`Session-Resumed: ${!!request.headers["resume-key"] && socketDeleteTimeouts.has(request.headers["resume-key"] as string)}`, "Lavalink-Major-Version: 3");
+	headers.push(`Session-Resumed: ${!!request.headers["resume-key"] && socketDeleteTimeouts.has(request.headers["resume-key"] as string)}`, "Lavalink-Major-Version: 3", "Is-Volcano: true");
 });
 
 http.on("upgrade", (request: HTTP.IncomingMessage, socket: import("net").Socket, head: Buffer) => {

@@ -42,7 +42,7 @@ const soundcloud_1 = __importDefault(require("./sources/soundcloud"));
 const youtube_1 = __importDefault(require("./sources/youtube"));
 const cpuCount = os_1.default.cpus().length;
 const pool = new ThreadPool_1.default({
-    size: Infinity,
+    size: cpuCount,
     dir: path_1.default.join(__dirname, "./worker.js")
 });
 const configDir = path_1.default.join(process.cwd(), "./application.yml");
@@ -56,6 +56,13 @@ else
 const config = (0, mixin_deep_1.default)({}, Constants_1.default.defaultOptions, cfgparsed);
 const rootLog = Logger_1.default[config.logging.level.root?.toLowerCase?.()] ?? Logger_1.default.info;
 const llLog = Logger_1.default[config.logging.level.lavalink?.toLowerCase?.()] ?? Logger_1.default.info;
+let username;
+try {
+    username = os_1.default.userInfo().username;
+}
+catch {
+    username = "unknown user";
+}
 if (config.spring.main["banner-mode"] === "log")
     rootLog("\n" +
         "\x1b[33m__      __   _                                \x1b[97moOOOOo\n" +
@@ -64,8 +71,8 @@ if (config.spring.main["banner-mode"] === "log")
         "\x1b[33m  \\ \\/ / _ \\| |/ __/ _` | '_ \\ / _ \\      \x1b[0m/\x1b[31mV V V\x1b[0m\\\n" +
         "\x1b[33m   \\  / (_) | | (_| (_| | | | | (_) |    \x1b[0m/   \x1b[31mV   \x1b[0m\\\n" +
         "\x1b[33m    \\/ \\___/|_|\\___\\__,_|_| |_|\\___/  \x1b[0m/\\/     \x1b[31mVV  \x1b[0m\\");
-rootLog(`Starting on ${os_1.default.hostname()} with PID ${process.pid} (${__filename} started by ${os_1.default.userInfo().username} in ${process.cwd()})`);
-rootLog("Using infinite worker threads in pool. THIS IS TEMPORARY. READ THE README");
+rootLog(`Starting on ${os_1.default.hostname()} with PID ${process.pid} (${__filename} started by ${username} in ${process.cwd()})`);
+rootLog(`Using ${cpuCount} worker threads in pool`);
 const server = (0, express_1.default)();
 const http = http_1.default.createServer(server);
 const ws = new ws_1.default.Server({ noServer: true });
@@ -121,7 +128,7 @@ function socketHeartbeat() {
 }
 function noop() { void 0; }
 ws.on("headers", (headers, request) => {
-    headers.push(`Session-Resumed: ${!!request.headers["resume-key"] && socketDeleteTimeouts.has(request.headers["resume-key"])}`, "Lavalink-Major-Version: 3");
+    headers.push(`Session-Resumed: ${!!request.headers["resume-key"] && socketDeleteTimeouts.has(request.headers["resume-key"])}`, "Lavalink-Major-Version: 3", "Is-Volcano: true");
 });
 http.on("upgrade", (request, socket, head) => {
     llLog(`Incoming connection from /${request.socket.remoteAddress}:${request.socket.remotePort}`);
