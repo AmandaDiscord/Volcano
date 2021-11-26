@@ -244,6 +244,7 @@ class Queue {
                         transcoder.process.kill();
                     });
                     final = transcoder.process.stdout.pipe(rw);
+                    return resolve(Discord.createAudioResource(final, { metadata: decoded, inputType: Discord.StreamType.OggOpus, inlineVolume: true }));
                 }
                 else
                     final = stream;
