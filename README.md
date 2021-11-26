@@ -19,6 +19,8 @@ Example:
 }
 ```
 
+Volcano appends a "Is-Volcano" header in the handshake. The value should be equal to "true" always if using Volcano.
+
 # Some Caveats
 Volcano only supports YouTube, Soundcloud, http, and local files currently. Any other sources will not work. If you really want them to work with Volcano, please open a PR. I am more than happy to add features.
 Volcano does not support all filter op properties. LavaLink's filters do not clearly translate logically to ffmpeg arguments (to me at least. I am nub plz no booly)
