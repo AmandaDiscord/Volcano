@@ -139,4 +139,4 @@ exports.OKStatusCodes = [200, 201, 204, 304];
 exports.baseSoundcloudURL = "https://soundcloud.com";
 exports.VoiceConnectionConnectThresholdMS = 20000;
 exports.PlayerStuckThresholdMS = 10000;
-exports.default = module.exports;
+exports.default = exports;

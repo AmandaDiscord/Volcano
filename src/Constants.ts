@@ -148,4 +148,4 @@ export const VoiceConnectionConnectThresholdMS = 20000;
 
 export const PlayerStuckThresholdMS = 10000;
 
-export default module.exports as typeof import("./Constants");
+export default exports as typeof import("./Constants");

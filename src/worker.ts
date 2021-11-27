@@ -34,7 +34,7 @@ const reportInterval = setInterval(() => {
 	if (!queues.size) return;
 	for (const queue of queues.values()) {
 		const state = queue.state;
-		if (!queue.current?.playStream.isPaused()) parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: Constants.OPCodes.PLAYER_UPDATE, guildId: queue.guildID, state: state }, clientID: queue.clientID });
+		if (!queue.paused) parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: Constants.OPCodes.PLAYER_UPDATE, guildId: queue.guildID, state: state }, clientID: queue.clientID });
 	}
 }, 5000);
 
@@ -71,12 +71,31 @@ if (fs.existsSync(keyDir)) {
 	else APIKey = fs.readFileSync(keyDir, { encoding: "utf-8" });
 } else keygen();
 
+function waitForResourceToEnterState(resource: Discord.VoiceConnection, status: Discord.VoiceConnectionStatus, timeoutMS: number): Promise<void>;
+function waitForResourceToEnterState(resource: Discord.AudioPlayer, status: Discord.AudioPlayerStatus, timeoutMS: number): Promise<void>;
+function waitForResourceToEnterState(resource: Discord.VoiceConnection | Discord.AudioPlayer, status: Discord.VoiceConnectionStatus | Discord.AudioPlayerStatus, timeoutMS: number): Promise<void> {
+	return new Promise((res, rej) => {
+		let timeout: NodeJS.Timeout | undefined = undefined;
+		function onStateChange(oldState: Discord.VoiceConnectionState | Discord.AudioPlayerState, newState: Discord.VoiceConnectionState | Discord.AudioPlayerState) {
+			if (newState.status !== status) return;
+			if (timeout) clearTimeout(timeout);
+			(resource as Discord.AudioPlayer).removeListener("stateChange", onStateChange);
+			return res(void 0);
+		}
+		(resource as Discord.AudioPlayer).on("stateChange", onStateChange);
+		timeout = setTimeout(() => {
+			(resource as Discord.AudioPlayer).removeListener("stateChange", onStateChange);
+			rej(new Error("Didn't enter state in time"));
+		}, timeoutMS);
+	});
+}
+
 class Queue {
 	public connection: import("@discordjs/voice").VoiceConnection;
 	public clientID: string;
 	public guildID: string;
 	public track: { track: string; start: number; end: number; volume: number; pause: boolean } | undefined = undefined;
-	public player = Discord.createAudioPlayer({ behaviors: { noSubscriber: Discord.NoSubscriberBehavior.Stop } });
+	public player = Discord.createAudioPlayer();
 	public current: import("@discordjs/voice").AudioResource<import("@lavalink/encoding").TrackInfo> | null = null;
 	public stopping = false;
 	public _filters: Array<string> = [];
@@ -87,6 +106,7 @@ class Queue {
 	public initial = true;
 	public seekTime = 0;
 	public _destroyed = false;
+	public paused = false;
 
 	public constructor(clientID: string, guildID: string) {
 		this.connection = Discord.getVoiceConnection(guildID, clientID)!;
@@ -98,8 +118,8 @@ class Queue {
 			if (newState.status === Discord.VoiceConnectionStatus.Disconnected) {
 				try {
 					await Promise.race([
-						Discord.entersState(this.connection, Discord.VoiceConnectionStatus.Signalling, 5000),
-						Discord.entersState(this.connection, Discord.VoiceConnectionStatus.Connecting, 5000)
+						waitForResourceToEnterState(this.connection, Discord.VoiceConnectionStatus.Signalling, 5000),
+						waitForResourceToEnterState(this.connection, Discord.VoiceConnectionStatus.Connecting, 5000)
 					]);
 				} catch {
 					if (newState.reason === Discord.VoiceConnectionDisconnectReason.WebSocketClose) parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: "event", type: "WebSocketClosedEvent", guildId: this.guildID, code: newState.closeCode, reason: codeReasons[newState.closeCode], byRemote: true }, clientID: this.clientID });
@@ -107,7 +127,7 @@ class Queue {
 			} else if (newState.status === Discord.VoiceConnectionStatus.Destroyed && !this._destroyed) parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: "event", type: "WebSocketClosedEvent", guildId: this.guildID, code: 4000, reason: "IDK what happened. All I know is that the connection was destroyed prematurely", byRemote: true }, clientID: this.clientID });
 			else if (newState.status === Discord.VoiceConnectionStatus.Connecting || newState.status === Discord.VoiceConnectionStatus.Signalling) {
 				try {
-					await Discord.entersState(this.connection, Discord.VoiceConnectionStatus.Ready, Constants.VoiceConnectionConnectThresholdMS);
+					await waitForResourceToEnterState(this.connection, Discord.VoiceConnectionStatus.Ready, Constants.VoiceConnectionConnectThresholdMS);
 				} catch {
 					parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: "event", type: "WebSocketClosedEvent", guildId: this.guildID, code: 4000, reason: `Couldn't connect in time (${Constants.VoiceConnectionConnectThresholdMS}ms)`, byRemote: false }, clientID: this.clientID });
 				}
@@ -115,7 +135,8 @@ class Queue {
 		});
 
 		this.player.on("stateChange", async (oldState, newState) => {
-			const instance = this.player;
+			// eslint-disable-next-line @typescript-eslint/no-this-alias
+			const queue = this;
 			if (newState.status === Discord.AudioPlayerStatus.Idle && oldState.status !== Discord.AudioPlayerStatus.Idle) {
 				this.current = null;
 				// Do not log if stopping. Queue.stop will send its own STOPPED reason instead of FINISHED. Do not log if shouldntCallFinish obviously.
@@ -123,21 +144,26 @@ class Queue {
 				this.stopping = false;
 				try {
 					await new Promise((res, rej) => {
-						if (instance.state.status === Discord.AudioPlayerStatus.Playing) return res(void 0);
+						if (queue.player.state.status === Discord.AudioPlayerStatus.Playing) return res(void 0);
 						let timer: NodeJS.Timeout | undefined = void 0;
+						const track = this.track;
 						function fn() {
-							if (instance.state.status !== Discord.AudioPlayerStatus.Playing) return;
+							// if the current queue track does not equal the track that was requested when initiated
+							// even if the client implements their own loop mode, having a reference to an Object and checking if it equals checks the reference, not its contents
+							// calling the play op replaces the reference as it requires a track string to play.
+							if ((queue.player.state.status !== Discord.AudioPlayerStatus.Playing) && queue.track === track) return;
 							if (timer) clearTimeout(timer);
-							if (fn) instance.removeListener("stateChange", fn);
+							if (fn) queue.player.removeListener("stateChange", fn);
 							else logEr("Somehow, the fn to remove from the player was undefined");
 							res(void 0);
 						}
 						timer = setTimeout(() => {
-							rej(new Error("TRACK_STUCK"));
-							if (fn) instance.removeListener("stateChange", fn);
+							if (queue.track === track) rej(new Error("TRACK_STUCK"));
+							else res(void 0);
+							if (fn) queue.player.removeListener("stateChange", fn);
 							else logEr("Somehow, the fn to remove from the player was undefined");
 						}, Constants.PlayerStuckThresholdMS);
-						instance.on("stateChange", fn);
+						queue.player.on("stateChange", fn);
 					});
 				} catch {
 					if (!this.track) return;
@@ -265,7 +291,6 @@ class Queue {
 		}).catch(e => logEr(e));
 		if (!resource) return;
 		if (this.applyingFilters) return resource.playStream.destroy();
-		if (this.player.state.status === Discord.AudioPlayerStatus.Playing) this.stop(true);
 		this.current = resource;
 		if (meta.pause) this.trackPausing = true;
 		this.player.play(resource);
@@ -287,11 +312,11 @@ class Queue {
 	}
 
 	public pause() {
-		this.player.pause(true);
+		this.paused = this.player.pause(true);
 	}
 
 	public resume() {
-		this.player.unpause();
+		this.paused = !this.player.unpause();
 	}
 
 	public stop(shouldntPost?: boolean) {
@@ -373,7 +398,7 @@ class Queue {
 parentPort.on("message", async (packet: { data?: import("./types").InboundPayload; op: typeof Constants.workerOPCodes[keyof typeof Constants.workerOPCodes], threadID: number; broadcasted?: boolean }) => {
 	if (packet.op === Constants.workerOPCodes.STATS) {
 		const qs = [...queues.values()];
-		return parentPort.postMessage({ op: Constants.workerOPCodes.REPLY, data: { playingPlayers: qs.filter(q => !q.current?.playStream.isPaused()).length, players: queues.size }, threadID: packet.threadID });
+		return parentPort.postMessage({ op: Constants.workerOPCodes.REPLY, data: { playingPlayers: qs.filter(q => !q.paused).length, players: queues.size }, threadID: packet.threadID });
 	} else if (packet.op === Constants.workerOPCodes.MESSAGE) {
 		const guildID = packet.data!.guildId;
 		const userID = packet.data!.clientID!;

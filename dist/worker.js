@@ -55,7 +55,7 @@ const reportInterval = setInterval(() => {
         return;
     for (const queue of queues.values()) {
         const state = queue.state;
-        if (!queue.current?.playStream.isPaused())
+        if (!queue.paused)
             parentPort.postMessage({ op: Constants_1.default.workerOPCodes.MESSAGE, data: { op: Constants_1.default.OPCodes.PLAYER_UPDATE, guildId: queue.guildID, state: state }, clientID: queue.clientID });
     }
 }, 5000);
@@ -92,10 +92,28 @@ if (fs_1.default.existsSync(keyDir)) {
 }
 else
     keygen();
+function waitForResourceToEnterState(resource, status, timeoutMS) {
+    return new Promise((res, rej) => {
+        let timeout = undefined;
+        function onStateChange(oldState, newState) {
+            if (newState.status !== status)
+                return;
+            if (timeout)
+                clearTimeout(timeout);
+            resource.removeListener("stateChange", onStateChange);
+            return res(void 0);
+        }
+        resource.on("stateChange", onStateChange);
+        timeout = setTimeout(() => {
+            resource.removeListener("stateChange", onStateChange);
+            rej(new Error("Didn't enter state in time"));
+        }, timeoutMS);
+    });
+}
 class Queue {
     constructor(clientID, guildID) {
         this.track = undefined;
-        this.player = Discord.createAudioPlayer({ behaviors: { noSubscriber: Discord.NoSubscriberBehavior.Stop } });
+        this.player = Discord.createAudioPlayer();
         this.current = null;
         this.stopping = false;
         this._filters = [];
@@ -106,6 +124,7 @@ class Queue {
         this.initial = true;
         this.seekTime = 0;
         this._destroyed = false;
+        this.paused = false;
         this.connection = Discord.getVoiceConnection(guildID, clientID);
         this.connection.subscribe(this.player);
         this.clientID = clientID;
@@ -114,8 +133,8 @@ class Queue {
             if (newState.status === Discord.VoiceConnectionStatus.Disconnected) {
                 try {
                     await Promise.race([
-                        Discord.entersState(this.connection, Discord.VoiceConnectionStatus.Signalling, 5000),
-                        Discord.entersState(this.connection, Discord.VoiceConnectionStatus.Connecting, 5000)
+                        waitForResourceToEnterState(this.connection, Discord.VoiceConnectionStatus.Signalling, 5000),
+                        waitForResourceToEnterState(this.connection, Discord.VoiceConnectionStatus.Connecting, 5000)
                     ]);
                 }
                 catch {
@@ -127,7 +146,7 @@ class Queue {
                 parentPort.postMessage({ op: Constants_1.default.workerOPCodes.MESSAGE, data: { op: "event", type: "WebSocketClosedEvent", guildId: this.guildID, code: 4000, reason: "IDK what happened. All I know is that the connection was destroyed prematurely", byRemote: true }, clientID: this.clientID });
             else if (newState.status === Discord.VoiceConnectionStatus.Connecting || newState.status === Discord.VoiceConnectionStatus.Signalling) {
                 try {
-                    await Discord.entersState(this.connection, Discord.VoiceConnectionStatus.Ready, Constants_1.default.VoiceConnectionConnectThresholdMS);
+                    await waitForResourceToEnterState(this.connection, Discord.VoiceConnectionStatus.Ready, Constants_1.default.VoiceConnectionConnectThresholdMS);
                 }
                 catch {
                     parentPort.postMessage({ op: Constants_1.default.workerOPCodes.MESSAGE, data: { op: "event", type: "WebSocketClosedEvent", guildId: this.guildID, code: 4000, reason: `Couldn't connect in time (${Constants_1.default.VoiceConnectionConnectThresholdMS}ms)`, byRemote: false }, clientID: this.clientID });
@@ -135,7 +154,7 @@ class Queue {
             }
         });
         this.player.on("stateChange", async (oldState, newState) => {
-            const instance = this.player;
+            const queue = this;
             if (newState.status === Discord.AudioPlayerStatus.Idle && oldState.status !== Discord.AudioPlayerStatus.Idle) {
                 this.current = null;
                 if (!this.stopping && !this.shouldntCallFinish)
@@ -143,28 +162,32 @@ class Queue {
                 this.stopping = false;
                 try {
                     await new Promise((res, rej) => {
-                        if (instance.state.status === Discord.AudioPlayerStatus.Playing)
+                        if (queue.player.state.status === Discord.AudioPlayerStatus.Playing)
                             return res(void 0);
                         let timer = void 0;
+                        const track = this.track;
                         function fn() {
-                            if (instance.state.status !== Discord.AudioPlayerStatus.Playing)
+                            if ((queue.player.state.status !== Discord.AudioPlayerStatus.Playing) && queue.track === track)
                                 return;
                             if (timer)
                                 clearTimeout(timer);
                             if (fn)
-                                instance.removeListener("stateChange", fn);
+                                queue.player.removeListener("stateChange", fn);
                             else
                                 logEr("Somehow, the fn to remove from the player was undefined");
                             res(void 0);
                         }
                         timer = setTimeout(() => {
-                            rej(new Error("TRACK_STUCK"));
+                            if (queue.track === track)
+                                rej(new Error("TRACK_STUCK"));
+                            else
+                                res(void 0);
                             if (fn)
-                                instance.removeListener("stateChange", fn);
+                                queue.player.removeListener("stateChange", fn);
                             else
                                 logEr("Somehow, the fn to remove from the player was undefined");
                         }, Constants_1.default.PlayerStuckThresholdMS);
-                        instance.on("stateChange", fn);
+                        queue.player.on("stateChange", fn);
                     });
                 }
                 catch {
@@ -313,8 +336,6 @@ class Queue {
             return;
         if (this.applyingFilters)
             return resource.playStream.destroy();
-        if (this.player.state.status === Discord.AudioPlayerStatus.Playing)
-            this.stop(true);
         this.current = resource;
         if (meta.pause)
             this.trackPausing = true;
@@ -336,10 +357,10 @@ class Queue {
         this.nextSong();
     }
     pause() {
-        this.player.pause(true);
+        this.paused = this.player.pause(true);
     }
     resume() {
-        this.player.unpause();
+        this.paused = !this.player.unpause();
     }
     stop(shouldntPost) {
         this.stopping = true;
@@ -425,7 +446,7 @@ class Queue {
 parentPort.on("message", async (packet) => {
     if (packet.op === Constants_1.default.workerOPCodes.STATS) {
         const qs = [...queues.values()];
-        return parentPort.postMessage({ op: Constants_1.default.workerOPCodes.REPLY, data: { playingPlayers: qs.filter(q => !q.current?.playStream.isPaused()).length, players: queues.size }, threadID: packet.threadID });
+        return parentPort.postMessage({ op: Constants_1.default.workerOPCodes.REPLY, data: { playingPlayers: qs.filter(q => !q.paused).length, players: queues.size }, threadID: packet.threadID });
     }
     else if (packet.op === Constants_1.default.workerOPCodes.MESSAGE) {
         const guildID = packet.data.guildId;

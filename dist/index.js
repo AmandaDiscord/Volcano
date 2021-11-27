@@ -135,8 +135,12 @@ http.on("upgrade", (request, socket, head) => {
     const temp401 = "HTTP/1.1 401 Unauthorized\r\n\r\n";
     const passwordIncorrect = (config.lavalink.server.password !== undefined && request.headers.authorization !== String(config.lavalink.server.password));
     const invalidUserID = (!request.headers["user-id"] || Array.isArray(request.headers["user-id"]) || !/^\d+$/.test(request.headers["user-id"]));
-    if (passwordIncorrect || invalidUserID)
-        return socket.write(temp401, () => socket.destroy());
+    if (passwordIncorrect || invalidUserID) {
+        return socket.write(temp401, () => {
+            socket.end();
+            socket.destroy();
+        });
+    }
     const userID = request.headers["user-id"];
     ws.handleUpgrade(request, socket, head, s => {
         if (request.headers["resume-key"] && socketDeleteTimeouts.has(request.headers["resume-key"])) {
@@ -295,7 +299,7 @@ const serverLoopInterval = setInterval(async () => {
 }, 1000 * 60);
 const IDRegex = /(ytsearch:)?(scsearch:)?(.+)/;
 server.use((req, res, next) => {
-    if (req.path !== "/" && req.path !== "/wakemydyno.txt" && config.lavalink.server.password && (!req.headers.authorization || req.headers.authorization !== String(config.lavalink.server.password))) {
+    if (req.path !== "/" && config.lavalink.server.password && (!req.headers.authorization || req.headers.authorization !== String(config.lavalink.server.password))) {
         Logger_1.default.warn(`Authorization missing for ${req.socket.remoteAddress} on ${req.method.toUpperCase()} ${req.path}`);
         return res.status(401).header("Content-Type", "text/plain").send("Unauthorized");
     }
@@ -303,7 +307,6 @@ server.use((req, res, next) => {
 });
 const soundCloudURL = new URL(Constants_1.default.baseSoundcloudURL);
 server.get("/", (req, res) => res.status(200).header("Content-Type", "text/plain").send("Ok boomer."));
-server.get("/wakemydyno.txt", (req, res) => res.status(200).header("Content-Type", "text/plain").send("Hi. Thank you :)"));
 server.get("/loadtracks", async (request, response) => {
     const identifier = request.query.identifier;
     const payload = { playlistInfo: {}, tracks: [] };
@@ -323,22 +326,30 @@ server.get("/loadtracks", async (request, response) => {
     if (resource.startsWith("http"))
         url = new URL(resource);
     async function doSoundCloudSearch() {
-        if ((isSoundcloudSearch || isYouTubeSearch) && !config.lavalink.server.soundcloudSearchEnabled)
-            return response.status(200).header(Constants_1.default.baseHTTPResponseHeaders).send(JSON.stringify(Object.assign(payload, { loadType: "LOAD_FAILED", exception: { message: "Soundcloud searching is not enabled.", severity: "COMMON" } })));
+        if ((isSoundcloudSearch || isYouTubeSearch) && !config.lavalink.server.soundcloudSearchEnabled) {
+            response.status(200).header(Constants_1.default.baseHTTPResponseHeaders).send(JSON.stringify(Object.assign(payload, { loadType: "LOAD_FAILED", exception: { message: "Soundcloud searching is not enabled.", severity: "COMMON" } })));
+            return false;
+        }
         const data = await (0, soundcloud_1.default)(resource, isSoundcloudSearch || isYouTubeSearch).catch(e => Util_1.default.standardErrorHandler(e, response, payload, llLog));
         if (!data)
-            return;
+            return false;
         const tracks = data.map(info => ({ track: encoding.encode(Object.assign({ flags: 1, version: 2, source: "soundcloud" }, info, { position: BigInt(info.position), length: BigInt(Math.round(info.length)) })), info }));
-        payload.tracks = tracks;
-        if (tracks.length === 0)
-            return Util_1.default.standardErrorHandler("Could not extract Soundcloud info.", response, payload, llLog, "NO_MATCHES");
-        else
+        if (tracks.length === 0) {
+            Util_1.default.standardErrorHandler("Could not extract Soundcloud info.", response, payload, llLog, "NO_MATCHES");
+            return false;
+        }
+        else {
+            payload.tracks = tracks;
             llLog(`Loaded track ${tracks[0].info.title}`);
+            return true;
+        }
     }
     if ((isSoundcloudSearch || (url && url.hostname === soundCloudURL.hostname))) {
         if (!config.lavalink.server.sources.soundcloud)
             return response.status(200).header(Constants_1.default.baseHTTPResponseHeaders).send(JSON.stringify(Object.assign(payload, { loadType: "LOAD_FAILED", exception: { message: "Soundcloud is not enabled.", severity: "COMMON" } })));
-        await doSoundCloudSearch();
+        const r = await doSoundCloudSearch();
+        if (!r)
+            return;
     }
     else if (path_1.default.isAbsolute(resource)) {
         if (!config.lavalink.server.sources.local)
@@ -382,8 +393,11 @@ server.get("/loadtracks", async (request, response) => {
             if (!config.lavalink.server.soundcloudSearchEnabled || !config.lavalink.server.sources.soundcloud)
                 return response.status(200).header(Constants_1.default.baseHTTPResponseHeaders).send(JSON.stringify(Object.assign(payload, { loadType: "LOAD_FAILED", exception: { message: "YouTube searching is not enabled.", severity: "COMMON" } })));
         }
-        if (!config.lavalink.server.sources.youtube && config.lavalink.server.sources.soundcloud)
-            await doSoundCloudSearch();
+        if (!config.lavalink.server.sources.youtube && config.lavalink.server.sources.soundcloud) {
+            const r = await doSoundCloudSearch();
+            if (!r)
+                return;
+        }
         else {
             if (!config.lavalink.server.sources.youtube)
                 return response.status(200).header(Constants_1.default.baseHTTPResponseHeaders).send(JSON.stringify(Object.assign(payload, { loadType: "LOAD_FAILED", exception: { message: "YouTube is not enabled.", severity: "COMMON" } })));
@@ -406,7 +420,8 @@ server.get("/loadtracks", async (request, response) => {
     }
     if (payload.tracks.length === 0)
         return Util_1.default.standardErrorHandler("No matches.", response, payload, llLog, "NO_MATCHES");
-    return response.status(200).header(Constants_1.default.baseHTTPResponseHeaders).send(JSON.stringify(Object.assign({ loadType: payload.tracks.length > 1 && (isYouTubeSearch || isSoundcloudSearch) ? "SEARCH_RESULT" : playlist ? "PLAYLIST_LOADED" : "TRACK_LOADED" }, payload)));
+    else
+        return response.status(200).header(Constants_1.default.baseHTTPResponseHeaders).send(JSON.stringify(Object.assign({ loadType: payload.tracks.length > 1 && (isYouTubeSearch || isSoundcloudSearch) ? "SEARCH_RESULT" : playlist ? "PLAYLIST_LOADED" : "TRACK_LOADED" }, payload)));
 });
 server.get("/decodetracks", (request, response) => {
     const track = request.query.track;
