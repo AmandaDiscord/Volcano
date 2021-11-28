@@ -71,10 +71,13 @@ if (fs.existsSync(keyDir)) {
 	else APIKey = fs.readFileSync(keyDir, { encoding: "utf-8" });
 } else keygen();
 
+// This is a proper rewrite of entersState. entersState does some weird stuff with Node internal methods which could lead to
+// events never firing and causing the thread to be locked and cause abort errors somehow.
 function waitForResourceToEnterState(resource: Discord.VoiceConnection, status: Discord.VoiceConnectionStatus, timeoutMS: number): Promise<void>;
 function waitForResourceToEnterState(resource: Discord.AudioPlayer, status: Discord.AudioPlayerStatus, timeoutMS: number): Promise<void>;
 function waitForResourceToEnterState(resource: Discord.VoiceConnection | Discord.AudioPlayer, status: Discord.VoiceConnectionStatus | Discord.AudioPlayerStatus, timeoutMS: number): Promise<void> {
 	return new Promise((res, rej) => {
+		if (resource.state.status === status) res(void 0);
 		let timeout: NodeJS.Timeout | undefined = undefined;
 		function onStateChange(oldState: Discord.VoiceConnectionState | Discord.AudioPlayerState, newState: Discord.VoiceConnectionState | Discord.AudioPlayerState) {
 			if (newState.status !== status) return;
@@ -135,41 +138,12 @@ class Queue {
 		});
 
 		this.player.on("stateChange", async (oldState, newState) => {
-			// eslint-disable-next-line @typescript-eslint/no-this-alias
-			const queue = this;
 			if (newState.status === Discord.AudioPlayerStatus.Idle && oldState.status !== Discord.AudioPlayerStatus.Idle) {
 				this.current = null;
+				this.track = undefined;
 				// Do not log if stopping. Queue.stop will send its own STOPPED reason instead of FINISHED. Do not log if shouldntCallFinish obviously.
 				if (!this.stopping && !this.shouldntCallFinish) parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackEndEvent", guildId: this.guildID, reason: "FINISHED" }, clientID: this.clientID });
 				this.stopping = false;
-				try {
-					await new Promise((res, rej) => {
-						if (queue.player.state.status === Discord.AudioPlayerStatus.Playing) return res(void 0);
-						let timer: NodeJS.Timeout | undefined = void 0;
-						const track = this.track;
-						function fn() {
-							// if the current queue track does not equal the track that was requested when initiated
-							// even if the client implements their own loop mode, having a reference to an Object and checking if it equals checks the reference, not its contents
-							// calling the play op replaces the reference as it requires a track string to play.
-							if ((queue.player.state.status !== Discord.AudioPlayerStatus.Playing) && queue.track === track) return;
-							if (timer) clearTimeout(timer);
-							if (fn) queue.player.removeListener("stateChange", fn);
-							else logEr("Somehow, the fn to remove from the player was undefined");
-							res(void 0);
-						}
-						timer = setTimeout(() => {
-							if (queue.track === track) rej(new Error("TRACK_STUCK"));
-							else res(void 0);
-							if (fn) queue.player.removeListener("stateChange", fn);
-							else logEr("Somehow, the fn to remove from the player was undefined");
-						}, Constants.PlayerStuckThresholdMS);
-						queue.player.on("stateChange", fn);
-					});
-				} catch {
-					if (!this.track) return;
-					this.stop(true);
-					parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackStuckEvent", guildId: this.guildID, track: this.track.track, thresholdMs: Constants.PlayerStuckThresholdMS }, clientID: this.clientID });
-				}
 			} else if (newState.status === Discord.AudioPlayerStatus.Playing) {
 				if (this.trackPausing) this.pause();
 				this.trackPausing = false;
@@ -296,6 +270,22 @@ class Queue {
 		this.player.play(resource);
 		if (meta.volume && meta.volume !== 100) this.volume(meta.volume / 100);
 		else if (this._volume !== 1.0) this.volume(this._volume);
+		const track = this.track;
+		try {
+			await waitForResourceToEnterState(this.player, Discord.AudioPlayerStatus.Playing, Constants.PlayerStuckThresholdMS);
+		} catch {
+			// If the track isn't the same track as before it started waiting (i.e. skipped) then you shouldn't say that it got stuck lol.
+			if (this.track !== track) return;
+			// This could be a bad thing to do considering maybe the user's McWifi was just bad, but we already send track stuck and it wouldn't make sense for it to suddenly start
+			// if it possibly could as in not actually stuck, just bad internet connection.
+			this.stop(true);
+			// I assign the values of current, track, and stopping here because these are usually reset at player transition from not Idle => Idle
+			// However, we're waiting for resource to transition from Idle => Playing, so it won't fire Idle again until another track is played.
+			this.current = null;
+			parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackStuckEvent", guildId: this.guildID, track: this.track?.track || "UNKNOWN", thresholdMs: Constants.PlayerStuckThresholdMS }, clientID: this.clientID });
+			this.track = undefined;
+			this.stopping = false;
+		}
 	}
 
 	public queue(track: { track: string; start: number; end: number; volume: number; pause: boolean; }) {
@@ -349,7 +339,7 @@ class Queue {
 		const previousIndex = this._filters.indexOf("-ss");
 		if (previousIndex !== -1) this._filters.splice(previousIndex, 2);
 		this._filters.push("-ss", `${amount || 0}ms`, "-accurate_seek");
-		if (!this.applyingFilters) this.play();
+		if (!this.applyingFilters) this.play().catch(logEr);
 		this.applyingFilters = true;
 		this.seekTime = amount;
 	}
@@ -383,14 +373,14 @@ class Queue {
 		if (filters.lowPass) toApply.push(`lowpass=f=${500 / filters.lowPass.smoothing}`);
 
 		this._filters.push(...toApply);
-		if (!this.applyingFilters) this.play();
+		if (!this.applyingFilters) this.play().catch(logEr);
 		this.applyingFilters = true;
 	}
 
 	public ffmpeg(args: Array<string>) {
 		this._filters.length = 0;
 		this._filters.push(...args);
-		if (!this.applyingFilters) this.play();
+		if (!this.applyingFilters) this.play().catch(logEr);
 		this.applyingFilters = true;
 	}
 }

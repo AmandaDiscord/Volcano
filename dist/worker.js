@@ -94,6 +94,8 @@ else
     keygen();
 function waitForResourceToEnterState(resource, status, timeoutMS) {
     return new Promise((res, rej) => {
+        if (resource.state.status === status)
+            res(void 0);
         let timeout = undefined;
         function onStateChange(oldState, newState) {
             if (newState.status !== status)
@@ -154,48 +156,12 @@ class Queue {
             }
         });
         this.player.on("stateChange", async (oldState, newState) => {
-            const queue = this;
             if (newState.status === Discord.AudioPlayerStatus.Idle && oldState.status !== Discord.AudioPlayerStatus.Idle) {
                 this.current = null;
+                this.track = undefined;
                 if (!this.stopping && !this.shouldntCallFinish)
                     parentPort.postMessage({ op: Constants_1.default.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackEndEvent", guildId: this.guildID, reason: "FINISHED" }, clientID: this.clientID });
                 this.stopping = false;
-                try {
-                    await new Promise((res, rej) => {
-                        if (queue.player.state.status === Discord.AudioPlayerStatus.Playing)
-                            return res(void 0);
-                        let timer = void 0;
-                        const track = this.track;
-                        function fn() {
-                            if ((queue.player.state.status !== Discord.AudioPlayerStatus.Playing) && queue.track === track)
-                                return;
-                            if (timer)
-                                clearTimeout(timer);
-                            if (fn)
-                                queue.player.removeListener("stateChange", fn);
-                            else
-                                logEr("Somehow, the fn to remove from the player was undefined");
-                            res(void 0);
-                        }
-                        timer = setTimeout(() => {
-                            if (queue.track === track)
-                                rej(new Error("TRACK_STUCK"));
-                            else
-                                res(void 0);
-                            if (fn)
-                                queue.player.removeListener("stateChange", fn);
-                            else
-                                logEr("Somehow, the fn to remove from the player was undefined");
-                        }, Constants_1.default.PlayerStuckThresholdMS);
-                        queue.player.on("stateChange", fn);
-                    });
-                }
-                catch {
-                    if (!this.track)
-                        return;
-                    this.stop(true);
-                    parentPort.postMessage({ op: Constants_1.default.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackStuckEvent", guildId: this.guildID, track: this.track.track, thresholdMs: Constants_1.default.PlayerStuckThresholdMS }, clientID: this.clientID });
-                }
             }
             else if (newState.status === Discord.AudioPlayerStatus.Playing) {
                 if (this.trackPausing)
@@ -344,6 +310,19 @@ class Queue {
             this.volume(meta.volume / 100);
         else if (this._volume !== 1.0)
             this.volume(this._volume);
+        const track = this.track;
+        try {
+            await waitForResourceToEnterState(this.player, Discord.AudioPlayerStatus.Playing, Constants_1.default.PlayerStuckThresholdMS);
+        }
+        catch {
+            if (this.track !== track)
+                return;
+            this.stop(true);
+            this.current = null;
+            parentPort.postMessage({ op: Constants_1.default.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackStuckEvent", guildId: this.guildID, track: this.track?.track || "UNKNOWN", thresholdMs: Constants_1.default.PlayerStuckThresholdMS }, clientID: this.clientID });
+            this.track = undefined;
+            this.stopping = false;
+        }
     }
     queue(track) {
         this.track = track;
@@ -393,7 +372,7 @@ class Queue {
             this._filters.splice(previousIndex, 2);
         this._filters.push("-ss", `${amount || 0}ms`, "-accurate_seek");
         if (!this.applyingFilters)
-            this.play();
+            this.play().catch(logEr);
         this.applyingFilters = true;
         this.seekTime = amount;
     }
@@ -432,14 +411,14 @@ class Queue {
             toApply.push(`lowpass=f=${500 / filters.lowPass.smoothing}`);
         this._filters.push(...toApply);
         if (!this.applyingFilters)
-            this.play();
+            this.play().catch(logEr);
         this.applyingFilters = true;
     }
     ffmpeg(args) {
         this._filters.length = 0;
         this._filters.push(...args);
         if (!this.applyingFilters)
-            this.play();
+            this.play().catch(logEr);
         this.applyingFilters = true;
     }
 }
