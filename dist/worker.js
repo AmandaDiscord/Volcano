@@ -323,6 +323,7 @@ class Queue {
             parentPort.postMessage({ op: Constants_1.default.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackStuckEvent", guildId: this.guildID, track: this.track?.track || "UNKNOWN", thresholdMs: Constants_1.default.PlayerStuckThresholdMS }, clientID: this.clientID });
             this.track = undefined;
             this.stopping = false;
+            this.shouldntCallFinish = false;
         }
     }
     queue(track) {
