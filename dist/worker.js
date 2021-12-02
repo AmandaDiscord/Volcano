@@ -162,6 +162,7 @@ class Queue {
                 if (!this.stopping && !this.shouldntCallFinish)
                     parentPort.postMessage({ op: Constants_1.default.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackEndEvent", guildId: this.guildID, reason: "FINISHED" }, clientID: this.clientID });
                 this.stopping = false;
+                this.shouldntCallFinish = false;
             }
             else if (newState.status === Discord.AudioPlayerStatus.Playing) {
                 if (this.trackPausing)

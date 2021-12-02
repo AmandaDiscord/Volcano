@@ -144,6 +144,7 @@ class Queue {
 				// Do not log if stopping. Queue.stop will send its own STOPPED reason instead of FINISHED. Do not log if shouldntCallFinish obviously.
 				if (!this.stopping && !this.shouldntCallFinish) parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackEndEvent", guildId: this.guildID, reason: "FINISHED" }, clientID: this.clientID });
 				this.stopping = false;
+				this.shouldntCallFinish = false;
 			} else if (newState.status === Discord.AudioPlayerStatus.Playing) {
 				if (this.trackPausing) this.pause();
 				this.trackPausing = false;
