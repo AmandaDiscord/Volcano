@@ -38,7 +38,6 @@ const parentPort = worker_threads_1.parentPort;
 const Constants_1 = __importDefault(require("./Constants"));
 const Logger_1 = __importDefault(require("./util/Logger"));
 const Util_1 = __importDefault(require("./util/Util"));
-const LimitedReadWriteStream_1 = __importDefault(require("./util/LimitedReadWriteStream"));
 const configDir = path_1.default.join(process.cwd(), "./application.yml");
 let cfgparsed;
 if (fs_1.default.existsSync(configDir)) {
@@ -127,6 +126,7 @@ class Queue {
         this.seekTime = 0;
         this._destroyed = false;
         this.paused = false;
+        this.rate = 1.0;
         this.connection = Discord.getVoiceConnection(guildID, clientID);
         this.connection.subscribe(this.player);
         this.clientID = clientID;
@@ -178,11 +178,12 @@ class Queue {
         });
     }
     get state() {
-        if (this.track && this.track.end && ((this.current?.playbackDuration || 0) + this.seekTime) >= this.track.end)
+        const position = Math.floor(((this.current?.playbackDuration || 0) + this.seekTime) * this.rate);
+        if (this.track && this.track.end && position >= this.track.end)
             this.stop(true);
         return {
             time: Date.now(),
-            position: (this.current?.playbackDuration || 0) + this.seekTime,
+            position: position,
             connected: this.connection.state.status === Discord.VoiceConnectionStatus.Ready
         };
     }
@@ -226,15 +227,8 @@ class Queue {
                         toApply.push("-af");
                     const argus = toApply.concat(this._filters);
                     const transcoder = new prism.FFmpeg({ args: argus });
-                    stream.pipe(transcoder.process.stdin);
                     this.applyingFilters = false;
-                    const rw = new LimitedReadWriteStream_1.default();
-                    rw.once("end", () => {
-                        stream?.destroy();
-                        transcoder.process.kill();
-                    });
-                    final = transcoder.process.stdout.pipe(rw);
-                    return resolve(Discord.createAudioResource(final, { metadata: decoded, inputType: Discord.StreamType.OggOpus, inlineVolume: true }));
+                    return resolve(Discord.createAudioResource(stream.pipe(transcoder), { metadata: decoded, inputType: Discord.StreamType.OggOpus, inlineVolume: true }));
                 }
                 else
                     final = stream;
@@ -314,6 +308,8 @@ class Queue {
         const track = this.track;
         try {
             await waitForResourceToEnterState(this.player, Discord.AudioPlayerStatus.Playing, Constants_1.default.PlayerStuckThresholdMS);
+            this.shouldntCallFinish = false;
+            this.stopping = false;
         }
         catch {
             if (this.track !== track)
@@ -322,8 +318,8 @@ class Queue {
             this.current = null;
             parentPort.postMessage({ op: Constants_1.default.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackStuckEvent", guildId: this.guildID, track: this.track?.track || "UNKNOWN", thresholdMs: Constants_1.default.PlayerStuckThresholdMS }, clientID: this.clientID });
             this.track = undefined;
-            this.stopping = false;
             this.shouldntCallFinish = false;
+            this.stopping = false;
         }
     }
     queue(track) {
@@ -398,6 +394,7 @@ class Queue {
             const rate = filters.timescale.rate || 1.0;
             const pitch = filters.timescale.pitch || 1.0;
             const speed = filters.timescale.speed || 1.0;
+            this.rate = speed;
             const speeddif = 1.0 - pitch;
             const finalspeed = speed + speeddif;
             const ratedif = 1.0 - rate;

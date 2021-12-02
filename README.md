@@ -10,6 +10,8 @@ Volcano makes a *best effort* towards mirroring LavaLink's protocols ~~which was
 # Non-compatible changes
 Volcano offers an op ffmpeg. **OP FFMPEG DOES NOT EXIST IN LAVALINK AS LAVALINK DOES NOT USE FFMPEG. DO NOT TRY TO GET SUPPORT FOR OP FFMPEG IN LAVALINK'S SERVER**. Op ffmpeg accepts an Array of raw ffmpeg args. op ffmpeg overrides op filters and op seek.
 
+op filters adds some extra logic to make sure that playerUpdate packets properly display the position. If you set the speed of the stream to be anything other than the default speed, then you *need* to account for this yourself. I can't do anything on my end.
+
 Example:
 ```js
 {

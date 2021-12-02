@@ -16,7 +16,6 @@ const parentPort = parentport;
 import Constants from "./Constants";
 import logger from "./util/Logger";
 import Util from "./util/Util";
-import LimitedReadWriteStream from "./util/LimitedReadWriteStream";
 const configDir: string = path.join(process.cwd(), "./application.yml");
 let cfgparsed: import("./types").LavaLinkConfig;
 
@@ -110,6 +109,7 @@ class Queue {
 	public seekTime = 0;
 	public _destroyed = false;
 	public paused = false;
+	public rate = 1.0;
 
 	public constructor(clientID: string, guildID: string) {
 		this.connection = Discord.getVoiceConnection(guildID, clientID)!;
@@ -159,10 +159,11 @@ class Queue {
 	}
 
 	public get state(): { time: number; position: number; connected: boolean } {
-		if (this.track && this.track.end && ((this.current?.playbackDuration || 0) + this.seekTime) >= this.track.end) this.stop(true);
+		const position = Math.floor(((this.current?.playbackDuration || 0) + this.seekTime) * this.rate);
+		if (this.track && this.track.end && position >= this.track.end) this.stop(true);
 		return {
 			time: Date.now(),
-			position: (this.current?.playbackDuration || 0) + this.seekTime,
+			position: position,
 			connected: this.connection.state.status === Discord.VoiceConnectionStatus.Ready
 		};
 	}
@@ -204,17 +205,8 @@ class Queue {
 					if (this._filters.length) toApply.push("-af");
 					const argus = toApply.concat(this._filters);
 					const transcoder = new prism.FFmpeg({ args: argus });
-					stream.pipe(transcoder.process.stdin!);
 					this.applyingFilters = false;
-					// act as a proxy instead of directly passing the transcoder stdout to the voice lib.
-					// If I did, it would throw WRITE_EPIPE and PREMATURE_CLOSE which I don't want to ignore other errors.
-					const rw = new LimitedReadWriteStream();
-					rw.once("end", () => {
-						stream?.destroy();
-						transcoder.process.kill();
-					});
-					final = transcoder.process.stdout!.pipe(rw);
-					return resolve(Discord.createAudioResource(final, { metadata: decoded, inputType: Discord.StreamType.OggOpus, inlineVolume: true }));
+					return resolve(Discord.createAudioResource(stream.pipe(transcoder), { metadata: decoded, inputType: Discord.StreamType.OggOpus, inlineVolume: true }));
 				} else final = stream;
 
 				try {
@@ -274,6 +266,8 @@ class Queue {
 		const track = this.track;
 		try {
 			await waitForResourceToEnterState(this.player, Discord.AudioPlayerStatus.Playing, Constants.PlayerStuckThresholdMS);
+			this.shouldntCallFinish = false;
+			this.stopping = false;
 		} catch {
 			// If the track isn't the same track as before it started waiting (i.e. skipped) then you shouldn't say that it got stuck lol.
 			if (this.track !== track) return;
@@ -285,8 +279,8 @@ class Queue {
 			this.current = null;
 			parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackStuckEvent", guildId: this.guildID, track: this.track?.track || "UNKNOWN", thresholdMs: Constants.PlayerStuckThresholdMS }, clientID: this.clientID });
 			this.track = undefined;
-			this.stopping = false;
 			this.shouldntCallFinish = false;
+			this.stopping = false;
 		}
 	}
 
@@ -363,10 +357,10 @@ class Queue {
 			const rate = filters.timescale.rate || 1.0;
 			const pitch = filters.timescale.pitch || 1.0;
 			const speed = filters.timescale.speed || 1.0;
+			this.rate = speed;
 			const speeddif = 1.0 - pitch;
 			const finalspeed = speed + speeddif;
 			const ratedif = 1.0 - rate;
-
 			toApply.push(`aresample=48000,asetrate=48000*${pitch + ratedif},atempo=${finalspeed},aresample=48000`);
 		}
 		if (filters.tremolo) toApply.push(`tremolo=f=${filters.tremolo.frequency || 2.0}:d=${filters.tremolo.depth || 0.5}`);
