@@ -30,7 +30,7 @@ async function getYoutubeAsSource(resource, isSearch) {
                     return { entries: [{ id: d.video_details.id, title: d.video_details.title, duration: Number(d.video_details.durationInSec || 0), uploader: d.video_details.channel?.name || "Unknown author" }] };
                 }
                 else {
-                    const d = await yt.playlist_info(resource);
+                    const d = await yt.playlist_info(resource, { incomplete: true });
                     if (!d)
                         throw new Error("NO_PLAYLIST");
                     await d.fetch();
@@ -61,7 +61,7 @@ async function getYoutubeAsSource(resource, isSearch) {
     if (url && url.searchParams.get("list") && url.searchParams.get("list").startsWith("FL_") || resource.startsWith("FL_"))
         throw new Error("Favorite list playlists cannot be fetched.");
     if (url && url.searchParams.has("list") || resource.startsWith("PL")) {
-        const pl = await yt.playlist_info(resource);
+        const pl = await yt.playlist_info(resource, { incomplete: true });
         if (!pl)
             throw new Error("NO_PLAYLIST");
         await pl.fetch();
