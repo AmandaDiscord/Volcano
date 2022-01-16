@@ -3,7 +3,8 @@
 Volcano is a (Mostly) LavaLink compatible replacement which is written in TypeScript for the Node JS runtime.
 
 # Why not just use LavaLink
-LavaLink make memory usage go brrrrr. Volcano is very lightweight. Dependencies have been carefully chosen with a tendency towards a lower level approach as compared to installing a collection of high level and bloated libs, wrapping it in a web server whilst breaking protocols and calling it a day. I have also had my fair share of troubleshooting and fixing memory leaks and I've done my best to not include those as a "feature". Yw. If you find a flaw in my logic, please open an issue or a PR and we'll sort things out.
+You should use LavaLink because it's an amazing modular application!
+However, every piece of software has its ups and downs and I, personally, have found that LavaLink uses more memory than I feel comfortable with. Not to mistake this with a memory leak. Volcano is very lightweight. Dependencies have been carefully chosen with a tendency towards a lower level approach as compared to the very possible approach I could have taken by installing a collection of high level and bloated libs, wrapping it in a web server whilst breaking LavaLink-protocols and calling it a day. I have also had my fair share of troubleshooting and fixing memory leaks and I've done my best to not include those as a "feature" (again, not referring to LavaLink. My code *can* be *bad* no meme). If you find a flaw in my logic, please open an issue or a PR and we'll sort things out.
 
 Volcano makes a *best effort* towards mirroring LavaLink's protocols ~~which was actually very difficult to do granted not much info is out there regarding specific cases of LavaLink's protocols~~ while trying to efficiently memory manage and make use of a thread pool based on worker_threads for reliable and smooth playback.
 
