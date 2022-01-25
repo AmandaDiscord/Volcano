@@ -184,6 +184,7 @@ class Queue {
 		// eslint-disable-next-line no-async-promise-executor
 		const resource = await new Promise<import("@discordjs/voice").AudioResource<import("@lavalink/encoding").TrackInfo>>(async (resolve, reject) => {
 			let stream: import("stream").Readable | undefined = undefined;
+			let typeFromPlayDL: import("play-dl").YouTubeStream["type"];
 			const demux = async () => {
 				if (!stream) return reject(new Error("NO_STREAM"));
 				let final: import("stream").Readable | undefined = undefined;
@@ -210,18 +211,23 @@ class Queue {
 				} else final = stream;
 
 				try {
+					if (typeFromPlayDL && (!this._filters.length && !meta.start)) return resolve(Discord.createAudioResource(final!, { metadata: decoded, inputType: typeFromPlayDL, inlineVolume: true }));
 					const probe = await Discord.demuxProbe(final!);
 					const res = Discord.createAudioResource(probe.stream, { metadata: decoded, inputType: probe.type, inlineVolume: true });
 					resolve(res);
 				} catch (e) {
 					logEr("There was an error when demuxing");
 					logEr(e);
+					parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackExceptionEvent", guildId: this.guildID, track: this.track?.track || "UNKNOWN", exception: e.name, message: e.message, severity: "COMMON", cause: e.stack || new Error().stack || "Unknown" }, clientID: this.clientID });
 				}
 			};
 			if (decoded.source === "youtube") {
 				if (!config.lavalink.server.sources.youtube) return reject(new Error("YOUTUBE_NOT_ENABLED"));
 				try {
-					stream = await yt.stream(decoded.uri as string).then(i => i.stream);
+					stream = await yt.stream(decoded.uri as string).then(i => {
+						typeFromPlayDL = i.type;
+						return i.stream;
+					});
 					await demux();
 				} catch (e) {
 					return reject(e);
