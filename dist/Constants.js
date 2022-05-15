@@ -24,7 +24,16 @@ exports.defaultOptions = {
             youtubePlaylistLoadLimit: 6,
             playerUpdateInterval: 5,
             youtubeSearchEnabled: true,
-            soundcloudSearchEnabled: true
+            youtubeTimeout: 12000,
+            soundcloudSearchEnabled: true,
+            "gc-warnings": true,
+            ratelimit: {
+                ipBlocks: [],
+                excludedIps: [],
+                strategy: "RotateOnBan",
+                searchTriggersFail: true,
+                retryLimit: -1
+            }
         }
     },
     logging: {

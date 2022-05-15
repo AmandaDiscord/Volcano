@@ -21,7 +21,16 @@ export const defaultOptions = {
 			youtubePlaylistLoadLimit: 6,
 			playerUpdateInterval: 5,
 			youtubeSearchEnabled: true,
-			soundcloudSearchEnabled: true
+			youtubeTimeout: 12000,
+			soundcloudSearchEnabled: true,
+			"gc-warnings": true,
+			ratelimit: {
+				ipBlocks: [],
+				excludedIps: [],
+				strategy: "RotateOnBan",
+				searchTriggersFail: true,
+				retryLimit: -1
+			}
 		}
 	},
 	logging: {
@@ -35,7 +44,7 @@ export const defaultOptions = {
 			lavalink: "INFO"
 		}
 	}
-};
+} as import("./types").Complete<import("./types").LavaLinkConfig>;
 
 export const baseHTTPResponseHeaders = {
 	"Lavalink-Api-Version": 3,

@@ -78,7 +78,7 @@ function waitForResourceToEnterState(resource: Discord.VoiceConnection | Discord
 	return new Promise((res, rej) => {
 		if (resource.state.status === status) res(void 0);
 		let timeout: NodeJS.Timeout | undefined = undefined;
-		function onStateChange(oldState: Discord.VoiceConnectionState | Discord.AudioPlayerState, newState: Discord.VoiceConnectionState | Discord.AudioPlayerState) {
+		function onStateChange(_oldState: Discord.VoiceConnectionState | Discord.AudioPlayerState, newState: Discord.VoiceConnectionState | Discord.AudioPlayerState) {
 			if (newState.status !== status) return;
 			if (timeout) clearTimeout(timeout);
 			(resource as Discord.AudioPlayer).removeListener("stateChange", onStateChange);
@@ -117,7 +117,8 @@ class Queue {
 		this.clientID = clientID;
 		this.guildID = guildID;
 
-		this.connection.on("stateChange", async (oldState, newState) => {
+		// @ts-ignore VSCode really dislikes this for some reason
+		this.connection.on("stateChange", async (_oldState, newState) => {
 			if (newState.status === Discord.VoiceConnectionStatus.Disconnected) {
 				try {
 					await Promise.race([
@@ -137,6 +138,7 @@ class Queue {
 			}
 		});
 
+		// @ts-ignore VSCode really dislikes this for some reason
 		this.player.on("stateChange", async (oldState, newState) => {
 			if (newState.status === Discord.AudioPlayerStatus.Idle && oldState.status !== Discord.AudioPlayerStatus.Idle) {
 				this.current = null;
@@ -145,7 +147,7 @@ class Queue {
 				if (!this.stopping && !this.shouldntCallFinish) parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackEndEvent", guildId: this.guildID, reason: "FINISHED" }, clientID: this.clientID });
 				this.stopping = false;
 				this.shouldntCallFinish = false;
-			} else if (newState.status === Discord.AudioPlayerStatus.Playing) {
+			} else if (newState.status === Discord.AudioPlayerStatus.Playing && oldState.status !== Discord.AudioPlayerStatus.Paused) {
 				if (this.trackPausing) this.pause();
 				this.trackPausing = false;
 				if ((!this.shouldntCallFinish || this.initial) && this.track) parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackStartEvent", guildId: this.guildID, track: this.track.track }, clientID: this.clientID });
@@ -448,7 +450,7 @@ parentPort.on("message", async (packet: { data?: import("./types").InboundPayloa
 		}
 		}
 	} else if (packet.op === Constants.workerOPCodes.VOICE_SERVER) {
-		methodMap.get(`${packet.data!.clientID}.${packet.data!.guildId}`)?.onVoiceStateUpdate({ channel_id: "" as any, guild_id: packet.data!.guildId as any, user_id: packet.data!.clientID as any, session_id: packet.data!.sessionId!, deaf: false, self_deaf: false, mute: false, self_mute: false, self_video: false, suppress: false, request_to_speak_timestamp: null });
+		methodMap.get(`${packet.data!.clientID}.${packet.data!.guildId}`)?.onVoiceStateUpdate({ channel_id: "" as any, guild_id: packet.data!.guildId as any, user_id: packet.data!.clientID as any, session_id: packet.data!.sessionId!, deaf: false, self_deaf: false, mute: false, self_mute: false, self_video: false, suppress: false });
 		methodMap.get(`${packet.data!.clientID}.${packet.data!.guildId}`)?.onVoiceServerUpdate({ guild_id: packet.data!.guildId as any, token: packet.data!.event!.token, endpoint: packet.data!.event!.endpoint });
 	} else if (packet.op === Constants.workerOPCodes.DELETE_ALL) {
 		const forUser = [...queues.values()].filter(q => q.clientID === packet.data!.clientID);

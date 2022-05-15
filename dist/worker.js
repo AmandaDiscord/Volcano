@@ -96,7 +96,7 @@ function waitForResourceToEnterState(resource, status, timeoutMS) {
         if (resource.state.status === status)
             res(void 0);
         let timeout = undefined;
-        function onStateChange(oldState, newState) {
+        function onStateChange(_oldState, newState) {
             if (newState.status !== status)
                 return;
             if (timeout)
@@ -131,7 +131,7 @@ class Queue {
         this.connection.subscribe(this.player);
         this.clientID = clientID;
         this.guildID = guildID;
-        this.connection.on("stateChange", async (oldState, newState) => {
+        this.connection.on("stateChange", async (_oldState, newState) => {
             if (newState.status === Discord.VoiceConnectionStatus.Disconnected) {
                 try {
                     await Promise.race([
@@ -164,7 +164,7 @@ class Queue {
                 this.stopping = false;
                 this.shouldntCallFinish = false;
             }
-            else if (newState.status === Discord.AudioPlayerStatus.Playing) {
+            else if (newState.status === Discord.AudioPlayerStatus.Playing && oldState.status !== Discord.AudioPlayerStatus.Paused) {
                 if (this.trackPausing)
                     this.pause();
                 this.trackPausing = false;
@@ -494,7 +494,7 @@ parentPort.on("message", async (packet) => {
         }
     }
     else if (packet.op === Constants_1.default.workerOPCodes.VOICE_SERVER) {
-        methodMap.get(`${packet.data.clientID}.${packet.data.guildId}`)?.onVoiceStateUpdate({ channel_id: "", guild_id: packet.data.guildId, user_id: packet.data.clientID, session_id: packet.data.sessionId, deaf: false, self_deaf: false, mute: false, self_mute: false, self_video: false, suppress: false, request_to_speak_timestamp: null });
+        methodMap.get(`${packet.data.clientID}.${packet.data.guildId}`)?.onVoiceStateUpdate({ channel_id: "", guild_id: packet.data.guildId, user_id: packet.data.clientID, session_id: packet.data.sessionId, deaf: false, self_deaf: false, mute: false, self_mute: false, self_video: false, suppress: false });
         methodMap.get(`${packet.data.clientID}.${packet.data.guildId}`)?.onVoiceServerUpdate({ guild_id: packet.data.guildId, token: packet.data.event.token, endpoint: packet.data.event.endpoint });
     }
     else if (packet.op === Constants_1.default.workerOPCodes.DELETE_ALL) {

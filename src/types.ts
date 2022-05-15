@@ -1,5 +1,9 @@
 type OPCodes = typeof import("./Constants")["OPCodes"];
 
+export type Complete<T> = {
+	[K in keyof T]-?: Complete<T[K]>;
+}
+
 export type LavaLinkConfig = {
 	server?: {
 		port?: number;
@@ -15,10 +19,7 @@ export type LavaLinkConfig = {
 			password?: string;
 			sources?: {
 				youtube?: boolean;
-				bandcamp?: boolean;
 				soundcloud?: boolean;
-				twitch?: boolean;
-				vimeo?: boolean;
 				http?: boolean;
 				local?: boolean;
 			};
@@ -28,6 +29,14 @@ export type LavaLinkConfig = {
 			youtubeSearchEnabled?: boolean;
 			youtubeTimeout?: number;
 			soundcloudSearchEnabled?: boolean;
+			"gc-warnings"?: boolean;
+			ratelimit?: {
+				ipBlocks?: Array<string>;
+				excludedIps?: Array<string>;
+				strategy?: "RotateOnBan" | "LoadBalance" | "NanoSwitch" | "RotatingNanoSwitch";
+				searchTriggersFail?: boolean;
+				retryLimit?: number;
+			};
 		};
 	};
 	logging?: {

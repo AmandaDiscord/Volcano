@@ -22,8 +22,8 @@ function processLoad() {
 exports.processLoad = processLoad;
 function standardErrorHandler(e, response, payload, llLog, loadType = "LOAD_FAILED", severity = "COMMON") {
     llLog(`Load failed\n${e}`);
-    response.status(200).header(Constants_1.default.baseHTTPResponseHeaders).send(JSON.stringify(Object.assign(payload, { loadType: loadType, exception: { message: (typeof e === "string" ? e : e.message || "").split("\n").slice(-1)[0].replace(/(Error|ERROR):? ?/, ""), severity: severity } })));
-    void 0;
+    response.writeHead(200, "OK", Constants_1.default.baseHTTPResponseHeaders).write(JSON.stringify(Object.assign(payload, { loadType: loadType, exception: { message: (typeof e === "string" ? e : e.message || "").split("\n").slice(-1)[0].replace(/(Error|ERROR):? ?/, ""), severity: severity } })));
+    return response.end();
 }
 exports.standardErrorHandler = standardErrorHandler;
 function request(url, redirects = 0) {
