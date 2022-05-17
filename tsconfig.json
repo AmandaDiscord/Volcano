@@ -22,7 +22,7 @@
 		"strictBindCallApply": true,
 		"strictNullChecks": true,
 		"target": "ES2020",
-		"types": ["node", "./typings/soundcloud-scraper", "./typings/mixin-deep"]
+		"types": ["node"]
 	},
 	"include": ["./src"]
 }

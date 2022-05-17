@@ -1,16 +1,22 @@
 const startTime: number = Date.now();
 
+const { version } = require("../package.json") as { version: string; };
+const lavalinkVersion = "3.4";
+const lavalinkMajor = lavalinkVersion.split(".")[0];
+
 // Native modules
 import HTTP from "http";
 import fs from "fs";
 import os from "os";
 import path from "path";
+import entities from "html-entities";
 
 // NPM modules
 import yaml from "yaml";
 import WebSocket from "ws";
-import mixin from "mixin-deep";
 import * as encoding from "@lavalink/encoding";
+import * as play from "play-dl";
+import { version as playDLVersion } from "play-dl/package.json";
 
 // Local modules
 import Constants from "./Constants";
@@ -38,7 +44,27 @@ if (fs.existsSync(configDir)) {
 	cfgparsed = yaml.parse(cfgyml);
 } else cfgparsed = {};
 
-const config: typeof Constants.defaultOptions = mixin({}, Constants.defaultOptions, cfgparsed);
+const config = Util.mixin({}, Constants.defaultOptions, cfgparsed) as typeof Constants.defaultOptions;
+
+const keyDir = path.join(__dirname, "../soundcloud.txt");
+
+function keygen() {
+	play.getFreeClientID().then(clientID => {
+		if (!clientID) throw new Error("SOUNDCLOUD_KEY_NO_CREATE");
+		fs.writeFileSync(keyDir, clientID, { encoding: "utf-8" });
+		play.setToken({ soundcloud : { client_id : clientID } });
+	});
+}
+
+if (fs.existsSync(keyDir)) {
+	if (Date.now() - fs.statSync(keyDir).mtime.getTime() >= (1000 * 60 * 60 * 24 * 7)) keygen();
+	else {
+		const APIKey = fs.readFileSync(keyDir, { encoding: "utf-8" });
+		play.setToken({ soundcloud: { client_id: APIKey } });
+	}
+} else keygen();
+
+play.setToken({ useragent: [Constants.fakeAgent] });
 
 const rootLog: typeof logger.info = logger[config.logging.level.root?.toLowerCase?.()] ?? logger.info;
 const llLog: typeof logger.info = logger[config.logging.level.lavalink?.toLowerCase?.()] ?? logger.info;
@@ -59,6 +85,7 @@ if (config.spring.main["banner-mode"] === "log")
 					"\x1b[33m   \\  / (_) | | (_| (_| | | | | (_) |    \x1b[0m/   \x1b[31mV   \x1b[0m\\\n" +
 					"\x1b[33m    \\/ \\___/|_|\\___\\__,_|_| |_|\\___/  \x1b[0m/\\/     \x1b[31mVV  \x1b[0m\\");
 
+rootLog(`\n\n\nVersion:               ${version}\nLavaLink base version: ${lavalinkVersion}\nNode:                  ${process.version}\nPlay-DL version:       ${playDLVersion}\n\n`);
 rootLog(`Starting on ${os.hostname()} with PID ${process.pid} (${__filename} started by ${username} in ${process.cwd()})`);
 rootLog(`Using ${cpuCount} worker threads in pool`);
 
@@ -123,7 +150,7 @@ function socketHeartbeat(): void {
 function noop(): void { void 0; }
 
 ws.on("headers", (headers, request) => {
-	headers.push(`Session-Resumed: ${!!request.headers["resume-key"] && socketDeleteTimeouts.has(request.headers["resume-key"] as string)}`, "Lavalink-Major-Version: 3", "Is-Volcano: true");
+	headers.push(`Session-Resumed: ${!!request.headers["resume-key"] && socketDeleteTimeouts.has(request.headers["resume-key"] as string)}`, `Lavalink-Major-Version: ${lavalinkMajor}`, "Is-Volcano: true");
 });
 
 http.on("upgrade", (request: HTTP.IncomingMessage, socket: import("net").Socket, head: Buffer) => {
@@ -340,11 +367,13 @@ async function serverHandler(req: import("http").IncomingMessage, res: import("h
 	}
 
 	if (reqPath === "/loadtracks" && req.method === "GET") {
-		const identifier = query.get("identifier");
+		const id = query.get("identifier");
 		const payload = { playlistInfo: {}, tracks: [] as Array<any> };
 		let playlist = false;
 
-		if (!identifier || typeof identifier !== "string") return Util.standardErrorHandler("Invalid or no identifier query string provided.", res, payload, llLog);
+		if (!id || typeof id !== "string") return Util.standardErrorHandler("Invalid or no identifier query string provided.", res, payload, llLog);
+
+		const identifier = entities.decode(id);
 
 		llLog(`Got request to load for identifier "${identifier}"`);
 
@@ -444,7 +473,7 @@ async function serverHandler(req: import("http").IncomingMessage, res: import("h
 					res.writeHead(200, "OK", Constants.baseHTTPResponseHeaders).write(JSON.stringify(Object.assign(payload, { loadType: "LOAD_FAILED", exception: { message: "YouTube is not enabled.", severity: "COMMON" } })));
 					return res.end();
 				}
-				const data = await getYoutubeAsSource(resource, isYouTubeSearch).catch(e => Util.standardErrorHandler(e, res, payload, llLog));
+				const data = await getYoutubeAsSource(resource, isYouTubeSearch, config).catch(e => Util.standardErrorHandler(e, res, payload, llLog));
 
 				if (!data) return;
 
@@ -474,8 +503,9 @@ async function serverHandler(req: import("http").IncomingMessage, res: import("h
 
 	if (reqPath === "/decodetracks" && req.method === "GET") {
 		let track = query.get("track") as string | Array<string> | null;
+		if (track) track = entities.decode(track as string);
 		try {
-			const r = JSON.stringify(track);
+			const r = JSON.parse(track as string);
 			track = r;
 		} catch {
 			// Just do nothing

@@ -5,10 +5,8 @@ import fs from "fs";
 import * as prism from "prism-media";
 import * as Discord from "@discordjs/voice";
 import * as encoding from "@lavalink/encoding";
-import * as yt from "play-dl";
-import Soundcloud from "soundcloud-scraper";
+import * as play from "play-dl";
 import yaml from "yaml";
-import mixin from "mixin-deep";
 
 if (!parentport) throw new Error("THREAD_IS_PARENT");
 const parentPort = parentport;
@@ -24,7 +22,7 @@ if (fs.existsSync(configDir)) {
 	cfgparsed = yaml.parse(cfgyml);
 } else cfgparsed = {};
 
-const config: typeof Constants.defaultOptions = mixin({}, Constants.defaultOptions, cfgparsed);
+const config: typeof Constants.defaultOptions = Util.mixin({}, Constants.defaultOptions, cfgparsed) as typeof Constants.defaultOptions;
 
 const queues = new Map<string, Queue>();
 const methodMap = new Map<string, import("@discordjs/voice").DiscordGatewayAdapterLibraryMethods>();
@@ -35,7 +33,7 @@ const reportInterval = setInterval(() => {
 		const state = queue.state;
 		if (!queue.paused) parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: Constants.OPCodes.PLAYER_UPDATE, guildId: queue.guildID, state: state }, clientID: queue.clientID });
 	}
-}, 5000);
+}, config.lavalink.server.playerUpdateInterval * 1000);
 
 parentPort.once("close", () => clearInterval(reportInterval));
 
@@ -55,20 +53,24 @@ const codeReasons = {
 };
 
 const keyDir = path.join(__dirname, "../soundcloud.txt");
-let APIKey: string;
 
 function keygen() {
-	Soundcloud.keygen(true).then(key => {
-		if (!key) throw new Error("SOUNDCLOUD_KEY_NO_CREATE");
-		APIKey = key;
-		fs.writeFileSync(keyDir, key, { encoding: "utf-8" });
+	play.getFreeClientID().then(clientID => {
+		if (!clientID) throw new Error("SOUNDCLOUD_KEY_NO_CREATE");
+		fs.writeFileSync(keyDir, clientID, { encoding: "utf-8" });
+		play.setToken({ soundcloud : { client_id : clientID } });
 	});
 }
 
 if (fs.existsSync(keyDir)) {
 	if (Date.now() - fs.statSync(keyDir).mtime.getTime() >= (1000 * 60 * 60 * 24 * 7)) keygen();
-	else APIKey = fs.readFileSync(keyDir, { encoding: "utf-8" });
+	else {
+		const APIKey = fs.readFileSync(keyDir, { encoding: "utf-8" });
+		play.setToken({ soundcloud: { client_id: APIKey } });
+	}
 } else keygen();
+
+play.setToken({ useragent: [Constants.fakeAgent] });
 
 // This is a proper rewrite of entersState. entersState does some weird stuff with Node internal methods which could lead to
 // events never firing and causing the thread to be locked and cause abort errors somehow.
@@ -226,7 +228,7 @@ class Queue {
 			if (decoded.source === "youtube") {
 				if (!config.lavalink.server.sources.youtube) return reject(new Error("YOUTUBE_NOT_ENABLED"));
 				try {
-					stream = await yt.stream(decoded.uri as string).then(i => {
+					stream = await play.stream(decoded.uri as string).then(i => {
 						typeFromPlayDL = i.type;
 						return i.stream;
 					});
@@ -237,13 +239,13 @@ class Queue {
 			} else if (decoded.source === "soundcloud") {
 				if (!config.lavalink.server.sources.soundcloud) return reject(new Error("SOUNDCLOUD_NOT_ENABLED"));
 				const url = decoded.identifier.replace(/^O:/, "");
-				const streamURL = await Soundcloud.Util.fetchSongStreamURL(url, APIKey);
-				if (url.endsWith("/hls")) stream = await Soundcloud.StreamDownloader.downloadHLS(streamURL);
-				else stream = await Soundcloud.StreamDownloader.downloadProgressive(streamURL);
+				stream = await play.stream(url).then(i => {
+					typeFromPlayDL = i.type;
+					return i.stream;
+				});
 				try {
 					await demux();
 				} catch (e) {
-					stream.destroy();
 					return reject(e);
 				}
 			} else if (decoded.source === "local") {

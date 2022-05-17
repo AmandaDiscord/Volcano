@@ -64,4 +64,29 @@ export function request(url: string, redirects = 0) {
 	});
 }
 
-export default { processLoad, standardErrorHandler, request };
+export function isObject(val: any) {
+	return typeof val === "function" || (typeof val === "object" && val !== null && !Array.isArray(val));
+}
+
+export function isValidKey(key: string) {
+	return key !== "__proto__" && key !== "constructor" && key !== "prototype";
+}
+
+export function mixin<T extends Record<string, any>, S extends Array<Record<string, any>>>(target: T, ...sources: S): import("../types").Mixin<T, S> {
+	for (const obj of sources) {
+		if (isObject(obj)) {
+			for (const key in obj) {
+				if (isValidKey(key)) step(target, obj[key], key);
+			}
+		}
+	}
+	return target as unknown as import("../types").Mixin<T, S>;
+}
+
+function step(target: Record<string, any>, val: Record<string, any>, key: string) {
+	const obj = target[key];
+	if (isObject(val) && isObject(obj)) mixin(obj, val);
+	else target[key] = val;
+}
+
+export default module.exports as typeof import("./Util");

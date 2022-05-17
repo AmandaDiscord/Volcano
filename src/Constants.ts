@@ -17,7 +17,6 @@ export const defaultOptions = {
 				http: false,
 				local: false
 			},
-			bufferDurationMs: 400,
 			youtubePlaylistLoadLimit: 6,
 			playerUpdateInterval: 5,
 			youtubeSearchEnabled: true,

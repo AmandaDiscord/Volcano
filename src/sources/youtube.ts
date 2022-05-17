@@ -1,6 +1,6 @@
 import * as yt from "play-dl";
 
-async function getYoutubeAsSource(resource: string, isSearch: boolean): Promise<{ entries: Array<{ id: string; title: string; duration: number; uploader: string }>; plData?: { name: string; selectedTrack: number } }> {
+async function getYoutubeAsSource(resource: string, isSearch: boolean, config: typeof import("../Constants").defaultOptions): Promise<{ entries: Array<{ id: string; title: string; duration: number; uploader: string }>; plData?: { name: string; selectedTrack: number } }> {
 	if (isSearch) {
 		const validated = yt.yt_validate(resource);
 		if (validated) {
@@ -40,9 +40,10 @@ async function getYoutubeAsSource(resource: string, isSearch: boolean): Promise<
 	if (url && url.searchParams.has("list") || resource.startsWith("PL")) {
 		const pl = await yt.playlist_info(resource, { incomplete: true });
 		if (!pl) throw new Error("NO_PLAYLIST");
-		await pl.fetch();
+		await pl.fetch(100 * config.lavalink.server.youtubePlaylistLoadLimit);
 		const entries = [] as Array<import("play-dl").YouTubeVideo>;
 		for (let i = 1; i < pl.total_pages + 1; i++) {
+			if (i > config.lavalink.server.youtubePlaylistLoadLimit) continue;
 			entries.push(...pl.page(i));
 		}
 		return { entries: entries.map(i => ({ id: i.id as string, title: i.title as string, duration: i.durationInSec, uploader: i.channel?.name || "Unknown author" })), plData: { name: pl.title as string, selectedTrack: url?.searchParams.get("index") ? Number(url.searchParams.get("index")) : 1 } };

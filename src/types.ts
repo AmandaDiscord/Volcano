@@ -4,6 +4,10 @@ export type Complete<T> = {
 	[K in keyof T]-?: Complete<T[K]>;
 }
 
+type AnyObject = { [k: string | number | symbol]: any };
+
+export type Mixin<T extends AnyObject, SR extends Array<AnyObject>> = SR extends Array<infer O> ? T & O : never;
+
 export type LavaLinkConfig = {
 	server?: {
 		port?: number;
@@ -23,7 +27,6 @@ export type LavaLinkConfig = {
 				http?: boolean;
 				local?: boolean;
 			};
-			bufferDurationMs?: number;
 			youtubePlaylistLoadLimit?: number;
 			playerUpdateInterval?: number;
 			youtubeSearchEnabled?: boolean;
