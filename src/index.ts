@@ -9,7 +9,7 @@ import HTTP from "http";
 import fs from "fs";
 import os from "os";
 import path from "path";
-import entities from "html-entities";
+import * as entities from "html-entities";
 
 // NPM modules
 import yaml from "yaml";
