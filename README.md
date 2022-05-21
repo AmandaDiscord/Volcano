@@ -25,17 +25,18 @@ Example:
 Volcano appends a "Is-Volcano" header in the handshake. The value should be equal to "true" always if using Volcano.
 
 # Some Caveats
+Volcano does its best to support SHOUTCast/ICECast, but may not return all relevant-to-you data.
 Volcano only supports YouTube, Soundcloud, http, and local files currently. Any other sources will not work. If you really want them to work with Volcano, please open a PR. I am more than happy to add features.
 Volcano does not support all filter op properties. LavaLink's filters do not clearly translate logically to ffmpeg arguments (to me at least. I am nub plz no booly)
 
 # Usage
-git clone the repo or just download the code as a zip and push it to prod :pain:
+Download the latest release from https://github.com/AmandaDiscord/Volcano/releases
 
-Starting it could be done by cding into the Volcano folder and then typing `node .` or starting the dist/index.js file. The package.json links to the index in the dist folder.
-Be careful with what current working directory you end up using because Volcano will try to read your application.yml config file based on the cwd (the exact behavior of LavaLink)
+Starting Volcano could be done by cding into the Volcano folder and then typing `node .` or starting the dist/index.js file. The package.json links to the index in the dist folder.
+Be careful with what current working directory you end up using because Volcano will try to read your application.yml config file based on the cwd and then fallback to default options (the exact behavior of LavaLink)
 
 # Requirements
-Node 16 or above.
+Node 16.9 or above.
 FFMPEG will default to using what's installed on the machine and added to path before falling back to avconf and then using the binaries installed by ffmpeg-static.
 FFMPEG in path is preferable as it will almost always provide better performance depending on how you built it.
 
@@ -43,11 +44,11 @@ FFMPEG in path is preferable as it will almost always provide better performance
 Test Machine: 4 VCores, 8GB VALLOC memory, 200GB SSD. Running Ubuntu 20.04.2 LTS. Provided by Contabo, located in Saint Louis, Missouri.
 
 All tests with LavaLink were conducted with Java 14 LTS (openjdk-14-jre-headless).
-All tests with Volcano were conducted with Node JS 16.6.
+All tests with Volcano were conducted with Node JS 17.0.1.
 
 ## Boot
 LavaLink using Java 14 LTS (openjdk-14-jre-headless) took approximately 3 seconds on average to reach a post ready state.
-Volcano using Node JS 16.6.2 took approximately 0.35 seconds on average to reach a post ready state.
+Volcano using Node JS 17.0.1 took approximately 0.35 seconds on average to reach a post ready state.
 
 Below tests performance based on playing players in most metrics.
 Tested tracks are all the same across all tests. (O:https://api-v2.soundcloud.com/media/soundcloud:tracks:401256987/1593d9da-25e1-4bdb-9449-6faad4616d52/stream/hls)
@@ -61,7 +62,7 @@ idle occupied 15.3MB stable.
 1 player without filters used 76MB consistently. (The large jump is because the worker_thread has a bit of overhead as module require cache is not shared with the main thread)
 
 ## Networking
-When getting tracks, only essential data is fetched in the form of streams. While getting track info from the HTTP source, only 50 chunks of 16KB (800KB total at max) are allowed to be piped, but it usually identifies the track before it reaches the end of the 50 chunks. After that, the stream is forcibly closed and the HTTP connection is destroyed. The biggest network and memory "hog" is YouTube tracks which has a highWaterMark of 10MB. The author of the YouTube lib insists that it doesn't always occupy that amount, but that is the theoretical max buffer size to account for network instability. Other track streaming usage sits around 2MB per track.
+When getting tracks, only essential data is fetched in the form of streams. The HTTP source has the possibility to take a while when dealing with live streams or for other reasons as the lib I use to parse track metadata *might* need to read until the end of the stream. I set a timeout for 10 seconds to destroy the input stream to continue. The biggest network and memory "hog" is YouTube tracks which has a highWaterMark of 10MB. The author of the YouTube lib insists that it doesn't always occupy that amount, but that is the theoretical max buffer size to account for network instability. Other track streaming usage sits around 2MB per track.
 
 No assumptions are made in regards to track metadata including streams.
 
