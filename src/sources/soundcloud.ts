@@ -1,6 +1,6 @@
-import * as play from "play-dl";
+import * as lamp from "lava-lamp";
 
-function songResultToTrack(i: import("play-dl").SoundCloudTrack) {
+function songResultToTrack(i: import("lava-lamp").SoundCloudTrack) {
 	if (!i.formats[0]) throw new Error("NO_SOUNDCLOUD_SONG_STREAM_URL");
 	return {
 		identifier: `${i.formats[0].format.protocol === "hls" ? "O:" : ""}${i.formats[0].url}`,
@@ -17,31 +17,23 @@ function songResultToTrack(i: import("play-dl").SoundCloudTrack) {
 async function getSoundCloudAsSource(resource: string, isSearch: boolean) {
 	const e = new Error("SOUNDCLOUD_NOT_FETCHABLE_RESOURCE");
 	if (isSearch) {
-		const results = await play.search(resource, { source: { soundcloud: "tracks" } });
+		const results = await lamp.search(resource, { source: { soundcloud: "tracks" } });
 		return results.map(songResultToTrack);
 	}
 
-	let result: import("play-dl").SoundCloud;
+	let result: import("lava-lamp").SoundCloud;
 	try {
-		result = await play.soundcloud(resource);
+		result = await lamp.soundcloud(resource);
 	} catch {
 		throw e;
 	}
 
-	if (result.type === "user") {
-		const user = result as import("play-dl").SoundCloudPlaylist;
-
-		if (!user.tracks) throw new Error("No tracks for user");
-
-		return (user.tracks as Array<import("play-dl").SoundCloudTrack>).map(songResultToTrack);
-	}
-
 	if (result.type === "playlist") {
-		const playlist = result as import("play-dl").SoundCloudPlaylist;
-		return (playlist.tracks as Array<import("play-dl").SoundCloudTrack>).map(songResultToTrack);
+		const playlist = result as import("lava-lamp").SoundCloudPlaylist;
+		return (playlist.tracks as Array<import("lava-lamp").SoundCloudTrack>).map(songResultToTrack);
 	}
 
-	if (result.type === "track") return [songResultToTrack(result as import("play-dl").SoundCloudTrack)];
+	if (result.type === "track") return [songResultToTrack(result as import("lava-lamp").SoundCloudTrack)];
 
 	throw e;
 }

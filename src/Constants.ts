@@ -26,7 +26,7 @@ export const defaultOptions = {
 			ratelimit: {
 				ipBlocks: [],
 				excludedIps: [],
-				strategy: "RotateOnBan",
+				strategy: "RotateOnBan" as "RotateOnBan" | "LoadBalance" | "NanoSwitch" | "RotatingNanoSwitch",
 				searchTriggersFail: true,
 				retryLimit: -1
 			}
@@ -148,7 +148,13 @@ export const workerOPCodes = {
 	DELETE_ALL: 8 as const
 };
 
-export const OKStatusCodes = [200, 201, 204, 304];
+export const OKStatusCodes = [200, 203];
+
+export const RedirectStatusCodes = [300, 301, 302, 303, 307, 308];
+
+export const RetriableStatusCodes = [408, 500, 502, 503, 504];
+
+export const RateLimitStatusCodes = [420, 429];
 
 export const baseSoundcloudURL = "https://soundcloud.com";
 

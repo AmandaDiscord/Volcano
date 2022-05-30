@@ -8,6 +8,9 @@ However, every piece of software has its ups and downs and I, personally, have f
 
 Volcano makes a *best effort* towards mirroring LavaLink's protocols ~~which was actually very difficult to do granted not much info is out there regarding specific cases of LavaLink's protocols~~ while trying to efficiently memory manage and make use of a thread pool based on worker_threads for reliable and smooth playback.
 
+# Be nice
+Do not be rude about LavaLink's performance or flaunt to LavaLink that this project may be more lightweight. There are trade offs with this project such as not being a perfect translations. While production ready, the caveats are to be taken into consideration. The owner of LavaLink has been very cool about all of this. As such, I do not want disdain between either side and the last thing I want is LavaLink to stop
+
 # Non-compatible changes
 Volcano offers an op ffmpeg. **OP FFMPEG DOES NOT EXIST IN LAVALINK AS LAVALINK DOES NOT USE FFMPEG. DO NOT TRY TO GET SUPPORT FOR OP FFMPEG IN LAVALINK'S SERVER**. Op ffmpeg accepts an Array of raw ffmpeg args. op ffmpeg overrides op filters and op seek.
 

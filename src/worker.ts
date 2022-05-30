@@ -5,7 +5,6 @@ import fs from "fs";
 import * as prism from "prism-media";
 import * as Discord from "@discordjs/voice";
 import * as encoding from "@lavalink/encoding";
-import * as play from "play-dl";
 import yaml from "yaml";
 
 if (!parentport) throw new Error("THREAD_IS_PARENT");
@@ -22,7 +21,8 @@ if (fs.existsSync(configDir)) {
 	cfgparsed = yaml.parse(cfgyml);
 } else cfgparsed = {};
 
-const config: typeof Constants.defaultOptions = Util.mixin({}, Constants.defaultOptions, cfgparsed) as typeof Constants.defaultOptions;
+global.lavalinkConfig = Util.mixin({}, Constants.defaultOptions, cfgparsed) as typeof Constants.defaultOptions;
+import * as lamp from "lava-lamp"; // Can load this now that global constants are assigned
 
 const queues = new Map<string, Queue>();
 const methodMap = new Map<string, import("@discordjs/voice").DiscordGatewayAdapterLibraryMethods>();
@@ -33,7 +33,7 @@ const reportInterval = setInterval(() => {
 		const state = queue.state;
 		if (!queue.paused) parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: Constants.OPCodes.PLAYER_UPDATE, guildId: queue.guildID, state: state }, clientID: queue.clientID });
 	}
-}, config.lavalink.server.playerUpdateInterval * 1000);
+}, lavalinkConfig.lavalink.server.playerUpdateInterval * 1000);
 
 parentPort.once("close", () => clearInterval(reportInterval));
 
@@ -55,10 +55,10 @@ const codeReasons = {
 const keyDir = path.join(__dirname, "../soundcloud.txt");
 
 function keygen() {
-	play.getFreeClientID().then(clientID => {
+	lamp.getFreeClientID().then(clientID => {
 		if (!clientID) throw new Error("SOUNDCLOUD_KEY_NO_CREATE");
 		fs.writeFileSync(keyDir, clientID, { encoding: "utf-8" });
-		play.setToken({ soundcloud : { client_id : clientID } });
+		lamp.setToken({ soundcloud : { client_id : clientID } });
 	});
 }
 
@@ -66,11 +66,11 @@ if (fs.existsSync(keyDir)) {
 	if (Date.now() - fs.statSync(keyDir).mtime.getTime() >= (1000 * 60 * 60 * 24 * 7)) keygen();
 	else {
 		const APIKey = fs.readFileSync(keyDir, { encoding: "utf-8" });
-		play.setToken({ soundcloud: { client_id: APIKey } });
+		lamp.setToken({ soundcloud: { client_id: APIKey } });
 	}
 } else keygen();
 
-play.setToken({ useragent: [Constants.fakeAgent] });
+lamp.setToken({ useragent: [Constants.fakeAgent] });
 
 // This is a proper rewrite of entersState. entersState does some weird stuff with Node internal methods which could lead to
 // events never firing and causing the thread to be locked and cause abort errors somehow.
@@ -188,7 +188,7 @@ class Queue {
 		// eslint-disable-next-line no-async-promise-executor
 		const resource = await new Promise<import("@discordjs/voice").AudioResource<import("@lavalink/encoding").TrackInfo>>(async (resolve, reject) => {
 			let stream: import("stream").Readable | undefined = undefined;
-			let typeFromPlayDL: import("play-dl").YouTubeStream["type"];
+			let typeFromPlayDL: import("lava-lamp").YouTubeStream["type"];
 			const demux = async () => {
 				if (!stream) return reject(new Error("NO_STREAM"));
 				let final: import("stream").Readable | undefined = undefined;
@@ -226,9 +226,9 @@ class Queue {
 				}
 			};
 			if (decoded.source === "youtube") {
-				if (!config.lavalink.server.sources.youtube) return reject(new Error("YOUTUBE_NOT_ENABLED"));
+				if (!lavalinkConfig.lavalink.server.sources.youtube) return reject(new Error("YOUTUBE_NOT_ENABLED"));
 				try {
-					stream = await play.stream(decoded.uri as string).then(i => {
+					stream = await lamp.stream(decoded.uri as string).then(i => {
 						typeFromPlayDL = i.type;
 						return i.stream;
 					});
@@ -237,9 +237,9 @@ class Queue {
 					return reject(e);
 				}
 			} else if (decoded.source === "soundcloud") {
-				if (!config.lavalink.server.sources.soundcloud) return reject(new Error("SOUNDCLOUD_NOT_ENABLED"));
+				if (!lavalinkConfig.lavalink.server.sources.soundcloud) return reject(new Error("SOUNDCLOUD_NOT_ENABLED"));
 				const url = decoded.identifier.replace(/^O:/, "");
-				stream = await play.stream(url).then(i => {
+				stream = await lamp.stream(url).then(i => {
 					typeFromPlayDL = i.type;
 					return i.stream;
 				});
@@ -249,7 +249,7 @@ class Queue {
 					return reject(e);
 				}
 			} else if (decoded.source === "local") {
-				if (!config.lavalink.server.sources.local) return reject(new Error("LOCAL_NOT_ENABLED"));
+				if (!lavalinkConfig.lavalink.server.sources.local) return reject(new Error("LOCAL_NOT_ENABLED"));
 				try {
 					stream = fs.createReadStream(decoded.uri as string);
 					await demux();
@@ -257,7 +257,7 @@ class Queue {
 					return reject(e);
 				}
 			} else {
-				if (!config.lavalink.server.sources.http) return reject(new Error("HTTP_NOT_ENABLED"));
+				if (!lavalinkConfig.lavalink.server.sources.http) return reject(new Error("HTTP_NOT_ENABLED"));
 				stream = await Util.request(decoded.uri as string);
 				try {
 					await demux();
@@ -288,6 +288,7 @@ class Queue {
 			// However, we're waiting for resource to transition from Idle => Playing, so it won't fire Idle again until another track is played.
 			this.current = null;
 			parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackStuckEvent", guildId: this.guildID, track: this.track?.track || "UNKNOWN", thresholdMs: Constants.PlayerStuckThresholdMS }, clientID: this.clientID });
+			logger.warn(`${this.track?.track ? encoding.decode(this.track.track).title : "UNKNOWN"} got stuck! Threshold surpassed: ${Constants.PlayerStuckThresholdMS}`);
 			this.track = undefined;
 			this.shouldntCallFinish = false;
 			this.stopping = false;

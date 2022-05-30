@@ -15,20 +15,13 @@ import * as entities from "html-entities";
 import yaml from "yaml";
 import WebSocket from "ws";
 import * as encoding from "@lavalink/encoding";
-import * as play from "play-dl";
-import { version as playDLVersion } from "play-dl/package.json";
+import { version as LavalampVersion } from "lava-lamp/package.json";
 
 // Local modules
 import Constants from "./Constants";
 import logger from "./util/Logger";
 import ThreadPool from "./util/ThreadPool";
 import Util from "./util/Util";
-
-// Source getters
-import getHTTPAsSource from "./sources/http";
-import getLocalAsSource from "./sources/local";
-import getSoundCloudAsSource from "./sources/soundcloud";
-import getYoutubeAsSource from "./sources/youtube";
 
 const cpuCount = os.cpus().length;
 const pool = new ThreadPool({
@@ -44,15 +37,23 @@ if (fs.existsSync(configDir)) {
 	cfgparsed = yaml.parse(cfgyml);
 } else cfgparsed = {};
 
-const config = Util.mixin({}, Constants.defaultOptions, cfgparsed) as typeof Constants.defaultOptions;
+global.lavalinkConfig = Util.mixin({}, Constants.defaultOptions, cfgparsed) as typeof Constants.defaultOptions;
+import * as lamp from "lava-lamp"; // Can load this now that global constants are assigned
+
+// Source getters
+import getHTTPAsSource from "./sources/http";
+import getLocalAsSource from "./sources/local";
+import getSoundCloudAsSource from "./sources/soundcloud";
+import getYoutubeAsSource from "./sources/youtube";
+
 
 const keyDir = path.join(__dirname, "../soundcloud.txt");
 
 function keygen() {
-	play.getFreeClientID().then(clientID => {
+	lamp.getFreeClientID().then(clientID => {
 		if (!clientID) throw new Error("SOUNDCLOUD_KEY_NO_CREATE");
 		fs.writeFileSync(keyDir, clientID, { encoding: "utf-8" });
-		play.setToken({ soundcloud : { client_id : clientID } });
+		lamp.setToken({ soundcloud : { client_id : clientID } });
 	});
 }
 
@@ -60,14 +61,14 @@ if (fs.existsSync(keyDir)) {
 	if (Date.now() - fs.statSync(keyDir).mtime.getTime() >= (1000 * 60 * 60 * 24 * 7)) keygen();
 	else {
 		const APIKey = fs.readFileSync(keyDir, { encoding: "utf-8" });
-		play.setToken({ soundcloud: { client_id: APIKey } });
+		lamp.setToken({ soundcloud: { client_id: APIKey } });
 	}
 } else keygen();
 
-play.setToken({ useragent: [Constants.fakeAgent] });
+lamp.setToken({ useragent: [Constants.fakeAgent] });
 
-const rootLog: typeof logger.info = logger[config.logging.level.root?.toLowerCase?.()] ?? logger.info;
-const llLog: typeof logger.info = logger[config.logging.level.lavalink?.toLowerCase?.()] ?? logger.info;
+const rootLog: typeof logger.info = logger[lavalinkConfig.logging.level.root?.toLowerCase?.()] ?? logger.info;
+const llLog: typeof logger.info = logger[lavalinkConfig.logging.level.lavalink?.toLowerCase?.()] ?? logger.info;
 
 let username: string;
 try {
@@ -76,7 +77,7 @@ try {
 	username = "unknown user";
 }
 
-if (config.spring.main["banner-mode"] === "log")
+if (lavalinkConfig.spring.main["banner-mode"] === "log")
 	rootLog("\n" +
 					"\x1b[33m__      __   _                                \x1b[97moOOOOo\n" +
 					"\x1b[33m\\ \\    / /  | |                             \x1b[97mooOOoo  oo\n" +
@@ -85,7 +86,7 @@ if (config.spring.main["banner-mode"] === "log")
 					"\x1b[33m   \\  / (_) | | (_| (_| | | | | (_) |    \x1b[0m/   \x1b[31mV   \x1b[0m\\\n" +
 					"\x1b[33m    \\/ \\___/|_|\\___\\__,_|_| |_|\\___/  \x1b[0m/\\/     \x1b[31mVV  \x1b[0m\\");
 
-rootLog(`\n\n\nVersion:               ${version}\nLavaLink base version: ${lavalinkVersion}\nNode:                  ${process.version}\nPlay-DL version:       ${playDLVersion}\n\n`);
+rootLog(`\n\n\nVersion:               ${version}\nLavaLink base version: ${lavalinkVersion}\nNode:                  ${process.version}\nLavaLamp version:      ${LavalampVersion}\n\n`);
 rootLog(`Starting on ${os.hostname()} with PID ${process.pid} (${__filename} started by ${username} in ${process.cwd()})`);
 rootLog(`Using ${cpuCount} worker threads in pool`);
 
@@ -158,7 +159,7 @@ http.on("upgrade", (request: HTTP.IncomingMessage, socket: import("net").Socket,
 
 	const temp401 = "HTTP/1.1 401 Unauthorized\r\n\r\n";
 
-	const passwordIncorrect: boolean = (config.lavalink.server.password !== undefined && request.headers.authorization !== String(config.lavalink.server.password));
+	const passwordIncorrect: boolean = (lavalinkConfig.lavalink.server.password !== undefined && request.headers.authorization !== String(lavalinkConfig.lavalink.server.password));
 	const invalidUserID: boolean = (!request.headers["user-id"] || Array.isArray(request.headers["user-id"]) || !/^\d+$/.test(request.headers["user-id"]));
 	if (passwordIncorrect || invalidUserID) {
 		return socket.write(temp401, () => {
@@ -354,7 +355,7 @@ async function serverHandler(req: import("http").IncomingMessage, res: import("h
 	const query = reqUrl.searchParams;
 
 	// This is just for rest. Upgrade requests for the websocket are handled in the http upgrade event.
-	if (reqPath !== "/" && config.lavalink.server.password && (!req.headers.authorization || req.headers.authorization !== String(config.lavalink.server.password))) {
+	if (reqPath !== "/" && lavalinkConfig.lavalink.server.password && (!req.headers.authorization || req.headers.authorization !== String(lavalinkConfig.lavalink.server.password))) {
 		logger.warn(`Authorization missing for ${req.socket.remoteAddress} on ${req.method!.toUpperCase()} ${reqPath}`);
 		res.writeHead(401, "Unauthorized", Object.assign({}, Constants.baseHTTPResponseHeaders, { "Content-Type": "text/plain" })).write("Unauthorized");
 		return res.end();
@@ -384,7 +385,7 @@ async function serverHandler(req: import("http").IncomingMessage, res: import("h
 		const isSoundcloudSearch = !!match[2];
 		const resource = match[3];
 
-		const canDefaultToSoundCloudSearch = (config.lavalink.server.sources.soundcloud && config.lavalink.server.soundcloudSearchEnabled) && (!config.lavalink.server.sources.youtube || !config.lavalink.server.youtubeSearchEnabled);
+		const canDefaultToSoundCloudSearch = (lavalinkConfig.lavalink.server.sources.soundcloud && lavalinkConfig.lavalink.server.soundcloudSearchEnabled) && (!lavalinkConfig.lavalink.server.sources.youtube || !lavalinkConfig.lavalink.server.youtubeSearchEnabled);
 
 		if (!resource) return Util.standardErrorHandler("Invalid or no identifier query string provided.", res, payload, llLog);
 
@@ -392,7 +393,7 @@ async function serverHandler(req: import("http").IncomingMessage, res: import("h
 		if (resource.startsWith("http")) url = new URL(resource);
 
 		const doSoundCloudSearch = async () => { // YouTube can fallback to SoundCloud if YouTube is disabled
-			if ((isSoundcloudSearch || isYouTubeSearch) && !config.lavalink.server.soundcloudSearchEnabled) {
+			if ((isSoundcloudSearch || isYouTubeSearch) && !lavalinkConfig.lavalink.server.soundcloudSearchEnabled) {
 				res.writeHead(200, "OK", Constants.baseHTTPResponseHeaders).write(JSON.stringify(Object.assign(payload, { loadType: "LOAD_FAILED", exception: { message: "Soundcloud searching is not enabled.", severity: "COMMON" } })));
 				res.end();
 				return false;
@@ -414,7 +415,7 @@ async function serverHandler(req: import("http").IncomingMessage, res: import("h
 		};
 
 		if ((isSoundcloudSearch || (url && url.hostname === soundCloudURL.hostname) || (isYouTubeSearch && canDefaultToSoundCloudSearch))) {
-			if (!config.lavalink.server.sources.soundcloud) {
+			if (!lavalinkConfig.lavalink.server.sources.soundcloud) {
 				res.writeHead(200, "OK", Constants.baseHTTPResponseHeaders).write(JSON.stringify(Object.assign(payload, { loadType: "LOAD_FAILED", exception: { message: "Soundcloud is not enabled.", severity: "COMMON" } })));
 				return res.end();
 			}
@@ -422,7 +423,7 @@ async function serverHandler(req: import("http").IncomingMessage, res: import("h
 			const r = await doSoundCloudSearch();
 			if (!r) return;
 		} else if (path.isAbsolute(resource)) {
-			if (!config.lavalink.server.sources.local) return Util.standardErrorHandler("Local is not enabled.", res, payload, llLog);
+			if (!lavalinkConfig.lavalink.server.sources.local) return Util.standardErrorHandler("Local is not enabled.", res, payload, llLog);
 
 			const data = await getLocalAsSource(resource).catch(e => Util.standardErrorHandler(e, res, payload, llLog));
 			if (!data) return;
@@ -435,7 +436,7 @@ async function serverHandler(req: import("http").IncomingMessage, res: import("h
 			payload.tracks.push(track);
 
 		} else if (url && !url.hostname.includes("youtu")) {
-			if (!config.lavalink.server.sources.http) return Util.standardErrorHandler("HTTP is not enabled.", res, payload, llLog);
+			if (!lavalinkConfig.lavalink.server.sources.http) return Util.standardErrorHandler("HTTP is not enabled.", res, payload, llLog);
 			const data = await getHTTPAsSource(resource).catch(e => Util.standardErrorHandler(e, res, payload, llLog));
 
 			if (!data) return;
@@ -465,15 +466,15 @@ async function serverHandler(req: import("http").IncomingMessage, res: import("h
 			if (!resource.startsWith("http")) isYouTubeSearch = true;
 			if (isYouTubeSearch && canDefaultToSoundCloudSearch) await doSoundCloudSearch();
 			else {
-				if (isYouTubeSearch && !config.lavalink.server.youtubeSearchEnabled) {
+				if (isYouTubeSearch && !lavalinkConfig.lavalink.server.youtubeSearchEnabled) {
 					res.writeHead(200, "OK", Constants.baseHTTPResponseHeaders).write(JSON.stringify(Object.assign(payload, { loadType: "LOAD_FAILED", exception: { message: "YouTube searching is not enabled.", severity: "COMMON" } })));
 					return res.end();
 				}
-				if (!config.lavalink.server.sources.youtube) {
+				if (!lavalinkConfig.lavalink.server.sources.youtube) {
 					res.writeHead(200, "OK", Constants.baseHTTPResponseHeaders).write(JSON.stringify(Object.assign(payload, { loadType: "LOAD_FAILED", exception: { message: "YouTube is not enabled.", severity: "COMMON" } })));
 					return res.end();
 				}
-				const data = await getYoutubeAsSource(resource, isYouTubeSearch, config).catch(e => Util.standardErrorHandler(e, res, payload, llLog));
+				const data = await getYoutubeAsSource(resource, isYouTubeSearch).catch(e => Util.standardErrorHandler(e, res, payload, llLog));
 
 				if (!data) return;
 
@@ -541,8 +542,8 @@ function convertDecodedTrackToResponse(data: import("@lavalink/encoding").TrackI
 	};
 }
 
-http.listen(config.server.port as number, config.server.address, () => {
-	rootLog(`HTTP and Socket started on port ${config.server.port} binding to ${config.server.address}`);
+http.listen(lavalinkConfig.server.port as number, lavalinkConfig.server.address, () => {
+	rootLog(`HTTP and Socket started on port ${lavalinkConfig.server.port} binding to ${lavalinkConfig.server.address}`);
 	rootLog(`Started in ${(Date.now() - startTime) / 1000} seconds (Node running for ${process.uptime()})`);
 });
 

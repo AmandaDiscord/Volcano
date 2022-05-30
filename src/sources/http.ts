@@ -14,18 +14,6 @@ async function getHTTPAsSource(resource: string) {
 		const stream = await Util.request(resource);
 
 		if (stream.headers) headers = stream.headers;
-		else if (stream.rawHeaders) {
-			let skip = false;
-			headers = {};
-			for (let index = 0; index < stream.rawHeaders.length; index++) {
-				if (skip) {
-					skip = false;
-					continue;
-				}
-				skip = true;
-				headers[stream.rawHeaders[index]] = stream.rawHeaders[index + 1];
-			}
-		}
 		if (headers && headers["icy-notice1"]) {
 			headers["transfer-encoding"] = "chunked";
 			// @ts-ignore
