@@ -239,10 +239,8 @@ class Queue {
 			} else if (decoded.source === "soundcloud") {
 				if (!lavalinkConfig.lavalink.server.sources.soundcloud) return reject(new Error("SOUNDCLOUD_NOT_ENABLED"));
 				const url = decoded.identifier.replace(/^O:/, "");
-				stream = await lamp.stream(url).then(i => {
-					typeFromPlayDL = i.type;
-					return i.stream;
-				});
+				const data = await lamp.stream_from_info(new lamp.SoundCloudTrack({ user: {}, media: { transcodings: [{ format: { protocol: "hls", mime_type: "unknown" }, url: url }] } }));
+				stream = data.stream;
 				try {
 					await demux();
 				} catch (e) {

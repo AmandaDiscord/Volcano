@@ -148,7 +148,7 @@ export const workerOPCodes = {
 	DELETE_ALL: 8 as const
 };
 
-export const OKStatusCodes = [200, 203];
+export const OKStatusCodes = [200, 203, 204, 206];
 
 export const RedirectStatusCodes = [300, 301, 302, 303, 307, 308];
 
