@@ -71,6 +71,7 @@ if (fs.existsSync(keyDir)) {
 } else keygen();
 
 lamp.setToken({ useragent: [Constants.fakeAgent] });
+if (lavalinkConfig.lavalink.server.youtubeCookie) lamp.setToken({ youtube: { cookie: lavalinkConfig.lavalink.server.youtubeCookie } });
 
 // This is a proper rewrite of entersState. entersState does some weird stuff with Node internal methods which could lead to
 // events never firing and causing the thread to be locked and cause abort errors somehow.
@@ -83,12 +84,12 @@ function waitForResourceToEnterState(resource: Discord.VoiceConnection | Discord
 		function onStateChange(_oldState: Discord.VoiceConnectionState | Discord.AudioPlayerState, newState: Discord.VoiceConnectionState | Discord.AudioPlayerState) {
 			if (newState.status !== status) return;
 			if (timeout) clearTimeout(timeout);
-			(resource as Discord.AudioPlayer).removeListener("stateChange", onStateChange);
+			(resource as Discord.AudioPlayer).removeListener<"stateChange">("stateChange", onStateChange);
 			return res(void 0);
 		}
-		(resource as Discord.AudioPlayer).on("stateChange", onStateChange);
+		(resource as Discord.AudioPlayer).on<"stateChange">("stateChange", onStateChange);
 		timeout = setTimeout(() => {
-			(resource as Discord.AudioPlayer).removeListener("stateChange", onStateChange);
+			(resource as Discord.AudioPlayer).removeListener<"stateChange">("stateChange", onStateChange);
 			rej(new Error("Didn't enter state in time"));
 		}, timeoutMS);
 	});
@@ -451,7 +452,7 @@ parentPort.on("message", async (packet: { data?: import("./types").InboundPayloa
 		}
 		}
 	} else if (packet.op === Constants.workerOPCodes.VOICE_SERVER) {
-		methodMap.get(`${packet.data!.clientID}.${packet.data!.guildId}`)?.onVoiceStateUpdate({ channel_id: "" as any, guild_id: packet.data!.guildId as any, user_id: packet.data!.clientID as any, session_id: packet.data!.sessionId!, deaf: false, self_deaf: false, mute: false, self_mute: false, self_video: false, suppress: false });
+		methodMap.get(`${packet.data!.clientID}.${packet.data!.guildId}`)?.onVoiceStateUpdate({ channel_id: "" as any, guild_id: packet.data!.guildId as any, user_id: packet.data!.clientID as any, session_id: packet.data!.sessionId!, deaf: false, self_deaf: false, mute: false, self_mute: false, self_video: false, suppress: false, request_to_speak_timestamp: null });
 		methodMap.get(`${packet.data!.clientID}.${packet.data!.guildId}`)?.onVoiceServerUpdate({ guild_id: packet.data!.guildId as any, token: packet.data!.event!.token, endpoint: packet.data!.event!.endpoint });
 	} else if (packet.op === Constants.workerOPCodes.DELETE_ALL) {
 		const forUser = [...queues.values()].filter(q => q.clientID === packet.data!.clientID);

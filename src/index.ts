@@ -66,6 +66,7 @@ if (fs.existsSync(keyDir)) {
 } else keygen();
 
 lamp.setToken({ useragent: [Constants.fakeAgent] });
+if (lavalinkConfig.lavalink.server.youtubeCookie) lamp.setToken({ youtube: { cookie: lavalinkConfig.lavalink.server.youtubeCookie } });
 
 const rootLog: typeof logger.info = logger[lavalinkConfig.logging.level.root?.toLowerCase?.()] ?? logger.info;
 const llLog: typeof logger.info = logger[lavalinkConfig.logging.level.lavalink?.toLowerCase?.()] ?? logger.info;

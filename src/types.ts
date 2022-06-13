@@ -21,6 +21,7 @@ export type LavaLinkConfig = {
 	lavalink?: {
 		server?: {
 			password?: string;
+			youtubeCookie?: string;
 			sources?: {
 				youtube?: boolean;
 				soundcloud?: boolean;

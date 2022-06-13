@@ -11,6 +11,7 @@ export const defaultOptions = {
 	lavalink: {
 		server: {
 			password: "youshallnotpass",
+			youtubeCookie: "",
 			sources: {
 				youtube: true,
 				soundcloud: true,
