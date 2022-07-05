@@ -28,6 +28,7 @@ export function request(url: string, opts?: { extraOptions?: import("http").Requ
 	const remote = new URL(url);
 	const reqHeaders: import("http").OutgoingHttpHeaders = Object.assign({ Host: remote.host, "Alt-Used": remote.host }, Constants.baseHTTPRequestHeaders, opts?.extraOptions?.headers ? opts.extraOptions.headers : {});
 	if (opts?.extraOptions?.headers) delete opts.extraOptions.headers;
+	if (reqHeaders.cookie) reqHeaders.cookie = (reqHeaders.cookie as string).replace(/…/g, "");
 	return new Promise<import("http").IncomingMessage>((res, rej) => {
 		const options: import("http").RequestOptions = Object.assign({
 			method: "GET",

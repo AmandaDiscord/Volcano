@@ -286,8 +286,8 @@ class Queue {
 			// I assign the values of current, track, and stopping here because these are usually reset at player transition from not Idle => Idle
 			// However, we're waiting for resource to transition from Idle => Playing, so it won't fire Idle again until another track is played.
 			this.current = null;
-			parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackStuckEvent", guildId: this.guildID, track: this.track?.track || "UNKNOWN", thresholdMs: Constants.PlayerStuckThresholdMS }, clientID: this.clientID });
-			logger.warn(`${this.track?.track ? encoding.decode(this.track.track).title : "UNKNOWN"} got stuck! Threshold surpassed: ${Constants.PlayerStuckThresholdMS}`);
+			parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackStuckEvent", guildId: this.guildID, track: track.track || "UNKNOWN", thresholdMs: Constants.PlayerStuckThresholdMS }, clientID: this.clientID });
+			logger.warn(`${track.track ? encoding.decode(track.track).title : "UNKNOWN"} got stuck! Threshold surpassed: ${Constants.PlayerStuckThresholdMS}`);
 			this.track = undefined;
 			this.shouldntCallFinish = false;
 			this.stopping = false;
