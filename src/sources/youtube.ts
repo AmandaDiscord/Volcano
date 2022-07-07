@@ -46,7 +46,7 @@ async function getYoutubeAsSource(resource: string, isSearch: boolean): Promise<
 			if (i > lavalinkConfig.lavalink.server.youtubePlaylistLoadLimit) continue;
 			entries.push(...pl.page(i));
 		}
-		return { entries: entries.map(i => ({ id: i.id as string, title: i.title as string, duration: i.durationInSec, uploader: i.channel?.name || "Unknown author" })), plData: { name: pl.title as string, selectedTrack: url?.searchParams.get("index") ? Number(url.searchParams.get("index")) : 1 } };
+		return { entries: entries.map(i => ({ id: i.id as string, title: i.title as string, duration: i.durationInSec, uploader: i.channel?.name || "Unknown author" })), plData: { name: pl.title as string, selectedTrack: url?.searchParams.get("index") ? Number(url.searchParams.get("index")) : 0 } };
 	}
 
 	const data = await lamp.video_basic_info(resource);

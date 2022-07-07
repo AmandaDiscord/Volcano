@@ -20,7 +20,7 @@ export function processLoad(): Promise<number> {
 export function standardErrorHandler(e: Error | string, response: import("http").ServerResponse, payload: any, llLog: typeof import("./Logger").info, loadType: "LOAD_FAILED" | "NO_MATCHES" = "LOAD_FAILED", severity = "COMMON"): void {
 	llLog(`Load failed\n${e}`);
 	response.writeHead(200, "OK", Constants.baseHTTPResponseHeaders).write(JSON.stringify(Object.assign(payload, { loadType: loadType, exception: { message: (typeof e === "string" ? e : e.message || "").split("\n").slice(-1)[0].replace(/(Error|ERROR):? ?/, ""), severity: severity } })));
-	return response.end();
+	response.end();
 }
 
 export function request(url: string, opts?: { extraOptions?: import("http").RequestOptions; isSearch?: boolean; body?: string; }, retries = 0, redirects = 0) {

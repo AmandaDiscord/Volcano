@@ -78,6 +78,22 @@ try {
 	username = "unknown user";
 }
 
+type p = NodeJS.Platform;
+
+const platformNames = {
+	"aix": "AIX",
+	"android": "Android",
+	"darwin": "Darwin",
+	"freebsd": "FreeBSD",
+	"haiku": "Haiku",
+	"linux": "Linux",
+	"openbsd": "OpenBSD",
+	"sunos": "SunOS",
+	"win32": "Windows",
+	"cygwin": "Cygwin",
+	"netbsd": "NetBSD"
+};
+
 if (lavalinkConfig.spring.main["banner-mode"] === "log")
 	rootLog("\n" +
 					"\x1b[33m__      __   _                                \x1b[97moOOOOo\n" +
@@ -89,6 +105,7 @@ if (lavalinkConfig.spring.main["banner-mode"] === "log")
 
 rootLog(`\n\n\nVersion:               ${version}\nLavaLink base version: ${lavalinkVersion}\nNode:                  ${process.version}\nLavaLamp version:      ${LavalampVersion}\n\n`);
 rootLog(`Starting on ${os.hostname()} with PID ${process.pid} (${__filename} started by ${username} in ${process.cwd()})`);
+rootLog(`OS: ${platformNames[process.platform] || process.platform} ${os.release()?.split(".")[0] || "Unknown release"} Arch: ${process.arch}`);
 rootLog(`Using ${cpuCount} worker threads in pool`);
 
 const http: HTTP.Server = HTTP.createServer(serverHandler);
@@ -544,9 +561,9 @@ function convertDecodedTrackToResponse(data: import("@lavalink/encoding").TrackI
 }
 
 http.listen(lavalinkConfig.server.port as number, lavalinkConfig.server.address, () => {
-	rootLog(`HTTP and Socket started on port ${lavalinkConfig.server.port} binding to ${lavalinkConfig.server.address}`);
-	rootLog(`Started in ${(Date.now() - startTime) / 1000} seconds (Node running for ${process.uptime()})`);
+	rootLog("Volcano is ready to accept connections.");
 });
+rootLog(`Server started on port(s) ${lavalinkConfig.server.port} (http)`);
 
 ws.once("close", () => {
 	clearInterval(serverLoopInterval);
@@ -560,3 +577,4 @@ ws.once("close", () => {
 
 process.on("unhandledRejection", (reason) => logger.error(reason));
 process.title = "Volcano";
+rootLog(`Started Launcher in ${(Date.now() - startTime) / 1000} seconds (Node running for ${process.uptime()})`);
