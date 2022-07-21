@@ -81,6 +81,7 @@ export const OPCodes = {
 	FFMPEG: "ffmpeg" as const,
 	VOLUME: "volume" as const,
 	DUMP: "dump" as const,
+	PING: "ping" as const,
 
 	PLAYER_UPDATE: "playerUpdate" as const,
 	STATS: "stats" as const,

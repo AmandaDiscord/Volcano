@@ -78,8 +78,6 @@ try {
 	username = "unknown user";
 }
 
-type p = NodeJS.Platform;
-
 const platformNames = {
 	"aix": "AIX",
 	"android": "Android",
@@ -295,6 +293,19 @@ async function onClientMessage(socket: WebSocket, data: WebSocket.Data, userID: 
 	}
 	case Constants.OPCodes.DUMP: {
 		pool.dump();
+		break;
+	}
+	case Constants.OPCodes.PING: {
+		const payload = { op: "pong" } as { op: "pong"; ping?: number };
+		if (msg.guildId) {
+			const threadStats: Array<{ pings: { [guildId: string]: number }; }> = await pool.broadcast({ op: Constants.workerOPCodes.STATS });
+			for (const worker of threadStats) {
+				if (worker.pings[msg.guildId] !== undefined) {
+					payload.ping = worker.pings[msg.guildId];
+				}
+			}
+		}
+		socket.send(JSON.stringify(payload));
 		break;
 	}
 	}

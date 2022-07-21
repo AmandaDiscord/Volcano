@@ -163,13 +163,15 @@ class Queue {
 		});
 	}
 
-	public get state(): { time: number; position: number; connected: boolean } {
+	public get state() {
 		const position = Math.floor(((this.current?.playbackDuration || 0) + this.seekTime) * this.rate);
 		if (this.track && this.track.end && position >= this.track.end) this.stop(true);
 		return {
 			time: Date.now(),
 			position: position,
-			connected: this.connection.state.status === Discord.VoiceConnectionStatus.Ready
+			connected: this.connection.state.status === Discord.VoiceConnectionStatus.Ready,
+			ping: this.connection.ping.ws || Infinity,
+			guildId: this.guildID
 		};
 	}
 
@@ -394,7 +396,7 @@ class Queue {
 parentPort.on("message", async (packet: { data?: import("./types").InboundPayload; op: typeof Constants.workerOPCodes[keyof typeof Constants.workerOPCodes], threadID: number; broadcasted?: boolean }) => {
 	if (packet.op === Constants.workerOPCodes.STATS) {
 		const qs = [...queues.values()];
-		return parentPort.postMessage({ op: Constants.workerOPCodes.REPLY, data: { playingPlayers: qs.filter(q => !q.paused).length, players: queues.size }, threadID: packet.threadID });
+		return parentPort.postMessage({ op: Constants.workerOPCodes.REPLY, data: { playingPlayers: qs.filter(q => !q.paused).length, players: queues.size, pings: qs.reduce((acc, cur) => acc[cur.guildID] = cur.state.ping, {}) }, threadID: packet.threadID });
 	} else if (packet.op === Constants.workerOPCodes.MESSAGE) {
 		const guildID = packet.data!.guildId;
 		const userID = packet.data!.clientID!;
