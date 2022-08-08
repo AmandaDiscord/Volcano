@@ -8,6 +8,7 @@ function stringify(data: any) {
 		const references = new Set<any>();
 		return JSON.stringify(step(data, references));
 	} else if (Array.isArray(data)) return `[${data.map(i => stringify(i)).join(",")}]`;
+	if (typeof data === "string") return `"${data}"`;
 	else return String(data);
 }
 
@@ -33,7 +34,7 @@ const logger = {
 	},
 	getPrefix: (type: "warn" | "info" | "error", worker: string) => {
 		const first = BackTracker.stack[1];
-		const scope = `${first.filename.replace(/\.js$/, "")}:${first.line}:${first.column}`;
+		const scope = `${first.filename}:${first.line}:${first.column}`;
 		const color = type === "warn" ? "\x1b[93m" : type === "error" ? "\x1b[91m" : "\x1b[92m";
 		return `\x1b[90m${new Date().toISOString().replace("T", " ").replace("Z", "")} ${color}${type.toUpperCase()} \x1b[35m${process.pid} \x1b[0m--- [${" ".repeat((workerNameMaxLogLength - worker.length) < 1 ? 1 : workerNameMaxLogLength - worker.length)}${worker}] \x1b[36m${scope}${" ".repeat((scopeNameMaxLogLength - scope.length) < 1 ? 1 : scopeNameMaxLogLength - scope.length)}\x1b[0m :`;
 	},
@@ -48,4 +49,4 @@ const logger = {
 	}
 };
 
-export = logger;
+export default logger;

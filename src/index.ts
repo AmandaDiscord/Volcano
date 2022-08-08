@@ -1,6 +1,5 @@
 const startTime: number = Date.now();
 
-const { version } = require("../package.json") as { version: string; };
 const lavalinkVersion = "3.4";
 const lavalinkMajor = lavalinkVersion.split(".")[0];
 
@@ -10,27 +9,31 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import * as entities from "html-entities";
+import { fileURLToPath } from "url";
 
 // NPM modules
 import yaml from "yaml";
-import WebSocket from "ws";
+import { WebSocketServer, WebSocket } from "ws";
 import * as encoding from "@lavalink/encoding";
-import { version as LavalampVersion } from "lava-lamp/package.json";
+import llpkg from "lava-lamp/package.json" assert { type: "json" };
 
 // Local modules
-import Constants from "./Constants";
-import logger from "./util/Logger";
-import ThreadPool from "./util/ThreadPool";
-import Util from "./util/Util";
+import Constants from "./Constants.js";
+import logger from "./util/Logger.js";
+import ThreadPool from "./util/ThreadPool.js";
+import Util from "./util/Util.js";
+
+logger.warn("You can safely ignore the node ExperimentalWarning regarding importing JSON files");
+const dirname = fileURLToPath(path.dirname(import.meta.url));
 
 const cpuCount = os.cpus().length;
 const pool = new ThreadPool({
 	size: cpuCount,
-	dir: path.join(__dirname, "./worker.js")
+	dir: path.join(dirname, "./worker.js")
 });
 
 const configDir: string = path.join(process.cwd(), "./application.yml");
-let cfgparsed: import("./types").LavaLinkConfig;
+let cfgparsed: import("./types.js").LavaLinkConfig;
 
 if (fs.existsSync(configDir)) {
 	const cfgyml: string = fs.readFileSync(configDir, { encoding: "utf-8" });
@@ -41,13 +44,13 @@ global.lavalinkConfig = Util.mixin({}, Constants.defaultOptions, cfgparsed) as t
 import * as lamp from "lava-lamp"; // Can load this now that global constants are assigned
 
 // Source getters
-import getHTTPAsSource from "./sources/http";
-import getLocalAsSource from "./sources/local";
-import getSoundCloudAsSource from "./sources/soundcloud";
-import getYoutubeAsSource from "./sources/youtube";
+import getHTTPAsSource from "./sources/http.js";
+import getLocalAsSource from "./sources/local.js";
+import getSoundCloudAsSource from "./sources/soundcloud.js";
+import getYoutubeAsSource from "./sources/youtube.js";
 
 
-const keyDir = path.join(__dirname, "../soundcloud.txt");
+const keyDir = path.join(dirname, "../soundcloud.txt");
 
 function keygen() {
 	lamp.getFreeClientID().then(clientID => {
@@ -101,18 +104,18 @@ if (lavalinkConfig.spring.main["banner-mode"] === "log")
 					"\x1b[33m   \\  / (_) | | (_| (_| | | | | (_) |    \x1b[0m/   \x1b[31mV   \x1b[0m\\\n" +
 					"\x1b[33m    \\/ \\___/|_|\\___\\__,_|_| |_|\\___/  \x1b[0m/\\/     \x1b[31mVV  \x1b[0m\\");
 
-rootLog(`\n\n\nVersion:               ${version}\nLavaLink base version: ${lavalinkVersion}\nNode:                  ${process.version}\nLavaLamp version:      ${LavalampVersion}\n\n`);
-rootLog(`Starting on ${os.hostname()} with PID ${process.pid} (${__filename} started by ${username} in ${process.cwd()})`);
+rootLog(`\n\n\nLavaLink base version: ${lavalinkVersion}\nNode:                  ${process.version}\nLavaLamp version:      ${llpkg.version}\n\n`);
+rootLog(`Starting on ${os.hostname()} with PID ${process.pid} (${fileURLToPath(import.meta.url)} started by ${username} in ${process.cwd()})`);
 rootLog(`OS: ${platformNames[process.platform] || process.platform} ${os.release()?.split(".")[0] || "Unknown release"} Arch: ${process.arch}`);
 rootLog(`Using ${cpuCount} worker threads in pool`);
 
 const http: HTTP.Server = HTTP.createServer(serverHandler);
-const ws = new WebSocket.Server({ noServer: true });
+const ws = new WebSocketServer({ noServer: true });
 
-const connections = new Map<string, Array<{ socket: WebSocket; resumeKey: string | null; resumeTimeout: number }>>();
+const connections = new Map<string, Array<{ socket: import("ws").WebSocket; resumeKey: string | null; resumeTimeout: number }>>();
 const voiceServerStates = new Map<string, { clientID: string; guildId: string; sessionId: string; event: { token: string; guild_id: string; endpoint: string } }>();
 const socketDeleteTimeouts = new Map<string, { timeout: NodeJS.Timeout; events: Array<any> }>();
-const playerMap = new Map<string, WebSocket>();
+const playerMap = new Map<string, import("ws").WebSocket>();
 
 pool.on("message", (_, msg) => {
 	const socket = playerMap.get(`${msg.clientID}.${msg.data.guildId}`);
@@ -131,7 +134,7 @@ pool.on("datareq", (op, data) => {
 	}
 });
 
-async function getStats(): Promise<import("./types").Stats> {
+async function getStats(): Promise<import("./types.js").Stats> {
 	const memory = process.memoryUsage();
 	const free: number = memory.heapTotal - memory.heapUsed;
 	const pload: number = await Util.processLoad();
@@ -219,7 +222,7 @@ http.on("upgrade", (request: HTTP.IncomingMessage, socket: import("net").Socket,
 
 ws.on("connection", async (socket, request) => {
 	const userID: string = request.headers["user-id"] as string;
-	const stats: import("./types").Stats = await getStats();
+	const stats: import("./types.js").Stats = await getStats();
 	socket.send(JSON.stringify(Object.assign(stats, { op: "stats" })));
 	socket.on("message", data => onClientMessage(socket, data, userID));
 	// @ts-ignore
@@ -230,7 +233,7 @@ ws.on("connection", async (socket, request) => {
 	socket.once("error", () => onClientClose(socket, userID, 1000, { ip: request.socket.remoteAddress!, port: request.socket.remotePort! }));
 });
 
-async function onClientMessage(socket: WebSocket, data: WebSocket.Data, userID: string): Promise<void> {
+async function onClientMessage(socket: import("ws").WebSocket, data: import("ws").RawData, userID: string): Promise<void> {
 	const buf: string | Buffer = Array.isArray(data)
 		? Buffer.concat(data)
 		: (data instanceof ArrayBuffer)
@@ -238,7 +241,7 @@ async function onClientMessage(socket: WebSocket, data: WebSocket.Data, userID: 
 			: data;
 
 	const d: string = buf.toString();
-	const msg: import("./types").InboundPayload = JSON.parse(d);
+	const msg: import("./types.js").InboundPayload = JSON.parse(d);
 
 	llLog(msg);
 
@@ -311,7 +314,7 @@ async function onClientMessage(socket: WebSocket, data: WebSocket.Data, userID: 
 	}
 }
 
-async function onClientClose(socket: WebSocket, userID: string, closeCode: number, extra: { ip: string; port: number }) {
+async function onClientClose(socket: import("ws").WebSocket, userID: string, closeCode: number, extra: { ip: string; port: number }) {
 	if (socket.readyState !== WebSocket.CLOSING && socket.readyState !== WebSocket.CLOSED) socket.close(closeCode);
 
 	socket.removeAllListeners();
@@ -361,7 +364,7 @@ async function onClientClose(socket: WebSocket, userID: string, closeCode: numbe
 
 const serverLoopInterval: NodeJS.Timeout = setInterval(async () => {
 	const stats = await getStats();
-	const payload: import("./types").OutboundPayload = Object.assign(stats, { op: "stats" as const });
+	const payload: import("./types.js").OutboundPayload = Object.assign(stats, { op: "stats" as const });
 	const str: string = JSON.stringify(payload);
 	for (const client of ws.clients) {
 		// @ts-ignore
@@ -586,6 +589,5 @@ ws.once("close", () => {
 	}
 });
 
-process.on("unhandledRejection", (reason) => logger.error(reason));
 process.title = "Volcano";
 rootLog(`Started Launcher in ${(Date.now() - startTime) / 1000} seconds (Node running for ${process.uptime()})`);

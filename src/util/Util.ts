@@ -1,6 +1,6 @@
-const icy: typeof import("http") = require("icy");
+const icy: typeof import("http") = await import("icy");
 
-import Constants from "../Constants";
+import Constants from "../Constants.js";
 
 export function processLoad(): Promise<number> {
 	return new Promise(res => {
@@ -17,7 +17,7 @@ export function processLoad(): Promise<number> {
 	});
 }
 
-export function standardErrorHandler(e: Error | string, response: import("http").ServerResponse, payload: any, llLog: typeof import("./Logger").info, loadType: "LOAD_FAILED" | "NO_MATCHES" = "LOAD_FAILED", severity = "COMMON"): void {
+export function standardErrorHandler(e: Error | string, response: import("http").ServerResponse, payload: any, llLog: typeof import("./Logger.js").default.info, loadType: "LOAD_FAILED" | "NO_MATCHES" = "LOAD_FAILED", severity = "COMMON"): void {
 	llLog(`Load failed\n${e}`);
 	response.writeHead(200, "OK", Constants.baseHTTPResponseHeaders).write(JSON.stringify(Object.assign(payload, { loadType: loadType, exception: { message: (typeof e === "string" ? e : e.message || "").split("\n").slice(-1)[0].replace(/(Error|ERROR):? ?/, ""), severity: severity } })));
 	response.end();
@@ -105,7 +105,7 @@ export function isValidKey(key: string) {
 	return key !== "__proto__" && key !== "constructor" && key !== "prototype";
 }
 
-export function mixin<T extends Record<string, any>, S extends Array<Record<string, any>>>(target: T, ...sources: S): import("../types").Mixin<T, S> {
+export function mixin<T extends Record<string, any>, S extends Array<Record<string, any>>>(target: T, ...sources: S): import("../types.js").Mixin<T, S> {
 	for (const obj of sources) {
 		if (isObject(obj)) {
 			for (const key in obj) {
@@ -113,7 +113,7 @@ export function mixin<T extends Record<string, any>, S extends Array<Record<stri
 			}
 		}
 	}
-	return target as unknown as import("../types").Mixin<T, S>;
+	return target as unknown as import("../types.js").Mixin<T, S>;
 }
 
 function step(target: Record<string, any>, val: Record<string, any>, key: string) {
@@ -122,7 +122,7 @@ function step(target: Record<string, any>, val: Record<string, any>, key: string
 	else target[key] = val;
 }
 
-export function getIPv6(ip: string, strategy: typeof import("../Constants").defaultOptions["lavalink"]["server"]["ratelimit"]["strategy"]): string {
+export function getIPv6(ip: string, strategy: typeof import("../Constants.js").defaultOptions["lavalink"]["server"]["ratelimit"]["strategy"]): string {
 	if (!isIPv6(ip)) throw Error("Invalid IPv6 format");
 	const [rawAddr, rawMask] = ip.split("/");
 	let base10Mask = parseInt(rawMask);
@@ -162,4 +162,4 @@ export function normalizeIP(ip: string) {
 	return fullIP;
 }
 
-export default module.exports as typeof import("./Util");
+export default { processLoad, standardErrorHandler, request, isObject, isValidKey, mixin, step, getIPv6, isIPv6, normalizeIP };

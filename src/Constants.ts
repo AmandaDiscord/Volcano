@@ -44,7 +44,7 @@ export const defaultOptions = {
 			lavalink: "INFO"
 		}
 	}
-} as import("./types").Complete<import("./types").LavaLinkConfig>;
+} as import("./types.js").Complete<import("./types.js").LavaLinkConfig>;
 
 export const baseHTTPResponseHeaders = {
 	"Lavalink-Api-Version": 3,
@@ -88,7 +88,7 @@ export const OPCodes = {
 	EVENT: "event" as const
 };
 
-export const defaultFilterValues: import("./types").PlayerFilterOptions = {
+export const defaultFilterValues: import("./types.js").PlayerFilterOptions = {
 	volume: 1.0,
 	equalizer: [
 		{
@@ -150,7 +150,7 @@ export const workerOPCodes = {
 	DELETE_ALL: 8 as const
 };
 
-export const OKStatusCodes = [200, 203, 204, 206];
+export const OKStatusCodes = [200, 203, 204, 206, 403];
 
 export const RedirectStatusCodes = [300, 301, 302, 303, 307, 308];
 
@@ -164,4 +164,4 @@ export const VoiceConnectionConnectThresholdMS = 20000;
 
 export const PlayerStuckThresholdMS = 10000;
 
-export default exports as typeof import("./Constants");
+export default { defaultOptions, baseHTTPRequestHeaders, fakeAgent, baseHTTPResponseHeaders, OPCodes, defaultFilterValues, workerOPCodes, OKStatusCodes, RedirectStatusCodes, RetriableStatusCodes, RateLimitStatusCodes, baseSoundcloudURL, VoiceConnectionConnectThresholdMS, PlayerStuckThresholdMS };

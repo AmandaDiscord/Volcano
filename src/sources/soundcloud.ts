@@ -38,4 +38,4 @@ async function getSoundCloudAsSource(resource: string, isSearch: boolean) {
 	throw e;
 }
 
-export = getSoundCloudAsSource;
+export default getSoundCloudAsSource;

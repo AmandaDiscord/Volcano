@@ -1,4 +1,4 @@
-type OPCodes = typeof import("./Constants")["OPCodes"];
+type OPCodes = typeof import("./Constants.js")["OPCodes"];
 
 export type Complete<T> = {
 	[K in keyof T]-?: Complete<T[K]>;

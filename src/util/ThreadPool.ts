@@ -3,9 +3,9 @@ import { EventEmitter } from "events";
 import fs from "fs";
 import path from "path";
 
-import logger from "./Logger";
+import logger from "./Logger.js";
 
-import Constants from "../Constants";
+import Constants from "../Constants.js";
 
 class SingleUseMap<K, V> extends Map<K, V> {
 	public use(key: K) {
@@ -199,4 +199,4 @@ async function onWorkerExit(id: string, worker: Worker, pool: ThreadPool) {
 	pool.emit("death", id);
 }
 
-export = ThreadPool;
+export default ThreadPool;

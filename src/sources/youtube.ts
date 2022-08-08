@@ -54,4 +54,4 @@ async function getYoutubeAsSource(resource: string, isSearch: boolean): Promise<
 	return { entries: [{ id: data.video_details.id as string, title: data.video_details.title as string, duration: Number(data.video_details.durationInSec as number || 0), uploader: data.video_details.channel?.name || "Unknown author" }] };
 }
 
-export = getYoutubeAsSource;
+export default getYoutubeAsSource;
