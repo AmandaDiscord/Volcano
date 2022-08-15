@@ -5,19 +5,38 @@ import Util from "../util/Util.js";
 
 const mimeRegex = /^(audio|video)\/(.+)$|^application\/(ogg)$/;
 
+type ExtraData = { stream: boolean; probe: string }
+
 async function getHTTPAsSource(resource: string) {
-	type ExtraData = { title?: string; author?: string; stream: boolean; probe: string }
 	let parsed: IAudioMetadata | undefined;
 	let headers: import("http").IncomingHttpHeaders | undefined = undefined;
 
 	try {
 		const stream = await Util.request(resource);
 
-		if (stream.headers) headers = stream.headers;
-		if (headers && headers["icy-notice1"]) {
-			headers["transfer-encoding"] = "chunked";
-			// @ts-ignore
-			parsed = { common: {}, format: {} };
+		// Do not read stream.headers as icy (the http backend) does some funky stuff, but appends to rawHeaders
+		if (stream.rawHeaders) {
+			if ((stream.rawHeaders.length % 2) !== 0) throw new Error("RAW_HEADERS_HAS_ODD_NUMBER_OF_ENTRIES");
+			headers = {};
+			for (let index = 0; index < stream.rawHeaders.length; index++) {
+				if ((index % 2) === 0) headers[stream.rawHeaders[index].toLowerCase()] = stream.rawHeaders[index + 1];
+				else continue;
+			}
+		} else if (stream.headers) throw new Error("STREAM_HAS_HEADERS_BUT_NO_RAW_HEADERS");
+		else throw new Error("RESPONSE_NO_HEADERS");
+
+		const isIcy = !!Object.keys(headers).find(h => h.startsWith("icy-"));
+		// Is stream chunked? (SKIPS A LOT OF CHECKS AND JUST RUNS WITH IT)
+		// Will be more than just ice-cast in the future
+		if (isIcy) {
+			if (!headers["transfer-encoding"]) headers["transfer-encoding"] = "chunked";
+			parsed = { common: {}, format: {} } as IAudioMetadata;
+
+			// Fill in ice cast data if applicable so track info doesn't always fallback to Unknown.
+			if (isIcy) {
+				if (headers["icy-description"]) parsed!.common.artist = headers["icy-description"] as string;
+				if (headers["icy-name"]) parsed!.common.title = headers["icy-name"] as string;
+			}
 		} else {
 			const timer = new Promise((_, rej) => setTimeout(() => rej(new Error("Timeout reached")), 10000));
 			parsed = await Promise.race<[Promise<unknown>, Promise<IAudioMetadata>]>([
@@ -37,8 +56,7 @@ async function getHTTPAsSource(resource: string) {
 			]);
 		} catch {
 			if (headers?.["content-type"]?.match(mimeRegex)) {
-				// @ts-ignore
-				parsed = { common: {}, format: {} };
+				parsed = { common: {}, format: {} } as IAudioMetadata;
 			} else parsed = undefined;
 		}
 	}
@@ -50,8 +68,6 @@ async function getHTTPAsSource(resource: string) {
 	const chunked = !!(headers["transfer-encoding"] && headers["transfer-encoding"].includes("chunked"));
 
 	const extra: ExtraData = { stream: chunked, probe: mimeMatch ? (mimeMatch[3] ? mimeMatch[3] : mimeMatch[2]) : parsed.format.container!.toLowerCase() };
-	if (headers["icy-description"]) extra.title = headers["icy-description"] as string;
-	if (headers["icy-name"]) extra.author = headers["icy-name"] as string;
 	return { parsed, extra };
 }
 

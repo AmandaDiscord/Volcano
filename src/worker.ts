@@ -248,7 +248,13 @@ class Queue {
 		const decoded = encoding.decode(meta.track);
 		if (!decoded.uri) return;
 		// eslint-disable-next-line no-async-promise-executor
-		const resource = await this.getResource(decoded, meta).catch(e => parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackExceptionEvent", guildId: this.guildID, track: this.track?.track || "UNKNOWN", exception: e.name, message: e.message, severity: "COMMON", cause: e.stack || new Error().stack || "Unknown" }, clientID: this.clientID }));
+		let resource: Awaited<ReturnType<Queue["getResource"]>> | undefined = undefined;
+		try {
+			resource = await this.getResource(decoded, meta);
+		} catch (e) {
+			logger.error(e);
+			parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackExceptionEvent", guildId: this.guildID, track: this.track?.track || "UNKNOWN", exception: e.name, message: e.message, severity: "COMMON", cause: e.stack || new Error().stack || "Unknown" }, clientID: this.clientID });
+		}
 		if (!resource) return;
 		if (this.actions.applyingFilters) {
 			resource.playStream.destroy();

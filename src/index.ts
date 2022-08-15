@@ -225,8 +225,7 @@ ws.on("connection", async (socket, request) => {
 	const stats: import("./types.js").Stats = await getStats();
 	socket.send(JSON.stringify(Object.assign(stats, { op: "stats" })));
 	socket.on("message", data => onClientMessage(socket, data, userID));
-	// @ts-ignore
-	socket.isAlive = true;
+	socket["isAlive"] = true;
 	socket.on("pong", socketHeartbeat);
 
 	socket.once("close", code => onClientClose(socket, userID, code, { ip: request.socket.remoteAddress!, port: request.socket.remotePort! }));
@@ -367,10 +366,8 @@ const serverLoopInterval: NodeJS.Timeout = setInterval(async () => {
 	const payload: import("./types.js").OutboundPayload = Object.assign(stats, { op: "stats" as const });
 	const str: string = JSON.stringify(payload);
 	for (const client of ws.clients) {
-		// @ts-ignore
-		if (client.isAlive === false) return client.terminate();
-		// @ts-ignore
-		client.isAlive = false;
+		if (client["isAlive"] === false) return client.terminate();
+		client["isAlive"] = false;
 
 		if (client.readyState === WebSocket.OPEN) {
 			client.ping(noop);
@@ -475,11 +472,11 @@ async function serverHandler(req: import("http").IncomingMessage, res: import("h
 
 			const info = {
 				identifier: resource,
-				author: data.extra.author || data.parsed.common.artist || "Unknown artist",
+				author: data.parsed.common.artist || "Unknown artist",
 				length: Math.round((data.parsed.format.duration || 0) * 1000),
 				isStream: data.extra.stream,
 				position: 0,
-				title: data.extra.title || data.parsed.common.title || "Unknown title",
+				title: data.parsed.common.title || "Unknown title",
 				uri: resource,
 			};
 
