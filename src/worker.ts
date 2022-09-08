@@ -2,11 +2,14 @@ import { parentPort as parentport } from "worker_threads";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
+import { pipeline, PassThrough } from "stream";
 
 import * as Discord from "@discordjs/voice";
 import * as encoding from "@lavalink/encoding";
 import prism from "prism-media";
 import yaml from "yaml";
+import m3u8 from "m3u8stream";
+import twitch from "twitch-m3u8";
 
 if (!parentport) throw new Error("THREAD_IS_PARENT");
 const parentPort = parentport;
@@ -23,8 +26,10 @@ if (fs.existsSync(configDir)) {
 } else cfgparsed = {};
 
 global.lavalinkConfig = Util.mixin({}, Constants.defaultOptions, cfgparsed) as typeof Constants.defaultOptions;
-import * as lamp from "lava-lamp"; // Can load this now that global constants are assigned
+import * as lamp from "play-dl";
 
+const twitchVodRegex = /\/videos\/(\d+)$/;
+const twitchChannelRegex = /twitch\.tv\/([^/]+)/;
 const queues = new Map<string, Queue>();
 const methodMap = new Map<string, import("@discordjs/voice").DiscordGatewayAdapterLibraryMethods>();
 
@@ -53,27 +58,39 @@ const codeReasons = {
 	4016: "We didn't recognize your encryption."
 };
 
+interface Plugin {
+	source: string;
+	searchShort?: string;
+
+	initialize?(): unknown;
+	setVariables?(loggr: Pick<typeof logger, "info" | "warn" | "error">): unknown;
+
+	canBeUsed(resource: string, isResourceSearch: boolean): boolean;
+	infoHandler(resource: string, isResourceSearch: boolean): { entries: Array<import("@lavalink/encoding").TrackInfo>, plData?: { name: string; selectedTrack: number; } } | Promise<{ entries: Array<import("@lavalink/encoding").TrackInfo>, plData?: { name: string; selectedTrack: number; } }>;
+	streamHandler(uri: string): import("stream").Readable;
+}
+const plugins: Array<Plugin> = [];
+
 const dirname = fileURLToPath(path.dirname(import.meta.url));
 const keyDir = path.join(dirname, "../soundcloud.txt");
 
-function keygen() {
-	lamp.getFreeClientID().then(clientID => {
-		if (!clientID) throw new Error("SOUNDCLOUD_KEY_NO_CREATE");
-		fs.writeFileSync(keyDir, clientID, { encoding: "utf-8" });
-		lamp.setToken({ soundcloud : { client_id : clientID } });
-	});
+async function keygen() {
+	const clientID = await lamp.getFreeClientID();
+	if (!clientID) throw new Error("SOUNDCLOUD_KEY_NO_CREATE");
+	fs.writeFileSync(keyDir, clientID, { encoding: "utf-8" });
+	lamp.setToken({ soundcloud : { client_id : clientID } });
 }
 
 if (fs.existsSync(keyDir)) {
 	if (Date.now() - fs.statSync(keyDir).mtime.getTime() >= (1000 * 60 * 60 * 24 * 7)) keygen();
 	else {
 		const APIKey = fs.readFileSync(keyDir, { encoding: "utf-8" });
-		lamp.setToken({ soundcloud: { client_id: APIKey } });
+		await lamp.setToken({ soundcloud: { client_id: APIKey } });
 	}
-} else keygen();
+} else await keygen();
 
-lamp.setToken({ useragent: [Constants.fakeAgent] });
-if (lavalinkConfig.lavalink.server.youtubeCookie) lamp.setToken({ youtube: { cookie: lavalinkConfig.lavalink.server.youtubeCookie } });
+await lamp.setToken({ useragent: [Constants.fakeAgent] });
+if (lavalinkConfig.lavalink.server.youtubeCookie) await lamp.setToken({ youtube: { cookie: lavalinkConfig.lavalink.server.youtubeCookie } });
 
 // This is a proper rewrite of entersState. entersState does some weird stuff with Node internal methods which could lead to
 // events never firing and causing the thread to be locked and cause abort errors somehow.
@@ -96,6 +113,8 @@ function waitForResourceToEnterState(resource: Discord.VoiceConnection | Discord
 		}, timeoutMS);
 	});
 }
+
+function noop() { void 0; }
 
 class Queue {
 	public connection: import("@discordjs/voice").VoiceConnection;
@@ -173,7 +192,7 @@ class Queue {
 		this.play().catch(logEr);
 	}
 
-	public async getResource(decoded: import("@lavalink/encoding").TrackInfo, meta: Exclude<typeof this.track, undefined>): Promise<import("@discordjs/voice").AudioResource<import("@lavalink/encoding").TrackInfo>> {
+	public async getResource(decoded: import("@lavalink/encoding").TrackInfo, meta: NonNullable<typeof this.track>): Promise<import("@discordjs/voice").AudioResource<import("@lavalink/encoding").TrackInfo>> {
 		if (!lavalinkConfig.lavalink.server.sources[decoded.source]) throw new Error(`${decoded.source.toUpperCase()}_NOT_ENABLED`);
 
 		let output: import("stream").Readable | null = null;
@@ -189,7 +208,7 @@ class Queue {
 			} else {
 				const info = await lamp.video_info(decoded.uri!);
 				const selected = info.format[info.format.length - 1];
-				output = await Util.request(selected.url!);
+				output = await fetch(selected.url!, { redirect: "follow", headers: Constants.baseHTTPRequestHeaders }).then(d => d.blob()).then(b => pipeline(b.stream(), new PassThrough(), noop));
 			}
 		}
 
@@ -205,7 +224,23 @@ class Queue {
 		}
 
 		else if (decoded.source === "http") {
-			output = await Util.request(decoded.uri!);
+			if (decoded.probeInfo?.raw === "x-mpegURL" || decoded.uri!.endsWith(".m3u8")) output = m3u8(decoded.uri!);
+			else output = await fetch(decoded.uri!, { redirect: "follow", headers: Constants.baseHTTPRequestHeaders }).then(d => d.blob()).then(b => pipeline(b.stream(), new PassThrough(), noop));
+		}
+
+		else if (decoded.source === "twitch") {
+			const vod = decoded.uri!.match(twitchVodRegex);
+			const user = decoded.uri!.match(twitchChannelRegex);
+			const streams = await twitch[vod ? "getVod" : "getStream"](vod ? vod[1] : user![1]) as Array<import("twitch-m3u8").Stream>;
+			if (!streams.length) throw new Error("CANNOT_EXTRACT_TWITCH_INFO_FROM_VOD");
+			const audioOnly = streams.find(d => d.quality === "Audio Only");
+			const chosen = audioOnly ? audioOnly : streams[0];
+			output = m3u8(chosen.url);
+		}
+
+		const found = plugins.find(p => p.source === decoded.source);
+		if (found) {
+			output = await found.streamHandler(decoded.uri!);
 		}
 
 		else throw new Error(`${decoded.source.toUpperCase()}_NOT_IMPLEMENTED`);
@@ -267,7 +302,7 @@ class Queue {
 		else if (this.actions.volume !== 1.0) this.volume(this.actions.volume);
 		const track = this.track;
 		try {
-			await waitForResourceToEnterState(this.player, Discord.AudioPlayerStatus.Playing, Constants.PlayerStuckThresholdMS);
+			await waitForResourceToEnterState(this.player, Discord.AudioPlayerStatus.Playing, lavalinkConfig.lavalink.server.trackStuckThresholdMs);
 			this.actions.shouldntCallFinish = false;
 			this.actions.stopping = false;
 		} catch {
@@ -279,8 +314,8 @@ class Queue {
 			// I assign the values of current, track, and stopping here because these are usually reset at player transition from not Idle => Idle
 			// However, we're waiting for resource to transition from Idle => Playing, so it won't fire Idle again until another track is played.
 			this.resource = null;
-			parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackStuckEvent", guildId: this.guildID, track: track.track || "UNKNOWN", thresholdMs: Constants.PlayerStuckThresholdMS }, clientID: this.clientID });
-			logger.warn(`${track.track ? encoding.decode(track.track).title : "UNKNOWN"} got stuck! Threshold surpassed: ${Constants.PlayerStuckThresholdMS}`);
+			parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackStuckEvent", guildId: this.guildID, track: track.track || "UNKNOWN", thresholdMs: lavalinkConfig.lavalink.server.trackStuckThresholdMs }, clientID: this.clientID });
+			logger.warn(`${track.track ? encoding.decode(track.track).title : "UNKNOWN"} got stuck! Threshold surpassed: ${lavalinkConfig.lavalink.server.trackStuckThresholdMs}`);
 			this.track = undefined;
 			this.actions.shouldntCallFinish = false;
 			this.actions.stopping = false;
@@ -472,6 +507,19 @@ function voiceAdapterCreator(userID: string, guildID: string): import("@discordj
 		};
 	};
 }
+
+const isDir = await fs.promises.stat(path.join(dirname, "../plugins")).then(s => s.isDirectory()).catch(() => false);
+if (isDir) {
+	for (const file of await fs.promises.readdir(path.join(dirname, "../plugins"))) {
+		if (!file.endsWith(".js")) continue;
+		const module = await import(`file://${path.join(dirname, "../plugins", file)}`);
+		const constructed: Plugin = new module.default();
+		constructed.setVariables?.(logger);
+		await constructed.initialize?.();
+		plugins.push(constructed);
+	}
+}
+
 
 parentPort.postMessage({ op: Constants.workerOPCodes.READY });
 

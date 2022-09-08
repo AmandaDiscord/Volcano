@@ -1,3 +1,3 @@
-const lamp = require("lava-lamp");
+const lamp = require("play-dl");
 
 lamp.authorization();

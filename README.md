@@ -11,12 +11,23 @@ Volcano makes a *best effort* towards mirroring LavaLink's protocols ~~which was
 # Be nice
 Do not be rude about LavaLink's performance or flaunt to LavaLink that this project may be more lightweight. There are trade offs with this project such as not being a perfect translations. While production ready, the caveats are to be taken into consideration. The owner of LavaLink has been very cool about all of this. As such, I do not want disdain between either side and the last thing I want is LavaLink to stop
 
-# Non-compatible changes
-Volcano offers an op ffmpeg. **OP FFMPEG DOES NOT EXIST IN LAVALINK AS LAVALINK DOES NOT USE FFMPEG. DO NOT TRY TO GET SUPPORT FOR OP FFMPEG IN LAVALINK'S SERVER**. Op ffmpeg accepts an Array of raw ffmpeg args. op ffmpeg overrides op filters and op seek.
+# Compatibility
+What Volcano offers that LavaLink doesn't:
+- op ffmpeg
+- Is-Volcano handshake header
 
-op filters adds some extra logic to make sure that playerUpdate packets properly display the position. If you set the speed of the stream to be anything other than the default speed, then you *need* to account for this yourself. I can't do anything on my end.
+What LavaLink offers that Volcano doesn't:
+- YouTube Music support
+- BandCamp Support
+- All filter op properties
+- Better filtering
+- Better support for SHOUTCast/ICECast
+- IPV6 requesting and rotation
+- http proxying
 
-Example:
+Volcano offers an op ffmpeg. **OP FFMPEG DOES NOT EXIST IN LAVALINK AS LAVALINK DOES NOT USE FFMPEG. DO NOT TRY TO GET SUPPORT FOR OP FFMPEG IN LAVALINK'S SERVER**. Op ffmpeg accepts an Array of raw ffmpeg args. op ffmpeg overrides op filters and op seek. Op filters adds some extra logic to make sure that playerUpdate packets properly display the position. If you set the speed of the stream to be anything other than the default speed, then you *need* to account for this yourself. I can't do anything on my end.
+
+Example for op ffmpeg:
 ```js
 {
 	"op": "ffmpeg",
@@ -25,21 +36,17 @@ Example:
 }
 ```
 
-Volcano appends a "Is-Volcano" header in the handshake. The value should be equal to "true" always if using Volcano.
-
-# Some Caveats
-Volcano does its best to support SHOUTCast/ICECast, but may not return all relevant-to-you data.
-Volcano only supports YouTube, Soundcloud, http, and local files currently. Any other sources will not work. If you really want them to work with Volcano, please open a PR. I am more than happy to add features.
-Volcano does not support all filter op properties. LavaLink's filters do not clearly translate logically to ffmpeg arguments (to me at least. I am nub plz no booly)
+# Plugins
+Volcano supports its own plugin system like LavaLink has its own and comes with a Spotify plugin by default as support for Spotify to some degree and also for developers to look at and copy. This plugin may or may not be compatible with the Spotify plugin offered by LavaLink. Something to keep in mind is that due to how fundamentally different Volcano is from LavaLink, including being a totally different language, Volcano cannot load plugins intended to be used by LavaLink and vice versa. The scope of what Plugins can do in Volcano is also limited to just track info and playback at the time of writing. The feature set may be expanded in the future, but this is what I was able to come up with in the limited time that I have. Plugins may have their own dependencies which you will have to install manually into your Volcano instance and re-do this for each Volcano update as the package.json may differ from update to update.
 
 # Usage
 Download the latest release from https://github.com/AmandaDiscord/Volcano/releases
 
-Starting Volcano could be done by cding into the Volcano folder and then typing `node .` or starting the dist/index.js file. The package.json links to the index in the dist folder.
+Starting Volcano could be done by cding into the Volcano folder and then typing `npm run start` or starting the dist/index.js file. The package.json links to the index in the dist folder.
 Be careful with what current working directory you end up using because Volcano will try to read your application.yml config file based on the cwd and then fallback to default options (the exact behavior of LavaLink)
 
 # Requirements
-Node 16.9 or above.
+Node 18 or above (global.fetch).
 FFMPEG will default to using what's installed on the machine and added to path before falling back to avconf and then using the binaries installed by ffmpeg-static.
 FFMPEG in path is preferable as it will almost always provide better performance depending on how you built it.
 

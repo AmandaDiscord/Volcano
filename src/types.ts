@@ -23,11 +23,14 @@ export type LavaLinkConfig = {
 			password?: string;
 			youtubeCookie?: string;
 			sources?: {
-				youtube?: boolean;
-				soundcloud?: boolean;
-				http?: boolean;
-				local?: boolean;
+				youtube?: boolean,
+				bandcamp?: boolean,
+				soundcloud?: boolean,
+				twitch?: boolean,
+				http?: boolean,
+				local?: boolean
 			};
+			trackStuckThresholdMs: number;
 			youtubePlaylistLoadLimit?: number;
 			playerUpdateInterval?: number;
 			youtubeSearchEnabled?: boolean;

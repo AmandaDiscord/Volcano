@@ -120,7 +120,7 @@ class ThreadPool extends ThreadBasedReplier {
 
 				if (msg.op === Constants.workerOPCodes.VOICE_SERVER) return this.emit("datareq", msg.op, msg.data);
 
-				if (msg.threadID && (msg.op === Constants.workerOPCodes.REPLY || msg.op === Constants.workerOPCodes.ACKKNOWLEDGE) && !this.outgoing.has(msg.threadID)) throw new Error("THREAD_RESPONSE_NOBODY_ASKED_LOL");
+				if (msg.threadID && (msg.op === Constants.workerOPCodes.REPLY || msg.op === Constants.workerOPCodes.ACKKNOWLEDGE) && !this.outgoing.has(msg.threadID)) return;
 				if (msg.threadID && msg.op === Constants.workerOPCodes.ACKKNOWLEDGE && this.outgoing.has(msg.threadID)) return this.outgoingPersist.has(msg.threadID) ? this.outgoing.get(msg.threadID)!(void 0) : this.outgoing.use(msg.threadID)!(void 0);
 				if (msg.threadID && msg.op === Constants.workerOPCodes.REPLY && this.outgoing.has(msg.threadID) && !this.outgoingPersist.has(msg.threadID)) return this.outgoing.use(msg.threadID)!(msg.data);
 				else if (msg.threadID && msg.op === Constants.workerOPCodes.REPLY && this.outgoing.has(msg.threadID) && this.outgoingPersist.has(msg.threadID)) return this.outgoing.get(msg.threadID)!(msg.data);

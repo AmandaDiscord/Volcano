@@ -14,10 +14,13 @@ export const defaultOptions = {
 			youtubeCookie: "",
 			sources: {
 				youtube: true,
+				bandcamp: true,
 				soundcloud: true,
+				twitch: true,
 				http: false,
 				local: false
 			},
+			trackStuckThresholdMs: 10000,
 			youtubePlaylistLoadLimit: 6,
 			playerUpdateInterval: 5,
 			youtubeSearchEnabled: true,
@@ -54,11 +57,6 @@ export const baseHTTPResponseHeaders = {
 export const fakeAgent = `Mozilla/5.0 (Server; NodeJS ${process.version.replace("v", "")}; rv:1.0) Magma/1.0 (KHTML, like Gecko) Volcano/1.0`;
 
 export const baseHTTPRequestHeaders = {
-	Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-	"Accept-Encoding": "gzip, deflate, br",
-	"Accept-Language": "en-US,en;q=0.5",
-	"Cache-Control": "no-cache",
-	Connection: "keep-alive",
 	DNT: "1",
 	Pragma: "no-cache",
 	"Sec-Fetch-Dest": "document",
@@ -162,6 +160,4 @@ export const baseSoundcloudURL = "https://soundcloud.com";
 
 export const VoiceConnectionConnectThresholdMS = 20000;
 
-export const PlayerStuckThresholdMS = 10000;
-
-export default { defaultOptions, baseHTTPRequestHeaders, fakeAgent, baseHTTPResponseHeaders, OPCodes, defaultFilterValues, workerOPCodes, OKStatusCodes, RedirectStatusCodes, RetriableStatusCodes, RateLimitStatusCodes, baseSoundcloudURL, VoiceConnectionConnectThresholdMS, PlayerStuckThresholdMS };
+export default { defaultOptions, baseHTTPRequestHeaders, fakeAgent, baseHTTPResponseHeaders, OPCodes, defaultFilterValues, workerOPCodes, OKStatusCodes, RedirectStatusCodes, RetriableStatusCodes, RateLimitStatusCodes, baseSoundcloudURL, VoiceConnectionConnectThresholdMS };

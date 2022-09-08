@@ -1,4 +1,4 @@
-import * as lamp from "lava-lamp";
+import * as lamp from "play-dl";
 
 async function getYoutubeAsSource(resource: string, isSearch: boolean): Promise<{ entries: Array<{ id: string; title: string; duration: number; uploader: string }>; plData?: { name: string; selectedTrack: number } }> {
 	if (isSearch) {
@@ -13,7 +13,7 @@ async function getYoutubeAsSource(resource: string, isSearch: boolean): Promise<
 					const d = await lamp.playlist_info(resource, { incomplete: true });
 					if (!d) throw new Error("NO_PLAYLIST");
 					await d.fetch();
-					const entries = [] as Array<import("lava-lamp").YouTubeVideo>;
+					const entries = [] as Array<import("play-dl").YouTubeVideo>;
 					for (let i = 1; i < d.total_pages + 1; i++) {
 						entries.push(...d.page(i));
 					}
@@ -26,7 +26,7 @@ async function getYoutubeAsSource(resource: string, isSearch: boolean): Promise<
 
 		// eslint-disable-next-line no-inner-declarations
 		async function doSearch() {
-			const searchResults = await lamp.search(resource, { limit: 10, source: { youtube: "video" } }) as Array<import("lava-lamp").YouTubeVideo>;
+			const searchResults = await lamp.search(resource, { limit: 10, source: { youtube: "video" } }) as Array<import("play-dl").YouTubeVideo>;
 			const found = searchResults.find(v => v.id === resource);
 			if (found) return { entries: [{ id: found.id as string, title: found.title as string, duration: found.durationInSec, uploader: found.channel?.name || "Unknown author" }] };
 			return { entries: searchResults.map(i => ({ id: i.id as string, title: i.title as string, duration: i.durationInSec, uploader: i.channel?.name || "Unknown author" })) };
@@ -41,7 +41,7 @@ async function getYoutubeAsSource(resource: string, isSearch: boolean): Promise<
 		const pl = await lamp.playlist_info(resource, { incomplete: true });
 		if (!pl) throw new Error("NO_PLAYLIST");
 		await pl.fetch(100 * lavalinkConfig.lavalink.server.youtubePlaylistLoadLimit);
-		const entries = [] as Array<import("lava-lamp").YouTubeVideo>;
+		const entries = [] as Array<import("play-dl").YouTubeVideo>;
 		for (let i = 1; i < pl.total_pages + 1; i++) {
 			if (i > lavalinkConfig.lavalink.server.youtubePlaylistLoadLimit) continue;
 			entries.push(...pl.page(i));

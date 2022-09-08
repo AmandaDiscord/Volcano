@@ -15,7 +15,7 @@ import { fileURLToPath } from "url";
 import yaml from "yaml";
 import { WebSocketServer, WebSocket } from "ws";
 import * as encoding from "@lavalink/encoding";
-import llpkg from "lava-lamp/package.json" assert { type: "json" };
+import llpkg from "play-dl/package.json" assert { type: "json" };
 
 // Local modules
 import Constants from "./Constants.js";
@@ -41,35 +41,48 @@ if (fs.existsSync(configDir)) {
 } else cfgparsed = {};
 
 global.lavalinkConfig = Util.mixin({}, Constants.defaultOptions, cfgparsed) as typeof Constants.defaultOptions;
-import * as lamp from "lava-lamp"; // Can load this now that global constants are assigned
+import * as lamp from "play-dl";
 
 // Source getters
 import getHTTPAsSource from "./sources/http.js";
 import getLocalAsSource from "./sources/local.js";
 import getSoundCloudAsSource from "./sources/soundcloud.js";
+import getTwitchAsSource from "./sources/twitch.js";
 import getYoutubeAsSource from "./sources/youtube.js";
 
 
 const keyDir = path.join(dirname, "../soundcloud.txt");
 
-function keygen() {
-	lamp.getFreeClientID().then(clientID => {
-		if (!clientID) throw new Error("SOUNDCLOUD_KEY_NO_CREATE");
-		fs.writeFileSync(keyDir, clientID, { encoding: "utf-8" });
-		lamp.setToken({ soundcloud : { client_id : clientID } });
-	});
+interface Plugin {
+	source: string;
+	searchShort?: string;
+
+	initialize?(): unknown;
+	setVariables?(loggr: Pick<typeof logger, "info" | "warn" | "error">): unknown;
+
+	canBeUsed(resource: string, isResourceSearch: boolean): boolean;
+	infoHandler(resource: string, isResourceSearch: boolean): { entries: Array<import("@lavalink/encoding").TrackInfo>, plData?: { name: string; selectedTrack: number; } } | Promise<{ entries: Array<import("@lavalink/encoding").TrackInfo>, plData?: { name: string; selectedTrack: number; } }>;
+	streamHandler(uri: string): import("stream").Readable;
+}
+const plugins: Array<Plugin> = [];
+
+async function keygen() {
+	const clientID = await lamp.getFreeClientID();
+	if (!clientID) throw new Error("SOUNDCLOUD_KEY_NO_CREATE");
+	fs.writeFileSync(keyDir, clientID, { encoding: "utf-8" });
+	await lamp.setToken({ soundcloud : { client_id : clientID } });
 }
 
 if (fs.existsSync(keyDir)) {
 	if (Date.now() - fs.statSync(keyDir).mtime.getTime() >= (1000 * 60 * 60 * 24 * 7)) keygen();
 	else {
 		const APIKey = fs.readFileSync(keyDir, { encoding: "utf-8" });
-		lamp.setToken({ soundcloud: { client_id: APIKey } });
+		await lamp.setToken({ soundcloud: { client_id: APIKey } });
 	}
-} else keygen();
+} else await keygen();
 
-lamp.setToken({ useragent: [Constants.fakeAgent] });
-if (lavalinkConfig.lavalink.server.youtubeCookie) lamp.setToken({ youtube: { cookie: lavalinkConfig.lavalink.server.youtubeCookie } });
+await lamp.setToken({ useragent: [Constants.fakeAgent] });
+if (lavalinkConfig.lavalink.server.youtubeCookie) await lamp.setToken({ youtube: { cookie: lavalinkConfig.lavalink.server.youtubeCookie } });
 
 const rootLog: typeof logger.info = logger[lavalinkConfig.logging.level.root?.toLowerCase?.()] ?? logger.info;
 const llLog: typeof logger.info = logger[lavalinkConfig.logging.level.lavalink?.toLowerCase?.()] ?? logger.info;
@@ -105,7 +118,7 @@ if (lavalinkConfig.spring.main["banner-mode"] === "log")
 					"\x1b[33m    \\/ \\___/|_|\\___\\__,_|_| |_|\\___/  \x1b[0m/\\/     \x1b[31mVV  \x1b[0m\\");
 
 rootLog(`\n\n\nLavaLink base version: ${lavalinkVersion}\nNode:                  ${process.version}\nLavaLamp version:      ${llpkg.version}\n\n`);
-rootLog(`Starting on ${os.hostname()} with PID ${process.pid} (${fileURLToPath(import.meta.url)} started by ${username} in ${process.cwd()})`);
+rootLog(`Starting Launcher using Node ${process.version.replace("v", "")} on ${os.hostname()} with PID ${process.pid} (${fileURLToPath(import.meta.url)} started by ${username} in ${process.cwd()})`);
 rootLog(`OS: ${platformNames[process.platform] || process.platform} ${os.release()?.split(".")[0] || "Unknown release"} Arch: ${process.arch}`);
 rootLog(`Using ${cpuCount} worker threads in pool`);
 
@@ -376,7 +389,8 @@ const serverLoopInterval: NodeJS.Timeout = setInterval(async () => {
 	}
 }, 1000 * 60);
 
-const IDRegex = /(ytsearch:)?(scsearch:)?(.+)/;
+const IDRegex = /(\w{2}search:)?(.+)/;
+const soundCloudURL = new URL(Constants.baseSoundcloudURL);
 
 async function serverHandler(req: import("http").IncomingMessage, res: import("http").ServerResponse): Promise<unknown> {
 	const reqUrl = new URL(req.url || "/", `http://${req.headers.host}`);
@@ -410,9 +424,11 @@ async function serverHandler(req: import("http").IncomingMessage, res: import("h
 		const match = identifier.match(IDRegex);
 		if (!match) return Util.standardErrorHandler("Identifier did not match regex", res, payload, llLog);
 
-		let isYouTubeSearch = !!match[1];
-		const isSoundcloudSearch = !!match[2];
-		const resource = match[3];
+		const isSearch = !!match[1];
+		const resource = match[2];
+
+		let isYouTubeSearch = isSearch && match[1].startsWith("yt");
+		const isSoundcloudSearch = isSearch && match[1].startsWith("sc");
 
 		const canDefaultToSoundCloudSearch = (lavalinkConfig.lavalink.server.sources.soundcloud && lavalinkConfig.lavalink.server.soundcloudSearchEnabled) && (!lavalinkConfig.lavalink.server.sources.youtube || !lavalinkConfig.lavalink.server.youtubeSearchEnabled);
 
@@ -431,7 +447,18 @@ async function serverHandler(req: import("http").IncomingMessage, res: import("h
 
 			if (!data) return false;
 
-			const tracks = data.map(info => ({ track: encoding.encode(Object.assign({ flags: 1, version: 2, source: "soundcloud" }, info, { position: BigInt(info.position), length: BigInt(Math.round(info.length)) })), info }));
+			const tracks = data.map(info => ({
+				track: encoding.encode(Object.assign({
+					flags: 1,
+					version: 2,
+					source: "soundcloud"
+				},
+				info,
+				{
+					position: BigInt(info.position),
+					length: BigInt(Math.round(info.length))
+				})), info
+			}));
 
 			if (tracks.length === 0) {
 				Util.standardErrorHandler("Could not extract SoundCloud info.", res, payload, llLog, "NO_MATCHES");
@@ -443,7 +470,7 @@ async function serverHandler(req: import("http").IncomingMessage, res: import("h
 			}
 		};
 
-		if ((isSoundcloudSearch || (url && url.hostname === soundCloudURL.hostname) || (isYouTubeSearch && canDefaultToSoundCloudSearch))) {
+		if (isSoundcloudSearch || (url && url.hostname === soundCloudURL.hostname) || (isYouTubeSearch && canDefaultToSoundCloudSearch)) {
 			if (!lavalinkConfig.lavalink.server.sources.soundcloud) {
 				res.writeHead(200, "OK", Constants.baseHTTPResponseHeaders).write(JSON.stringify(Object.assign(payload, { loadType: "LOAD_FAILED", exception: { message: "Soundcloud is not enabled.", severity: "COMMON" } })));
 				return res.end();
@@ -451,47 +478,107 @@ async function serverHandler(req: import("http").IncomingMessage, res: import("h
 
 			const r = await doSoundCloudSearch();
 			if (!r) return;
+
+
 		} else if (path.isAbsolute(resource)) {
 			if (!lavalinkConfig.lavalink.server.sources.local) return Util.standardErrorHandler("Local is not enabled.", res, payload, llLog);
 
 			const data = await getLocalAsSource(resource).catch(e => Util.standardErrorHandler(e, res, payload, llLog));
 			if (!data) return;
 
-			const encoded = encoding.encode(Object.assign({ flags: 1, version: 2, source: "local" }, data, { position: BigInt(0), length: BigInt(data.length), isStream: false, uri: resource }));
-			const track = { track: encoded, info: Object.assign({ isSeekable: true, isStream: false, uri: resource }, data) };
+			const encoded = encoding.encode(Object.assign({
+				flags: 1,
+				version: 2,
+				source: "local",
+				probeInfo: data.probeInfo
+			},
+			data,
+			{
+				position: BigInt(0),
+				length: BigInt(data.length),
+				isStream: false,
+				uri: resource
+			}));
+			const track = {
+				track: encoded,
+				info: Object.assign({
+					isSeekable: true,
+					isStream: false,
+					uri: resource
+				}, data)
+			};
 
 			llLog(`Loaded track ${track.info.title}`);
 
 			payload.tracks.push(track);
 
-		} else if (url && !url.hostname.includes("youtu")) {
-			if (!lavalinkConfig.lavalink.server.sources.http) return Util.standardErrorHandler("HTTP is not enabled.", res, payload, llLog);
-			const data = await getHTTPAsSource(resource).catch(e => Util.standardErrorHandler(e, res, payload, llLog));
+
+		} else if (url && url.hostname === "www.twitch.tv") {
+			if (!lavalinkConfig.lavalink.server.sources.twitch) return Util.standardErrorHandler("Twitch is not enabled.", res, payload, llLog);
+			const data = await getTwitchAsSource(resource).catch(e => Util.standardErrorHandler(e, res, payload, llLog));
 
 			if (!data) return;
 
 			const info = {
 				identifier: resource,
-				author: data.parsed.common.artist || "Unknown artist",
-				length: Math.round((data.parsed.format.duration || 0) * 1000),
-				isStream: data.extra.stream,
+				author: data.author,
+				length: 0,
+				isStream: true,
 				position: 0,
-				title: data.parsed.common.title || "Unknown title",
-				uri: resource,
+				title: data.title,
+				uri: data.uri
 			};
 
 			llLog(`Loaded track ${info.title}`);
+			const track = encoding.encode(Object.assign({ flags: 1, version: 2, source: "twitch" }, info, { position: BigInt(info.position), length: BigInt(info.length) }));
+			payload.tracks.push({ track, info });
 
-			let encoded: string;
-			try {
-				encoded = encoding.encode(Object.assign({ flags: 1, version: 2, source: "http", probeInfo: { raw: data.extra.probe, name: data.extra.probe, parameters: null } }, info, { position: BigInt(info.position), length: BigInt(Math.round(info.length)) }));
-			} catch(e) {
-				return Util.standardErrorHandler(e, res, payload, llLog);
+
+		} else if ((url && !url.hostname.includes("youtu")) || isSearch ) {
+			const searchablePlugin = plugins.find(p => p.searchShort && isSearch && match[1].startsWith(p.searchShort));
+			if (searchablePlugin && searchablePlugin.canBeUsed(resource, true)) {
+				const result = await searchablePlugin.infoHandler(resource, true);
+				payload.tracks = result.entries;
+				if (result.plData) payload.playlistInfo = result.plData;
+			} else {
+				const found = plugins.find(p => p.canBeUsed(resource, false));
+				if (found) {
+					const result = await found.infoHandler(resource, true);
+					payload.tracks = result.entries;
+					if (result.plData) payload.playlistInfo = result.plData;
+
+
+				} else if (!isSearch) {
+					if (!lavalinkConfig.lavalink.server.sources.http) return Util.standardErrorHandler("HTTP is not enabled.", res, payload, llLog);
+					const data = await getHTTPAsSource(resource).catch(e => Util.standardErrorHandler(e, res, payload, llLog));
+
+					if (!data) return;
+
+					const info = {
+						identifier: resource,
+						author: data.parsed.common.artist || "Unknown artist",
+						length: Math.round((data.parsed.format.duration || 0) * 1000),
+						isStream: data.extra.stream,
+						position: 0,
+						title: data.parsed.common.title || "Unknown title",
+						uri: resource,
+					};
+
+					llLog(`Loaded track ${info.title}`);
+
+					let encoded: string;
+					try {
+						encoded = encoding.encode(Object.assign({ flags: 1, version: 2, source: "http", probeInfo: { raw: data.extra.probe, name: data.extra.probe, parameters: null } }, info, { position: BigInt(info.position), length: BigInt(Math.round(info.length)) }));
+					} catch(e) {
+						return Util.standardErrorHandler(e, res, payload, llLog);
+					}
+					const track = { track: encoded, info: Object.assign({ isSeekable: !info.isStream }, info) };
+					payload.tracks.push(track);
+				}
 			}
-			const track = { track: encoded, info: Object.assign({ isSeekable: !info.isStream }, info) };
+		}
 
-			payload.tracks.push(track);
-		} else {
+		if (!payload.tracks.length) {
 			if (!resource.startsWith("http")) isYouTubeSearch = true;
 			if (isYouTubeSearch && canDefaultToSoundCloudSearch) await doSoundCloudSearch();
 			else {
@@ -507,7 +594,18 @@ async function serverHandler(req: import("http").IncomingMessage, res: import("h
 
 				if (!data) return;
 
-				const infos = data.entries.map(i => ({ identifier: i.id, author: i.uploader, length: Math.round(i.duration * 1000), isStream: i.duration === 0, isSeekable: i.duration !== 0, position: 0, title: i.title, uri: `https://youtube.com/watch?v=${i.id}` }));
+				const infos = data.entries.map(i =>
+					({
+						identifier: i.id,
+						author: i.uploader,
+						length: Math.round(i.duration * 1000),
+						isStream: i.duration === 0,
+						isSeekable: i.duration !== 0,
+						position: 0,
+						title: i.title,
+						uri: `https://youtube.com/watch?v=${i.id}`
+					})
+				);
 				const tracks = infos.map(info => ({ track: encoding.encode(Object.assign({ flags: 1, version: 2, source: "youtube" }, info, { position: BigInt(info.position), length: BigInt(Math.round(info.length)) })), info }));
 
 				if (data.plData) {
@@ -521,6 +619,7 @@ async function serverHandler(req: import("http").IncomingMessage, res: import("h
 
 				if (tracks.length === 0) return Util.standardErrorHandler("Could not extract YouTube info.", res, payload, llLog, "NO_MATCHES");
 				else if (tracks.length === 1 && !data.plData) llLog(`Loaded track ${tracks[0].info.title}`);
+				else if (tracks.length > 1 && data.plData) llLog(`Loaded playlist ${data.plData.name}`);
 			}
 		}
 
@@ -533,9 +632,12 @@ async function serverHandler(req: import("http").IncomingMessage, res: import("h
 
 	if (reqPath === "/decodetracks" && req.method === "GET") {
 		let track = query.get("track") as string | Array<string> | null;
-		if (track) track = entities.decode(track as string);
+		llLog(`Got request to decode for track "${track}"`);
 		try {
-			const r = JSON.parse(track as string);
+			// @ts-expect-error
+			if (track) track = entities.decode(track);
+			// @ts-expect-error
+			const r = JSON.parse(track);
 			track = r;
 		} catch {
 			// Just do nothing
@@ -544,8 +646,14 @@ async function serverHandler(req: import("http").IncomingMessage, res: import("h
 
 		let data: ReturnType<typeof convertDecodedTrackToResponse> | Array<{ track: string; info: ReturnType<typeof convertDecodedTrackToResponse> }> | undefined;
 
-		if (Array.isArray(track)) data = track.map(i => ({ track: i, info: convertDecodedTrackToResponse(encoding.decode(i)) }));
-		else data = convertDecodedTrackToResponse(encoding.decode(track));
+		if (Array.isArray(track)) {
+			data = track.map(i =>
+				({
+					track: i,
+					info: convertDecodedTrackToResponse(encoding.decode(i))
+				})
+			);
+		} else data = convertDecodedTrackToResponse(encoding.decode(track));
 
 		res.writeHead(200, "OK", Constants.baseHTTPResponseHeaders).write(JSON.stringify(data));
 		return res.end();
@@ -555,19 +663,18 @@ async function serverHandler(req: import("http").IncomingMessage, res: import("h
 	return res.end();
 }
 
-const soundCloudURL = new URL(Constants.baseSoundcloudURL);
-
 function convertDecodedTrackToResponse(data: import("@lavalink/encoding").TrackInfo) {
 	return {
 		identifier: data.identifier,
 		isSeekable: !data.isStream,
 		author: data.author,
-		length: data.length,
+		length: Number(data.length),
 		isStream: data.isStream,
-		position: data.position,
+		position: Number(data.position),
 		title: data.title,
 		uri: data.uri,
-		sourceName: data.source
+		sourceName: data.source,
+		probeInfo: data.probeInfo
 	};
 }
 
@@ -587,4 +694,18 @@ ws.once("close", () => {
 });
 
 process.title = "Volcano";
+
+const isDir = await fs.promises.stat(path.join(dirname, "../plugins")).then(s => s.isDirectory()).catch(() => false);
+if (isDir) {
+	for (const file of await fs.promises.readdir(path.join(dirname, "../plugins"))) {
+		const module = await import(`file://${path.join(dirname, "../plugins", file)}`);
+		const constructed: Plugin = new module.default();
+		constructed.setVariables?.(logger);
+		await constructed.initialize?.();
+		plugins.push(constructed);
+		rootLog(`Loaded plugin for ${constructed.source}`);
+	}
+}
+
 rootLog(`Started Launcher in ${(Date.now() - startTime) / 1000} seconds (Node running for ${process.uptime()})`);
+rootLog("You may also safely ignore errors regarding the Fetch API being an experimental feature");

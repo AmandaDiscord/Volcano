@@ -1,5 +1,3 @@
-const icy: typeof import("http") = await import("icy");
-
 import Constants from "../Constants.js";
 
 export function processLoad(): Promise<number> {
@@ -22,80 +20,6 @@ export function standardErrorHandler(e: Error | string, response: import("http")
 	response.writeHead(200, "OK", Constants.baseHTTPResponseHeaders).write(JSON.stringify(Object.assign(payload, { loadType: loadType, exception: { message: (typeof e === "string" ? e : e.message || "").split("\n").slice(-1)[0].replace(/(Error|ERROR):? ?/, ""), severity: severity } })));
 	response.end();
 }
-
-export function request(url: string, opts?: { extraOptions?: import("http").RequestOptions; isSearch?: boolean; body?: string; }, retries = 0, redirects = 0) {
-	if (redirects === 4) return Promise.reject(new Error("Too many redirects"));
-	const remote = new URL(url);
-	const reqHeaders: import("http").OutgoingHttpHeaders = Object.assign({ Host: remote.host, "Alt-Used": remote.host }, Constants.baseHTTPRequestHeaders, opts?.extraOptions?.headers ? opts.extraOptions.headers : {});
-	if (opts?.extraOptions?.headers) delete opts.extraOptions.headers;
-	if (reqHeaders.cookie) reqHeaders.cookie = (reqHeaders.cookie as string).replace(/…/g, "");
-	return new Promise<import("http").IncomingMessage>((res, rej) => {
-		const options: import("http").RequestOptions = Object.assign({
-			method: "GET",
-			host: remote.hostname,
-			path: `${remote.pathname}${remote.search}`,
-			port: remote.port ? remote.port : (remote.protocol === "https:" ? "443" : "80"),
-			protocol: remote.protocol,
-			headers: reqHeaders,
-			family: 4
-		}, opts?.extraOptions ? opts.extraOptions : {});
-		if (lavalinkConfig.lavalink.server.ratelimit.ipBlocks.length) {
-			options.family = 6;
-			options.localAddress = getIPv6(lavalinkConfig.lavalink.server.ratelimit.ipBlocks[Math.floor(Math.random() * lavalinkConfig.lavalink.server.ratelimit.ipBlocks.length)], "LoadBalance");
-		}
-		const req = icy.request(options, async response => {
-			if (!response.headers && response.rawHeaders) response.headers = response.rawHeaders.reduce((acc, cur, ind) => !(ind % 2) && response.rawHeaders[ind + 1] ? Object.defineProperty(acc, cur.toLowerCase(), { value: response.rawHeaders[ind + 1] }) : acc, {});
-			response.once("error", e => {
-				req.destroy();
-				response.destroy();
-				return rej(e);
-			});
-			response.once("end", () => {
-				req.destroy();
-				response.destroy();
-			});
-			if (Constants.RedirectStatusCodes.includes(response.statusCode!) && response.headers?.location) {
-				let d: import("http").IncomingMessage;
-				try {
-					req.destroy();
-					response.destroy();
-					d = await request(response.headers.location, opts, retries, redirects++);
-				} catch (e) {
-					return rej(e);
-				}
-				return res(d);
-			} else if (Constants.OKStatusCodes.includes(response.statusCode!)) res(response);
-			else if (Constants.RetriableStatusCodes.includes(response.statusCode!) || Constants.RateLimitStatusCodes.includes(response.statusCode!)) {
-				if (Constants.RateLimitStatusCodes.includes(response.statusCode!)) {
-					if (opts?.isSearch && lavalinkConfig.lavalink.server.ratelimit.searchTriggersFail && options.family === 6) void 0;
-				}
-				const limit = lavalinkConfig.lavalink.server.ratelimit.retryLimit;
-				if (retries > (limit === -1 ? 4 : (limit === 0 ? Infinity : limit))) return rej(new Error("Too many retries"));
-				let d: import("http").IncomingMessage;
-				try {
-					req.destroy();
-					response.destroy();
-					d = await request(url, opts, retries++, redirects);
-				} catch (e) {
-					return rej(e);
-				}
-				return res(d);
-			} else {
-				req.destroy();
-				response.destroy();
-				return rej(new Error(`NOT_OK_OR_REDIRECT_STATUS ${response.statusCode}`));
-			}
-		});
-		req.once("error", e => {
-			req.destroy();
-			return rej(e);
-		});
-		if (opts?.body) req.write(opts.body);
-		req.end();
-	});
-}
-
-global.lavalinkRequest = request;
 
 export function isObject(val: any) {
 	return typeof val === "function" || (typeof val === "object" && val !== null && !Array.isArray(val));
@@ -162,4 +86,4 @@ export function normalizeIP(ip: string) {
 	return fullIP;
 }
 
-export default { processLoad, standardErrorHandler, request, isObject, isValidKey, mixin, step, getIPv6, isIPv6, normalizeIP };
+export default { processLoad, standardErrorHandler, isObject, isValidKey, mixin, step, getIPv6, isIPv6, normalizeIP };

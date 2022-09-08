@@ -1,6 +1,6 @@
-import * as lamp from "lava-lamp";
+import * as lamp from "play-dl";
 
-function songResultToTrack(i: import("lava-lamp").SoundCloudTrack) {
+function songResultToTrack(i: import("play-dl").SoundCloudTrack) {
 	if (!i.formats[0]) throw new Error("NO_SOUNDCLOUD_SONG_STREAM_URL");
 	return {
 		identifier: `${i.formats[0].format.protocol === "hls" ? "O:" : ""}${i.formats[0].url}`,
@@ -21,7 +21,7 @@ async function getSoundCloudAsSource(resource: string, isSearch: boolean) {
 		return results.map(songResultToTrack);
 	}
 
-	let result: import("lava-lamp").SoundCloud;
+	let result: import("play-dl").SoundCloud;
 	try {
 		result = await lamp.soundcloud(resource);
 	} catch {
@@ -29,11 +29,11 @@ async function getSoundCloudAsSource(resource: string, isSearch: boolean) {
 	}
 
 	if (result.type === "playlist") {
-		const playlist = result as import("lava-lamp").SoundCloudPlaylist;
-		return (playlist.tracks as Array<import("lava-lamp").SoundCloudTrack>).map(songResultToTrack);
+		const playlist = result as import("play-dl").SoundCloudPlaylist;
+		return (playlist.tracks as Array<import("play-dl").SoundCloudTrack>).map(songResultToTrack);
 	}
 
-	if (result.type === "track") return [songResultToTrack(result as import("lava-lamp").SoundCloudTrack)];
+	if (result.type === "track") return [songResultToTrack(result as import("play-dl").SoundCloudTrack)];
 
 	throw e;
 }
