@@ -2,7 +2,7 @@ import { parentPort as parentport } from "worker_threads";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
-import { pipeline, PassThrough } from "stream";
+import { Readable } from "stream";
 
 import * as Discord from "@discordjs/voice";
 import * as encoding from "@lavalink/encoding";
@@ -173,6 +173,16 @@ class Queue {
 		});
 	}
 
+	private static async fetchStream(url: string): Promise<Readable> {
+		const response = await fetch(url, { redirect: "follow", headers: Constants.baseHTTPRequestHeaders });
+		if (!response.body) {
+			throw new Error("INVALID_STREAM_RESPONSE");
+		}
+
+		// @ts-expect-error node is weird.
+		return Readable.fromWeb(response.body);
+	}
+
 	public get state() {
 		const position = Math.floor(((this.resource?.playbackDuration || 0) + this.actions.seekTime) * this.actions.rate);
 		if (this.track && this.track.end && position >= this.track.end) this.stop(true);
@@ -208,7 +218,7 @@ class Queue {
 			} else {
 				const info = await lamp.video_info(decoded.uri!);
 				const selected = info.format[info.format.length - 1];
-				output = await fetch(selected.url!, { redirect: "follow", headers: Constants.baseHTTPRequestHeaders }).then(d => d.blob()).then(b => pipeline(b.stream(), new PassThrough(), noop));
+				output = await Queue.fetchStream(selected.url!);
 			}
 		}
 
@@ -225,7 +235,7 @@ class Queue {
 
 		else if (decoded.source === "http") {
 			if (decoded.probeInfo?.raw === "x-mpegURL" || decoded.uri!.endsWith(".m3u8")) output = m3u8(decoded.uri!);
-			else output = await fetch(decoded.uri!, { redirect: "follow", headers: Constants.baseHTTPRequestHeaders }).then(d => d.blob()).then(b => pipeline(b.stream(), new PassThrough(), noop));
+			output = await Queue.fetchStream(decoded.uri!);
 		}
 
 		else if (decoded.source === "twitch") {
