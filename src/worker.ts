@@ -235,7 +235,7 @@ class Queue {
 
 		else if (decoded.source === "http") {
 			if (decoded.probeInfo?.raw === "x-mpegURL" || decoded.uri!.endsWith(".m3u8")) output = m3u8(decoded.uri!);
-			output = await Queue.fetchStream(decoded.uri!);
+			else output = await Queue.fetchStream(decoded.uri!);
 		}
 
 		else if (decoded.source === "twitch") {
