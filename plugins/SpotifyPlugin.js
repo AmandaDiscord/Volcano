@@ -60,7 +60,7 @@ class SpotifyPlugin {
 	async infoHandler(resource) {
 		const response = await fetch(resource, { redirect: "follow" });
 		const data = await response.text();
-		const parser = htmlParse(data);
+		const parser = htmlParse.default(data);
 		const head = parser.getElementsByTagName("head")[0];
 
 		const type = head.querySelector("meta[property=\"og:type\"]")?.getAttribute("content") || "music.song";
