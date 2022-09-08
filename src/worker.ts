@@ -64,6 +64,7 @@ interface Plugin {
 
 	initialize?(): unknown;
 	setVariables?(loggr: Pick<typeof logger, "info" | "warn" | "error">): unknown;
+	mutateFilters?(filters: Array<string>): unknown;
 
 	canBeUsed(resource: string, isResourceSearch: boolean): boolean;
 	infoHandler(resource: string, isResourceSearch: boolean): { entries: Array<import("@lavalink/encoding").TrackInfo>, plData?: { name: string; selectedTrack: number; } } | Promise<{ entries: Array<import("@lavalink/encoding").TrackInfo>, plData?: { name: string; selectedTrack: number; } }>;
@@ -175,12 +176,10 @@ class Queue {
 
 	private static async fetchStream(url: string): Promise<Readable> {
 		const response = await fetch(url, { redirect: "follow", headers: Constants.baseHTTPRequestHeaders });
-		if (!response.body) {
-			throw new Error("INVALID_STREAM_RESPONSE");
-		}
+		const body = response.body;
+		if (!body) throw new Error("INVALID_STREAM_RESPONSE");
 
-		// @ts-expect-error node is weird.
-		return Readable.fromWeb(response.body);
+		return Readable.fromWeb(body as import("stream/web").ReadableStream<any>);
 	}
 
 	public get state() {
@@ -272,6 +271,9 @@ class Queue {
 				toApply.unshift("-ss", `${meta.start}ms`);
 			}
 			// _filters should no longer have -ss if there are other filters, then push the audio filters flag
+			for (const plugin of plugins) {
+				await plugin.mutateFilters?.(this._filters);
+			}
 			if (this._filters.length) toApply.push("-af", ...this._filters);
 			this.actions.applyingFilters = false;
 			const pipes: Array<import("stream").Readable> = [output, new prism.FFmpeg({ args: toApply }), new prism.VolumeTransformer({ type: "s16le" }), new prism.opus.Encoder({ rate: 48000, channels: 2, frameSize: 960 })];

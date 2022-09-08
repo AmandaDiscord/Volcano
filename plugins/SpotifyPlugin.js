@@ -9,7 +9,7 @@
  * @property {string} author
  * @property {string} identifier
  * @property {string} uri
- * @property {number} duration
+ * @property {number} length
  * @property {boolean} isStream
  */
 
@@ -25,6 +25,7 @@
  *
  * @property {(logger: Logger) => unknown} [setVariables]
  * @property {() => unknown} [initialize]
+ * @property {(filters: Array<string>) => unknown} [mutateFilters]
  * @property {string} source
  * @property {string} [searchShort]
  * @property {(resource: string, isResourceSearch: boolean) => boolean} canBeUsed
@@ -32,11 +33,8 @@
  * @property {(uri: string) => import("stream").Readable | Promise<import("stream").Readable>} streamHandler
  */
 
-import { pipeline, PassThrough } from "stream";
-
 import htmlParse from "node-html-parser";
-
-function noop() { void 0; }
+import { Readable } from "stream";
 
 /** @implements {PluginInterface} */
 class SpotifyPlugin {
@@ -68,7 +66,7 @@ class SpotifyPlugin {
 		if (type === "music.playlist") {
 			const notFetched = "Track not fetched";
 			/** @type {Array<TrackInfo>} */
-			const trackList = head.querySelectorAll("meta[name=\"music:song\"]").map(i => ({ title: notFetched, author: notFetched, duration: 0, uri: i.getAttribute("content") || "", identifier: i.getAttribute("content") || "", isStream: false }));
+			const trackList = head.querySelectorAll("meta[name=\"music:song\"]").map(i => ({ title: notFetched, author: notFetched, length: 0, uri: i.getAttribute("content") || "", identifier: i.getAttribute("content") || "", isStream: false }));
 			return { entries: trackList, plData: { name: title, selectedTrack: 0 } };
 		}
 
@@ -77,14 +75,14 @@ class SpotifyPlugin {
 		const duration = +(head.querySelector("meta[name=\"music:duration\"]")?.getAttribute("content") || 0);
 		const trackNumber = +(head.querySelector("meta[name=\"music:album:track\"]")?.getAttribute("content") || 0);
 		/** @type {TrackInfo} */
-		const thisTrack = { uri, title, author, duration, identifier: resource, isStream: false };
+		const thisTrack = { uri, title, author, length: duration, identifier: resource, isStream: false };
 		if (trackNumber) return { entries: [thisTrack], plData: { name: "Unknown Playlist", selectedTrack: (trackNumber || 1) - 1 } };
 		return { entries: [thisTrack] };
 	}
 
 	/** @param {string} uri */
 	async streamHandler(uri) {
-		return fetch(uri, { redirect: "follow" }).then(d => d.blob()).then(b => pipeline(b.stream(), new PassThrough(), noop));
+		return fetch(uri, { redirect: "follow" }).then(d => Readable.fromWeb(d.body));
 	}
 }
 

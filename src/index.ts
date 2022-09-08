@@ -59,6 +59,7 @@ interface Plugin {
 
 	initialize?(): unknown;
 	setVariables?(loggr: Pick<typeof logger, "info" | "warn" | "error">): unknown;
+	mutateFilters?(filters: Array<string>): unknown;
 
 	canBeUsed(resource: string, isResourceSearch: boolean): boolean;
 	infoHandler(resource: string, isResourceSearch: boolean): { entries: Array<import("@lavalink/encoding").TrackInfo>, plData?: { name: string; selectedTrack: number; } } | Promise<{ entries: Array<import("@lavalink/encoding").TrackInfo>, plData?: { name: string; selectedTrack: number; } }>;
@@ -538,13 +539,19 @@ async function serverHandler(req: import("http").IncomingMessage, res: import("h
 			const searchablePlugin = plugins.find(p => p.searchShort && isSearch && match[1].startsWith(p.searchShort));
 			if (searchablePlugin && searchablePlugin.canBeUsed(resource, true)) {
 				const result = await searchablePlugin.infoHandler(resource, true);
-				payload.tracks = result.entries;
+				payload.tracks = result.entries.map(t => ({
+					track: encoding.encode(Object.assign({ flags: 1, version: 2, source: searchablePlugin.source, position: BigInt(0) }, t, { length: BigInt(t.length) })),
+					info: Object.assign({ position: 0 }, t)
+				}));
 				if (result.plData) payload.playlistInfo = result.plData;
 			} else {
 				const found = plugins.find(p => p.canBeUsed(resource, false));
 				if (found) {
 					const result = await found.infoHandler(resource, true);
-					payload.tracks = result.entries;
+					payload.tracks = result.entries.map(t => ({
+						track: encoding.encode(Object.assign({ flags: 1, version: 2, source: found.source, position: BigInt(0) }, t, { length: BigInt(t.length) })),
+						info: Object.assign({ position: 0 }, t)
+					}));
 					if (result.plData) payload.playlistInfo = result.plData;
 
 
@@ -708,4 +715,4 @@ if (isDir) {
 }
 
 rootLog(`Started Launcher in ${(Date.now() - startTime) / 1000} seconds (Node running for ${process.uptime()})`);
-rootLog("You may also safely ignore errors regarding the Fetch API being an experimental feature");
+logger.warn("You may also safely ignore errors regarding the Fetch API being an experimental feature");

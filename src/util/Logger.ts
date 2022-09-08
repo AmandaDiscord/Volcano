@@ -23,7 +23,7 @@ function step(object: any, references: Set<any>): any {
 				rebuilt[key] = step(object[key], references);
 			}
 		} else if (Array.isArray(object[key])) return `[${object[key].map(i => stringify(i)).join(",")}]`;
-		else rebuilt[key] = stringify(object[key]);
+		else rebuilt[key] = stringify(object[key], true);
 	}
 
 	return rebuilt;
