@@ -238,12 +238,12 @@ class Queue {
 			output = m3u8(chosen.url);
 		}
 
-		const found = plugins.find(p => p.source === decoded.source);
-		if (found) {
-			output = await found.streamHandler(decoded.uri!);
+		else {
+			const found = plugins.find(p => p.source === decoded.source);
+			if (found) {
+				output = await found.streamHandler(decoded.uri!);
+			} else throw new Error(`${decoded.source.toUpperCase()}_NOT_IMPLEMENTED`);
 		}
-
-		else throw new Error(`${decoded.source.toUpperCase()}_NOT_IMPLEMENTED`);
 
 		if (!output) throw new Error(`NO_OUTPUT_TYPE_${decoded.source.toUpperCase()}_FILTERS_${String(!!this._filters.length).toUpperCase()}_PREVIOUS_${String(!this.actions.initial).toUpperCase()}`);
 
