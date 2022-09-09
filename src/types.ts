@@ -168,3 +168,25 @@ export type Stats = {
 	};
 	uptime: number;
 };
+
+export type TrackInfo = {
+	title: string;
+	author: string;
+	identifier: string;
+	uri: string;
+	length: number;
+	isStream: boolean;
+}
+
+export interface Plugin {
+	source: string;
+	searchShort?: string;
+
+	initialize?(): unknown;
+	setVariables?(loggr: Pick<typeof import("./util/Logger.js")["default"], "info" | "warn" | "error">): unknown;
+	mutateFilters?(filters: Array<string>): unknown;
+
+	canBeUsed(resource: string, isResourceSearch: boolean): boolean;
+	infoHandler(resource: string, isResourceSearch: boolean): { entries: Array<TrackInfo>, plData?: { name: string; selectedTrack: number; } } | Promise<{ entries: Array<TrackInfo>, plData?: { name: string; selectedTrack: number; } }>;
+	streamHandler(info: import("@lavalink/encoding").TrackInfo, usingFFMPEG: boolean): { type?: import("@discordjs/voice").StreamType; stream: import("stream").Readable } | Promise<{ type?: import("@discordjs/voice").StreamType; stream: import("stream").Readable }>;
+}

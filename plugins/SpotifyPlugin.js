@@ -30,7 +30,7 @@
  * @property {string} [searchShort]
  * @property {(resource: string, isResourceSearch: boolean) => boolean} canBeUsed
  * @property {(resource: string, isResourceSearch: boolean) => { entries: Array<TrackInfo>, plData?: { name: string; selectedTrack: number; } } | Promise<{ entries: Array<TrackInfo>, plData?: { name: string; selectedTrack: number; } }>} infoHandler
- * @property {(uri: string) => import("stream").Readable | Promise<import("stream").Readable>} streamHandler
+ * @property {(info: import("@lavalink/encoding").TrackInfo, usingFFMPEG: boolean) => { type?: import("@discordjs/voice").StreamType; stream: import("stream").Readable } | Promise<{ type?: import("@discordjs/voice").StreamType; stream: import("stream").Readable }>} streamHandler
  */
 
 import htmlParse from "node-html-parser";
@@ -80,9 +80,10 @@ class SpotifyPlugin {
 		return { entries: [thisTrack] };
 	}
 
-	/** @param {string} uri */
-	async streamHandler(uri) {
-		return fetch(uri, { redirect: "follow" }).then(d => Readable.fromWeb(d.body));
+	/** @param {import("@lavalink/encoding").TrackInfo} info */
+	async streamHandler(info) {
+		if (!info.uri) throw new Error("NO_URI");
+		return fetch(info.uri, { redirect: "follow" }).then(d => ({ stream: Readable.fromWeb(d.body) }));
 	}
 }
 

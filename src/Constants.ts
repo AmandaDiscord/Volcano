@@ -148,16 +148,6 @@ export const workerOPCodes = {
 	DELETE_ALL: 8 as const
 };
 
-export const OKStatusCodes = [200, 203, 204, 206, 403];
-
-export const RedirectStatusCodes = [300, 301, 302, 303, 307, 308];
-
-export const RetriableStatusCodes = [408, 500, 502, 503, 504];
-
-export const RateLimitStatusCodes = [420, 429];
-
-export const baseSoundcloudURL = "https://soundcloud.com";
-
 export const VoiceConnectionConnectThresholdMS = 20000;
 
-export default { defaultOptions, baseHTTPRequestHeaders, fakeAgent, baseHTTPResponseHeaders, OPCodes, defaultFilterValues, workerOPCodes, OKStatusCodes, RedirectStatusCodes, RetriableStatusCodes, RateLimitStatusCodes, baseSoundcloudURL, VoiceConnectionConnectThresholdMS };
+export default { defaultOptions, baseHTTPRequestHeaders, fakeAgent, baseHTTPResponseHeaders, OPCodes, defaultFilterValues, workerOPCodes, VoiceConnectionConnectThresholdMS };

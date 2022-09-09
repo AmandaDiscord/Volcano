@@ -3,13 +3,12 @@ import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
 import { Readable } from "stream";
+import util from "util";
 
 import * as Discord from "@discordjs/voice";
 import * as encoding from "@lavalink/encoding";
 import prism from "prism-media";
 import yaml from "yaml";
-import m3u8 from "m3u8stream";
-import twitch from "twitch-m3u8";
 
 if (!parentport) throw new Error("THREAD_IS_PARENT");
 const parentPort = parentport;
@@ -28,8 +27,6 @@ if (fs.existsSync(configDir)) {
 global.lavalinkConfig = Util.mixin({}, Constants.defaultOptions, cfgparsed) as typeof Constants.defaultOptions;
 import * as lamp from "play-dl";
 
-const twitchVodRegex = /\/videos\/(\d+)$/;
-const twitchChannelRegex = /twitch\.tv\/([^/]+)/;
 const queues = new Map<string, Queue>();
 const methodMap = new Map<string, import("@discordjs/voice").DiscordGatewayAdapterLibraryMethods>();
 
@@ -58,19 +55,7 @@ const codeReasons = {
 	4016: "We didn't recognize your encryption."
 };
 
-interface Plugin {
-	source: string;
-	searchShort?: string;
-
-	initialize?(): unknown;
-	setVariables?(loggr: Pick<typeof logger, "info" | "warn" | "error">): unknown;
-	mutateFilters?(filters: Array<string>): unknown;
-
-	canBeUsed(resource: string, isResourceSearch: boolean): boolean;
-	infoHandler(resource: string, isResourceSearch: boolean): { entries: Array<import("@lavalink/encoding").TrackInfo>, plData?: { name: string; selectedTrack: number; } } | Promise<{ entries: Array<import("@lavalink/encoding").TrackInfo>, plData?: { name: string; selectedTrack: number; } }>;
-	streamHandler(uri: string): import("stream").Readable;
-}
-const plugins: Array<Plugin> = [];
+const plugins: Array<import("./types.js").Plugin> = [];
 
 const dirname = fileURLToPath(path.dirname(import.meta.url));
 const keyDir = path.join(dirname, "../soundcloud.txt");
@@ -114,8 +99,6 @@ function waitForResourceToEnterState(resource: Discord.VoiceConnection | Discord
 		}, timeoutMS);
 	});
 }
-
-function noop() { void 0; }
 
 class Queue {
 	public connection: import("@discordjs/voice").VoiceConnection;
@@ -198,7 +181,7 @@ class Queue {
 		this.actions.seekTime = 0;
 		this.actions.initial = true;
 		if (!this.track) return;
-		this.play().catch(logEr);
+		this.play().catch(e => logger.error(util.inspect(e)));
 	}
 
 	public async getResource(decoded: import("@lavalink/encoding").TrackInfo, meta: NonNullable<typeof this.track>): Promise<import("@discordjs/voice").AudioResource<import("@lavalink/encoding").TrackInfo>> {
@@ -207,52 +190,14 @@ class Queue {
 		let output: import("stream").Readable | null = null;
 		let streamType: import("@discordjs/voice").StreamType | undefined = undefined;
 
-		const useFFMPEG = this._filters.length || meta.start;
+		const useFFMPEG = !!this._filters.length || !!meta.start;
 
-		if (decoded.source === "youtube") {
-			if (!useFFMPEG) {
-				const stream = await lamp.stream(decoded.uri!, { discordPlayerCompatibility: this.actions.applyingFilters });
-				output = stream.stream;
-				streamType = stream.type;
-			} else {
-				const info = await lamp.video_info(decoded.uri!);
-				const selected = info.format[info.format.length - 1];
-				output = await Queue.fetchStream(selected.url!);
-			}
-		}
-
-		else if (decoded.source === "soundcloud") {
-			const url = decoded.identifier.replace(/^O:/, "");
-			const stream = await lamp.stream_from_info(new lamp.SoundCloudTrack({ user: {}, media: { transcodings: [{ format: { protocol: "hls", mime_type: "unknown" }, url: url }] } }));
-			output = stream.stream;
-			streamType = stream.type;
-		}
-
-		else if (decoded.source === "local") {
-			output = fs.createReadStream(decoded.uri!);
-		}
-
-		else if (decoded.source === "http") {
-			if (decoded.probeInfo?.raw === "x-mpegURL" || decoded.uri!.endsWith(".m3u8")) output = m3u8(decoded.uri!);
-			else output = await Queue.fetchStream(decoded.uri!);
-		}
-
-		else if (decoded.source === "twitch") {
-			const vod = decoded.uri!.match(twitchVodRegex);
-			const user = decoded.uri!.match(twitchChannelRegex);
-			const streams = await twitch[vod ? "getVod" : "getStream"](vod ? vod[1] : user![1]) as Array<import("twitch-m3u8").Stream>;
-			if (!streams.length) throw new Error("CANNOT_EXTRACT_TWITCH_INFO_FROM_VOD");
-			const audioOnly = streams.find(d => d.quality === "Audio Only");
-			const chosen = audioOnly ? audioOnly : streams[0];
-			output = m3u8(chosen.url);
-		}
-
-		else {
-			const found = plugins.find(p => p.source === decoded.source);
-			if (found) {
-				output = await found.streamHandler(decoded.uri!);
-			} else throw new Error(`${decoded.source.toUpperCase()}_NOT_IMPLEMENTED`);
-		}
+		const found = plugins.find(p => p.source === decoded.source);
+		if (found) {
+			const result = await found.streamHandler(decoded, useFFMPEG);
+			output = result.stream;
+			streamType = result.type;
+		} else throw new Error(`${decoded.source.toUpperCase()}_NOT_IMPLEMENTED`);
 
 		if (!output) throw new Error(`NO_OUTPUT_TYPE_${decoded.source.toUpperCase()}_FILTERS_${String(!!this._filters.length).toUpperCase()}_PREVIOUS_${String(!this.actions.initial).toUpperCase()}`);
 
@@ -299,7 +244,7 @@ class Queue {
 		try {
 			resource = await this.getResource(decoded, meta);
 		} catch (e) {
-			logger.error(e);
+			logger.error(util.inspect(e));
 			parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: "event", type: "TrackExceptionEvent", guildId: this.guildID, track: this.track?.track || "UNKNOWN", exception: e.name, message: e.message, severity: "COMMON", cause: e.stack || new Error().stack || "Unknown" }, clientID: this.clientID });
 		}
 		if (!resource) return;
@@ -385,7 +330,7 @@ class Queue {
 		const previousIndex = this._filters.indexOf("-ss");
 		if (previousIndex !== -1) this._filters.splice(previousIndex, 2);
 		this._filters.push("-ss", `${amount || 0}ms`);
-		if (!this.actions.applyingFilters) this.play().catch(logEr);
+		if (!this.actions.applyingFilters) this.play().catch(e => logger.error(util.inspect(e)));
 		this.actions.applyingFilters = true;
 		this.actions.seekTime = amount;
 	}
@@ -421,7 +366,7 @@ class Queue {
 		this._filters.push(...toApply);
 		const previouslyApplying = this.actions.applyingFilters;
 		this.actions.applyingFilters = true;
-		if (!previouslyApplying) this.play().catch(logEr);
+		if (!previouslyApplying) this.play().catch(e => logger.error(util.inspect(e)));
 	}
 
 	public ffmpeg(args: Array<string>) {
@@ -429,7 +374,7 @@ class Queue {
 		this._filters.push(...args);
 		const previouslyApplying = this.actions.applyingFilters;
 		this.actions.applyingFilters = true;
-		if (!previouslyApplying) this.play().catch(logEr);
+		if (!previouslyApplying) this.play().catch(e => logger.error(util.inspect(e)));
 	}
 }
 
@@ -520,31 +465,40 @@ function voiceAdapterCreator(userID: string, guildID: string): import("@discordj
 	};
 }
 
+process.on("unhandledRejection", e => logger.error(util.inspect(e)));
+process.on("uncaughtException", (e, origin) => logger.error(`${util.inspect(e)}\n${util.inspect(origin)}`));
+
+// taken from https://github.com/yarnpkg/berry/blob/2cf0a8fe3e4d4bd7d4d344245d24a85a45d4c5c9/packages/yarnpkg-pnp/sources/loader/applyPatch.ts#L414-L435
+// Having Experimental warning show up once is "fine" but it's also printed
+// for each Worker that is created so it ends up spamming stderr.
+// Since that doesn't provide any value we suppress the warning.
+const originalEmit = process.emit;
+// @ts-expect-error - TS complains about the return type of originalEmit.apply
+process.emit = function (name, data) {
+	if (name === "warning" && typeof data === "object" && data.name === "ExperimentalWarning") return false;
+	// eslint-disable-next-line prefer-rest-params
+	return originalEmit.apply(process, arguments as unknown as Parameters<typeof process.emit>);
+};
+
+for (const file of await fs.promises.readdir(path.join(dirname, "./sources"))) {
+	if (!file.endsWith(".js")) continue;
+	const module = await import(`file://${path.join(dirname, "./sources", file)}`);
+	const constructed: import("./types.js").Plugin = new module.default();
+	constructed.setVariables?.(logger);
+	await constructed.initialize?.();
+	plugins.push(constructed);
+}
+
 const isDir = await fs.promises.stat(path.join(dirname, "../plugins")).then(s => s.isDirectory()).catch(() => false);
 if (isDir) {
 	for (const file of await fs.promises.readdir(path.join(dirname, "../plugins"))) {
 		if (!file.endsWith(".js")) continue;
 		const module = await import(`file://${path.join(dirname, "../plugins", file)}`);
-		const constructed: Plugin = new module.default();
+		const constructed: import("./types.js").Plugin = new module.default();
 		constructed.setVariables?.(logger);
 		await constructed.initialize?.();
 		plugins.push(constructed);
 	}
 }
 
-
 parentPort.postMessage({ op: Constants.workerOPCodes.READY });
-
-function logEr(e) {
-	let final: Error;
-	if (e instanceof Error) final = e;
-	else if (typeof e === "string") final = new Error(e);
-	else if (e && !e.stack) {
-		e.stack = new Error().stack;
-		final = e;
-	} else final = new Error("Unknown error occurred");
-	logger.error(`${final.message}\n${final.stack}`);
-}
-
-process.on("unhandledRejection", logEr);
-process.on("uncaughtException", logEr);
