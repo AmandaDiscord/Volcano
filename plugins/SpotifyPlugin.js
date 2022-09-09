@@ -75,7 +75,7 @@ class SpotifyPlugin {
 		const duration = +(head.querySelector("meta[name=\"music:duration\"]")?.getAttribute("content") || 0);
 		const trackNumber = +(head.querySelector("meta[name=\"music:album:track\"]")?.getAttribute("content") || 0);
 		/** @type {TrackInfo} */
-		const thisTrack = { uri, title, author, length: duration, identifier: resource, isStream: false };
+		const thisTrack = { uri, title, author, length: duration * 1000, identifier: resource, isStream: false };
 		if (trackNumber) return { entries: [thisTrack], plData: { name: "Unknown Playlist", selectedTrack: (trackNumber || 1) - 1 } };
 		return { entries: [thisTrack] };
 	}
