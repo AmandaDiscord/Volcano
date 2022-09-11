@@ -25,12 +25,14 @@
  *
  * @property {(logger: Logger) => unknown} [setVariables]
  * @property {() => unknown} [initialize]
- * @property {(filters: Array<string>) => unknown} [mutateFilters]
- * @property {string} source
+ * @property {(filters: Array<string>, options: Record<any, any>) => unknown} [mutateFilters]
+ * @property {(url: URL, req: import("http").IncomingMessage, res: import("http").ServerResponse) => unknown} [routeHandler]
+ * @property {(packet: Record<any, any>, socket: import("ws").WebSocket) => unknown} [onWSMessage]
+ * @property {string} [source]
  * @property {string} [searchShort]
- * @property {(resource: string, isResourceSearch: boolean) => boolean} canBeUsed
- * @property {(resource: string, isResourceSearch: boolean) => { entries: Array<TrackInfo>, plData?: { name: string; selectedTrack: number; } } | Promise<{ entries: Array<TrackInfo>, plData?: { name: string; selectedTrack: number; } }>} infoHandler
- * @property {(info: import("@lavalink/encoding").TrackInfo, usingFFMPEG: boolean) => { type?: import("@discordjs/voice").StreamType; stream: import("stream").Readable } | Promise<{ type?: import("@discordjs/voice").StreamType; stream: import("stream").Readable }>} streamHandler
+ * @property {(resource: string, isResourceSearch: boolean) => boolean} [canBeUsed]
+ * @property {(resource: string, isResourceSearch: boolean) => { entries: Array<TrackInfo>, plData?: { name: string; selectedTrack: number; } } | Promise<{ entries: Array<TrackInfo>, plData?: { name: string; selectedTrack: number; } }>} [infoHandler]
+ * @property {(info: import("@lavalink/encoding").TrackInfo, usingFFMPEG: boolean) => { type?: import("@discordjs/voice").StreamType; stream: import("stream").Readable } | Promise<{ type?: import("@discordjs/voice").StreamType; stream: import("stream").Readable }>} [streamHandler]
  */
 
 import htmlParse from "node-html-parser";

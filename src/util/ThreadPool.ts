@@ -102,35 +102,35 @@ class ThreadPool extends ThreadBasedReplier {
 	private spawn(): Promise<[string, Worker]> {
 		return new Promise((res, rej) => {
 			const newID = this.nextWorkerID();
-			if (this.children.has(newID)) throw new Error("NEW_THREAD_EXISTS_IN_POOL");
+			if (this.children.has(newID)) throw new Error(Constants.STRINGS.NEW_THREAD_EXISTS_IN_POOL);
 			const worker = new Worker(this.dir);
-			this.emit("spawn", newID, worker);
+			this.emit(Constants.STRINGS.SPAWN, newID, worker);
 
 			let ready = false;
 
-			worker.on("message", msg => {
+			worker.on(Constants.STRINGS.MESSAGE, msg => {
 				if (msg.op === Constants.workerOPCodes.READY) {
 					ready = true;
 					this.children.set(newID, worker);
-					this.emit("ready", newID, worker);
+					this.emit(Constants.STRINGS.READY, newID, worker);
 					return res([newID, worker]);
 				}
-				if (!ready) return rej(new Error("THREAD_DID_NOT_COMMUNICATE_READY"));
+				if (!ready) return rej(new Error(Constants.STRINGS.THREAD_DID_NOT_COMMUNICATE_READY));
 				if (msg.op === Constants.workerOPCodes.CLOSE) return onWorkerExit(newID, worker, this);
 
-				if (msg.op === Constants.workerOPCodes.VOICE_SERVER) return this.emit("datareq", msg.op, msg.data);
+				if (msg.op === Constants.workerOPCodes.VOICE_SERVER) return this.emit(Constants.STRINGS.DATA_REQ, msg.op, msg.data);
 
 				if (msg.threadID && (msg.op === Constants.workerOPCodes.REPLY || msg.op === Constants.workerOPCodes.ACKKNOWLEDGE) && !this.outgoing.has(msg.threadID)) return;
 				if (msg.threadID && msg.op === Constants.workerOPCodes.ACKKNOWLEDGE && this.outgoing.has(msg.threadID)) return this.outgoingPersist.has(msg.threadID) ? this.outgoing.get(msg.threadID)!(void 0) : this.outgoing.use(msg.threadID)!(void 0);
 				if (msg.threadID && msg.op === Constants.workerOPCodes.REPLY && this.outgoing.has(msg.threadID) && !this.outgoingPersist.has(msg.threadID)) return this.outgoing.use(msg.threadID)!(msg.data);
 				else if (msg.threadID && msg.op === Constants.workerOPCodes.REPLY && this.outgoing.has(msg.threadID) && this.outgoingPersist.has(msg.threadID)) return this.outgoing.get(msg.threadID)!(msg.data);
 
-				if (msg.op === Constants.workerOPCodes.MESSAGE) return this.emit("message", worker.threadId, msg);
+				if (msg.op === Constants.workerOPCodes.MESSAGE) return this.emit(Constants.STRINGS.MESSAGE, worker.threadId, msg);
 			});
 
-			worker.on("error", e => logger.error(e));
+			worker.on(Constants.STRINGS.ERROR, e => logger.error(e));
 
-			worker.once("exit", () => onWorkerExit(newID, worker, this));
+			worker.once(Constants.STRINGS.EXIT, () => onWorkerExit(newID, worker, this));
 		});
 	}
 
@@ -138,14 +138,14 @@ class ThreadPool extends ThreadBasedReplier {
 		await Promise.all([...this.children.values()].map(async child => {
 			const stream = await child.getHeapSnapshot().catch(e => logger.error(e));
 			if (stream) {
-				const write = fs.createWriteStream(path.join("../../", `worker-${child.threadId}-snapshot-${Date.now()}.heapsnapshot`));
+				const write = fs.createWriteStream(path.join(Constants.STRINGS.PATH_UP, Constants.STRINGS.PATH_UP, `worker-${child.threadId}-snapshot-${Date.now()}.heapsnapshot`));
 				stream.pipe(write);
 			}
 		}));
 	}
 
 	public send(id: string, message: ThreadMessage) {
-		if (!this.children.get(id)) throw new Error("THREAD_NOT_IN_POOL");
+		if (!this.children.get(id)) throw new Error(Constants.STRINGS.THREAD_NOT_IN_POOL);
 		return this.baseRequest(message.op, message.data, (d) => this.children.get(id)!.postMessage(d));
 	}
 
@@ -181,22 +181,22 @@ async function onWorkerExit(id: string, worker: Worker, pool: ThreadPool) {
 		await Promise.race([
 			worker.terminate(),
 			new Promise((_, rej) => {
-				timer = setTimeout(() => rej(new Error("Timer reached")), 5000);
+				timer = setTimeout(() => rej(new Error(Constants.STRINGS.TIMEOUT_REACHED)), 5000);
 			})
 		]);
 	} catch {
 		const stream = await worker.getHeapSnapshot().catch(e => logger.error(e));
 		if (stream) {
-			const write = fs.createWriteStream(path.join("../../", `worker-${id}-snapshot-${Date.now()}.heapsnapshot`));
+			const write = fs.createWriteStream(path.join(Constants.STRINGS.PATH_UP, Constants.STRINGS.PATH_UP, `worker-${id}-snapshot-${Date.now()}.heapsnapshot`));
 			stream.pipe(write);
 		}
-		return logger.error("Worker did not terminate in time. Heap snapshot written", id);
+		return logger.error(Constants.STRINGS.WORKER_NOT_TERMINATED_IN_TIME, id);
 	}
 	if (timer) clearTimeout(timer);
 	pool.taskSizeMap.delete(id);
 	pool.children.delete(id);
 	worker.removeAllListeners();
-	pool.emit("death", id);
+	pool.emit(Constants.STRINGS.DEATH, id);
 }
 
 export default ThreadPool;

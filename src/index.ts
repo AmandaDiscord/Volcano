@@ -37,7 +37,7 @@ const configDir: string = path.join(process.cwd(), "./application.yml");
 let cfgparsed: import("./types.js").LavaLinkConfig;
 
 if (fs.existsSync(configDir)) {
-	const cfgyml: string = fs.readFileSync(configDir, { encoding: "utf-8" });
+	const cfgyml: string = fs.readFileSync(configDir, { encoding: Constants.STRINGS.UTF8 });
 	cfgparsed = yaml.parse(cfgyml);
 } else cfgparsed = {};
 
@@ -51,14 +51,14 @@ const plugins: Array<import("./types.js").Plugin> = [];
 async function keygen() {
 	const clientID = await lamp.getFreeClientID();
 	if (!clientID) throw new Error("SOUNDCLOUD_KEY_NO_CREATE");
-	fs.writeFileSync(keyDir, clientID, { encoding: "utf-8" });
+	fs.writeFileSync(keyDir, clientID, { encoding: Constants.STRINGS.UTF8 });
 	await lamp.setToken({ soundcloud : { client_id : clientID } });
 }
 
 if (fs.existsSync(keyDir)) {
 	if (Date.now() - fs.statSync(keyDir).mtime.getTime() >= (1000 * 60 * 60 * 24 * 7)) keygen();
 	else {
-		const APIKey = fs.readFileSync(keyDir, { encoding: "utf-8" });
+		const APIKey = fs.readFileSync(keyDir, { encoding: Constants.STRINGS.UTF8 });
 		await lamp.setToken({ soundcloud: { client_id: APIKey } });
 	}
 } else await keygen();
@@ -112,7 +112,7 @@ const voiceServerStates = new Map<string, { clientID: string; guildId: string; s
 const socketDeleteTimeouts = new Map<string, { timeout: NodeJS.Timeout; events: Array<any> }>();
 const playerMap = new Map<string, import("ws").WebSocket>();
 
-pool.on("message", (_, msg) => {
+pool.on(Constants.STRINGS.MESSAGE, (_, msg) => {
 	const socket = playerMap.get(`${msg.clientID}.${msg.data.guildId}`);
 	const entry = [...connections.values()].find(i => i.some(c => c.socket === socket));
 	const rKey = entry?.find((c) => c.socket);
@@ -121,7 +121,7 @@ pool.on("message", (_, msg) => {
 	socket?.send(JSON.stringify(msg.data));
 });
 
-pool.on("datareq", (op, data) => {
+pool.on(Constants.STRINGS.DATA_REQ, (op, data) => {
 	if (op === Constants.workerOPCodes.VOICE_SERVER) {
 		const v = voiceServerStates.get(`${data.clientID}.${data.guildId}`);
 
@@ -165,32 +165,33 @@ function socketHeartbeat(): void {
 function noop(): void { void 0; }
 
 ws.on("headers", (headers, request) => {
-	headers.push(`Session-Resumed: ${!!request.headers["resume-key"] && socketDeleteTimeouts.has(request.headers["resume-key"] as string)}`, `Lavalink-Major-Version: ${lavalinkMajor}`, "Is-Volcano: true");
+	headers.push(`Session-Resumed: ${!!request.headers[Constants.STRINGS.RESUME_KEY] && socketDeleteTimeouts.has(request.headers[Constants.STRINGS.RESUME_KEY] as string)}`, `Lavalink-Major-Version: ${lavalinkMajor}`, Constants.STRINGS.IS_VOLCANO_HEADER);
 });
 
+const allDigitRegex = /^\d+$/;
 http.on("upgrade", (request: HTTP.IncomingMessage, socket: import("net").Socket, head: Buffer) => {
 	llLog(`Incoming connection from /${request.socket.remoteAddress}:${request.socket.remotePort}`);
 
 	const temp401 = "HTTP/1.1 401 Unauthorized\r\n\r\n";
 
 	const passwordIncorrect: boolean = (lavalinkConfig.lavalink.server.password !== undefined && request.headers.authorization !== String(lavalinkConfig.lavalink.server.password));
-	const invalidUserID: boolean = (!request.headers["user-id"] || Array.isArray(request.headers["user-id"]) || !/^\d+$/.test(request.headers["user-id"]));
+	const invalidUserID: boolean = (!request.headers[Constants.STRINGS.USER_ID] || Array.isArray(request.headers[Constants.STRINGS.USER_ID]) || !allDigitRegex.test(request.headers[Constants.STRINGS.USER_ID] as string));
 	if (passwordIncorrect || invalidUserID) {
 		return socket.write(temp401, () => {
 			socket.end();
 			socket.destroy();
 		});
 	}
-	const userID: string = request.headers["user-id"] as string;
+	const userID: string = request.headers[Constants.STRINGS.USER_ID] as string;
 
 	ws.handleUpgrade(request, socket, head, s => {
-		if (request.headers["resume-key"] && socketDeleteTimeouts.has(request.headers["resume-key"] as string)) {
-			const resume = socketDeleteTimeouts.get(request.headers["resume-key"] as string)!;
+		if (request.headers[Constants.STRINGS.RESUME_KEY] && socketDeleteTimeouts.has(request.headers[Constants.STRINGS.RESUME_KEY] as string)) {
+			const resume = socketDeleteTimeouts.get(request.headers[Constants.STRINGS.RESUME_KEY] as string)!;
 			clearTimeout(resume.timeout);
-			socketDeleteTimeouts.delete(request.headers["resume-key"] as string);
+			socketDeleteTimeouts.delete(request.headers[Constants.STRINGS.RESUME_KEY] as string);
 			const exist = connections.get(userID);
 			if (exist) {
-				const pre = exist.find(i => i.resumeKey === request.headers["resume-key"]);
+				const pre = exist.find(i => i.resumeKey === request.headers[Constants.STRINGS.RESUME_KEY]);
 
 				if (pre) pre.socket = s;
 				else exist.push({ socket: s, resumeKey: null, resumeTimeout: 60 });
@@ -200,31 +201,31 @@ http.on("upgrade", (request: HTTP.IncomingMessage, socket: import("net").Socket,
 				s.send(JSON.stringify(event));
 			}
 
-			llLog(`Resumed session with key ${request.headers["resume-key"]}`);
+			llLog(`Resumed session with key ${request.headers[Constants.STRINGS.RESUME_KEY]}`);
 			llLog(`Replaying ${resume.events.length.toLocaleString()} events`);
 			resume.events.length = 0;
-			return ws.emit("connection", s, request);
+			return ws.emit(Constants.STRINGS.CONNECTION, s, request);
 		}
 
-		llLog("Connection successfully established");
+		llLog(Constants.STRINGS.CONNECTION_SUCCESSFULLY_ESTABLISHED);
 		const existing = connections.get(userID);
 		const pl = { socket: s, resumeKey: null, resumeTimeout: 60 };
 		if (existing) existing.push(pl);
 		else connections.set(userID, [pl]);
-		ws.emit("connection", s, request);
+		ws.emit(Constants.STRINGS.CONNECTION, s, request);
 	});
 });
 
-ws.on("connection", async (socket, request) => {
-	const userID: string = request.headers["user-id"] as string;
+ws.on(Constants.STRINGS.CONNECTION, async (socket, request) => {
+	const userID: string = request.headers[Constants.STRINGS.USER_ID] as string;
 	const stats: import("./types.js").Stats = await getStats();
-	socket.send(JSON.stringify(Object.assign(stats, { op: "stats" })));
-	socket.on("message", data => onClientMessage(socket, data, userID));
-	socket["isAlive"] = true;
-	socket.on("pong", socketHeartbeat);
+	socket.send(JSON.stringify(Object.assign(stats, { op: Constants.STRINGS.STATS })));
+	socket.on(Constants.STRINGS.MESSAGE, data => onClientMessage(socket, data, userID));
+	socket[Constants.STRINGS.IS_ALIVE] = true;
+	socket.on(Constants.STRINGS.PONG, socketHeartbeat);
 
-	socket.once("close", code => onClientClose(socket, userID, code, { ip: request.socket.remoteAddress!, port: request.socket.remotePort! }));
-	socket.once("error", () => onClientClose(socket, userID, 1000, { ip: request.socket.remoteAddress!, port: request.socket.remotePort! }));
+	socket.once(Constants.STRINGS.CLOSE, code => onClientClose(socket, userID, code, { ip: request.socket.remoteAddress!, port: request.socket.remotePort! }));
+	socket.once(Constants.STRINGS.ERROR, () => onClientClose(socket, userID, 1000, { ip: request.socket.remoteAddress!, port: request.socket.remotePort! }));
 });
 
 async function onClientMessage(socket: import("ws").WebSocket, data: import("ws").RawData, userID: string): Promise<void> {
@@ -235,7 +236,12 @@ async function onClientMessage(socket: import("ws").WebSocket, data: import("ws"
 			: data;
 
 	const d: string = buf.toString();
-	const msg: import("./types.js").InboundPayload = JSON.parse(d);
+	let msg: import("./types.js").InboundPayload;
+	try {
+		msg = JSON.parse(d);
+	} catch {
+		return;
+	}
 
 	llLog(msg);
 
@@ -284,7 +290,7 @@ async function onClientMessage(socket: import("ws").WebSocket, data: import("ws"
 		break;
 	}
 	case Constants.OPCodes.FFMPEG: {
-		if (!msg.guildId || !msg.args || !Array.isArray(msg.args) || !msg.args.every(i => typeof i === "string")) return;
+		if (!msg.guildId || !msg.args || !Array.isArray(msg.args) || !msg.args.every(i => typeof i === Constants.STRINGS.STRING)) return;
 		void pool.broadcast(pl);
 		break;
 	}
@@ -293,18 +299,18 @@ async function onClientMessage(socket: import("ws").WebSocket, data: import("ws"
 		break;
 	}
 	case Constants.OPCodes.PING: {
-		const payload = { op: "pong" } as { op: "pong"; ping?: number };
+		const payload = { op: Constants.STRINGS.PONG } as { op: "pong"; ping?: number };
 		if (msg.guildId) {
 			const threadStats: Array<{ pings: { [guildId: string]: number }; }> = await pool.broadcast({ op: Constants.workerOPCodes.STATS });
-			for (const worker of threadStats) {
-				if (worker.pings[msg.guildId] !== undefined) {
-					payload.ping = worker.pings[msg.guildId];
-				}
-			}
+			for (const worker of threadStats)
+				if (worker.pings[msg.guildId] !== undefined) payload.ping = worker.pings[msg.guildId];
 		}
 		socket.send(JSON.stringify(payload));
 		break;
 	}
+	default:
+		plugins.forEach(p => p.onWSMessage?.(msg, socket));
+		break;
 	}
 }
 
@@ -358,11 +364,11 @@ async function onClientClose(socket: import("ws").WebSocket, userID: string, clo
 
 const serverLoopInterval: NodeJS.Timeout = setInterval(async () => {
 	const stats = await getStats();
-	const payload: import("./types.js").OutboundPayload = Object.assign(stats, { op: "stats" as const });
+	const payload: import("./types.js").OutboundPayload = Object.assign(stats, { op: Constants.STRINGS.STATS });
 	const str: string = JSON.stringify(payload);
 	for (const client of ws.clients) {
-		if (client["isAlive"] === false) return client.terminate();
-		client["isAlive"] = false;
+		if (client[Constants.STRINGS.IS_ALIVE] === false) return client.terminate();
+		client[Constants.STRINGS.IS_ALIVE] = false;
 
 		if (client.readyState === WebSocket.OPEN) {
 			client.ping(noop);
@@ -371,90 +377,80 @@ const serverLoopInterval: NodeJS.Timeout = setInterval(async () => {
 	}
 }, 1000 * 60);
 
-const IDRegex = /(\w{2}search:)?(.+)/;
+const IDRegex = /(\w{1,4}search:)?(.+)/;
 
 async function serverHandler(req: import("http").IncomingMessage, res: import("http").ServerResponse): Promise<unknown> {
-	const reqUrl = new URL(req.url || "/", `http://${req.headers.host}`);
+	const reqUrl = new URL(req.url || Constants.STRINGS.SLASH, `http://${req.headers.host}`);
 	const reqPath = reqUrl.pathname;
 	const query = reqUrl.searchParams;
 
 	// This is just for rest. Upgrade requests for the websocket are handled in the http upgrade event.
-	if (reqPath !== "/" && lavalinkConfig.lavalink.server.password && (!req.headers.authorization || req.headers.authorization !== String(lavalinkConfig.lavalink.server.password))) {
+	if (reqPath !== Constants.STRINGS.SLASH && lavalinkConfig.lavalink.server.password && (!req.headers.authorization || req.headers.authorization !== String(lavalinkConfig.lavalink.server.password))) {
 		logger.warn(`Authorization missing for ${req.socket.remoteAddress} on ${req.method!.toUpperCase()} ${reqPath}`);
-		res.writeHead(401, "Unauthorized", Object.assign({}, Constants.baseHTTPResponseHeaders, { "Content-Type": "text/plain" })).write("Unauthorized");
-		return res.end();
+		return res.writeHead(401, Constants.STRINGS.UNAUTHORIZED, Object.assign({}, Constants.baseHTTPResponseHeaders, { [Constants.STRINGS.CONTENT_TYPE_CAPPED]: Constants.STRINGS.TEXT_PLAIN })).end(Constants.STRINGS.UNAUTHORIZED);
 	}
 
 	// Wake My Dyno does not like Volcano at all for whatever reason, so support was removed.
-	if (reqPath === "/" && req.method === "GET") {
-		res.writeHead(200, "OK", Object.assign({}, Constants.baseHTTPResponseHeaders, { "Content-Type": "text/plain" })).write("Ok boomer.");
-		return res.end();
-	}
+	if (reqPath === Constants.STRINGS.SLASH && req.method === Constants.STRINGS.GET) return res.writeHead(200, Constants.STRINGS.OK, Object.assign({}, Constants.baseHTTPResponseHeaders, { [Constants.STRINGS.CONTENT_TYPE_CAPPED]: Constants.STRINGS.TEXT_PLAIN })).end(Constants.STRINGS.OK_BOOMER);
 
-	if (reqPath === "/loadtracks" && req.method === "GET") {
-		const id = query.get("identifier");
+	else if (reqPath === Constants.STRINGS.LOADTRACKS && req.method === Constants.STRINGS.GET) {
+		const id = query.get(Constants.STRINGS.IDENTIFIER);
 		const payload = {
 			playlistInfo: {},
 			tracks: [] as Array<any>
 		};
 
-		if (!id || typeof id !== "string") return Util.standardErrorHandler("Invalid or no identifier query string provided.", res, payload, llLog);
+		if (!id || typeof id !== Constants.STRINGS.STRING) return Util.standardErrorHandler(Constants.STRINGS.INVALID_IDENTIFIER, res, payload, llLog);
 
 		const identifier = entities.decode(id);
 
 		llLog(`Got request to load for identifier "${identifier}"`);
 
 		const match = identifier.match(IDRegex);
-		if (!match) return Util.standardErrorHandler("Identifier did not match regex", res, payload, llLog); // Should theoretically never happen, but TypeScript doesn't know this
+		if (!match) return Util.standardErrorHandler(Constants.STRINGS.IDENTIFIER_DIDNT_MATCH_REGEX, res, payload, llLog); // Should theoretically never happen, but TypeScript doesn't know this
 
 		const isSearch = !!match[1];
 		const resource = match[2];
 
-		if (!resource) return Util.standardErrorHandler("Invalid or no identifier query string provided.", res, payload, llLog);
-
-		const canDefaultToSoundCloudSearch = (lavalinkConfig.lavalink.server.sources.soundcloud && lavalinkConfig.lavalink.server.soundcloudSearchEnabled) && (!lavalinkConfig.lavalink.server.sources.youtube || !lavalinkConfig.lavalink.server.youtubeSearchEnabled);
+		if (!resource) return Util.standardErrorHandler(Constants.STRINGS.INVALID_IDENTIFIER, res, payload, llLog);
 
 		try {
-			const assignResults = (result: Awaited<ReturnType<import("./types.js").Plugin["infoHandler"]>>, source: string) => {
+			const assignResults = (result: Awaited<ReturnType<NonNullable<import("./types.js").Plugin["infoHandler"]>>>, source: string) => {
 				payload.tracks = result.entries.map(t => ({
-					track: encoding.encode(Object.assign({ flags: 1, version: 2, source: source, position: BigInt(0), probeInfo: t["probeInfo"] }, t, { length: BigInt(t.length) })),
+					track: encoding.encode(Object.assign({ flags: 1, version: 2, source: source, position: BigInt(0), probeInfo: t[Constants.STRINGS.PROBE_INFO] }, t, { length: BigInt(t.length) })),
 					info: Object.assign({ position: 0 }, t)
 				}));
 				if (result.plData) payload.playlistInfo = result.plData;
 			};
 
 			const searchablePlugin = plugins.find(p => p.searchShort && isSearch && match[1].startsWith(p.searchShort));
-			if (searchablePlugin && searchablePlugin.canBeUsed(resource, true)) {
-				if (lavalinkConfig.lavalink.server.sources[searchablePlugin.source] !== undefined && !lavalinkConfig.lavalink.server.sources[searchablePlugin.source]) return Util.standardErrorHandler(`${searchablePlugin.source} is not enabled`, res, payload, llLog, "LOAD_FAILED");
-				if ((searchablePlugin.source === "youtube" || searchablePlugin.source === "soundcloud") && !lavalinkConfig.lavalink.server[`${searchablePlugin.source}SearchEnabled`]) return Util.standardErrorHandler(`${searchablePlugin.source} searching is not enabled`, res, payload, llLog, "LOAD_FAILED");
-				const result = await searchablePlugin.infoHandler(resource, true);
-				assignResults(result, searchablePlugin.source);
+			if (searchablePlugin && searchablePlugin.canBeUsed?.(resource, true)) {
+				if (searchablePlugin.source && lavalinkConfig.lavalink.server.sources[searchablePlugin.source] !== undefined && !lavalinkConfig.lavalink.server.sources[searchablePlugin.source]) return Util.standardErrorHandler(`${searchablePlugin.source} is not enabled`, res, payload, llLog, Constants.STRINGS.LOAD_FAILED);
+				if ((searchablePlugin.source === Constants.STRINGS.YOUTUBE || searchablePlugin.source === Constants.STRINGS.SOUNDCLOUD) && !lavalinkConfig.lavalink.server[`${searchablePlugin.source}SearchEnabled`]) return Util.standardErrorHandler(`${searchablePlugin.source} searching is not enabled`, res, payload, llLog, Constants.STRINGS.LOAD_FAILED);
+				const result = await searchablePlugin.infoHandler?.(resource, true);
+				if (result && searchablePlugin.source) assignResults(result, searchablePlugin.source);
 			} else {
-				const found = plugins.find(p => p.canBeUsed(resource, false));
+				const found = plugins.find(p => p.canBeUsed?.(resource, false));
 				if (found) {
-					if (lavalinkConfig.lavalink.server.sources[found.source] !== undefined && !lavalinkConfig.lavalink.server.sources[found.source]) return Util.standardErrorHandler(`${found.source} is not enabled`, res, payload, llLog, "LOAD_FAILED");
-					const result = await found.infoHandler(resource, false);
-					assignResults(result, found.source);
+					if (found.source && lavalinkConfig.lavalink.server.sources[found.source] !== undefined && !lavalinkConfig.lavalink.server.sources[found.source]) return Util.standardErrorHandler(`${found.source} is not enabled`, res, payload, llLog, Constants.STRINGS.LOAD_FAILED);
+					const result = await found.infoHandler?.(resource, false);
+					if (result && found.source) assignResults(result, found.source);
 				} else {
-					const yt = plugins.find(p => p.source === "youtube")!;
-					const sc = plugins.find(p => p.source === "soundcloud")!;
-					const result = await (canDefaultToSoundCloudSearch ? sc : yt).infoHandler(resource, true);
-					assignResults(result, canDefaultToSoundCloudSearch ? "soundcloud" : "youtube");
+					const yt = plugins.find(p => p.source === Constants.STRINGS.YOUTUBE)!;
+					const result = await yt.infoHandler?.(resource, true);
+					if (result) assignResults(result, yt.source!);
 				}
 			}
 		} catch (e) {
 			return Util.standardErrorHandler(e, res, payload, llLog);
 		}
 
-		if (payload.tracks.length === 0) return Util.standardErrorHandler("No matches.", res, payload, llLog, "NO_MATCHES");
-		else {
-			res.writeHead(200, "OK", Constants.baseHTTPResponseHeaders).write(JSON.stringify(Object.assign({ loadType: payload.tracks.length > 1 && isSearch ? "SEARCH_RESULT" : payload.playlistInfo["name"] ? "PLAYLIST_LOADED" : "TRACK_LOADED" }, payload)));
-			return res.end();
-		}
+		if (payload.tracks.length === 0) return Util.standardErrorHandler(Constants.STRINGS.NO_MATCHES_LOWER, res, payload, llLog, Constants.STRINGS.NO_MATCHES);
+		else return res.writeHead(200, Constants.STRINGS.OK, Constants.baseHTTPResponseHeaders).end(JSON.stringify(Object.assign({ loadType: payload.tracks.length > 1 && isSearch ? Constants.STRINGS.SEARCH_RESULT : payload.playlistInfo[Constants.STRINGS.NAME] ? Constants.STRINGS.PLAYLIST_LOADED : Constants.STRINGS.TRACK_LOADED }, payload)));
 	}
 
-	if (reqPath === "/decodetracks" && req.method === "GET") {
-		let track = query.get("track") as string | Array<string> | null;
+	else if (reqPath === Constants.STRINGS.DECODETRACKS && req.method === Constants.STRINGS.GET) {
+		let track = query.get(Constants.STRINGS.TRACK) as string | Array<string> | null;
 		llLog(`Got request to decode for track "${track}"`);
 		try {
 			// @ts-expect-error
@@ -465,25 +461,26 @@ async function serverHandler(req: import("http").IncomingMessage, res: import("h
 		} catch {
 			// Just do nothing
 		}
-		if (!track || !(typeof track === "string" || (Array.isArray(track) && track.every(i => typeof i === "string")))) return Util.standardErrorHandler("Invalid or no track query string provided.", res, {}, llLog);
+		if (!track || !(typeof track === Constants.STRINGS.STRING || (Array.isArray(track) && track.every(i => typeof i === Constants.STRINGS.STRING)))) return Util.standardErrorHandler(Constants.STRINGS.INVALID_TRACK, res, {}, llLog);
 
 		let data: ReturnType<typeof convertDecodedTrackToResponse> | Array<{ track: string; info: ReturnType<typeof convertDecodedTrackToResponse> }> | undefined;
 
 		if (Array.isArray(track)) {
-			data = track.map(i =>
-				({
-					track: i,
-					info: convertDecodedTrackToResponse(encoding.decode(i))
-				})
-			);
+			data = track.map(i => ({
+				track: i,
+				info: convertDecodedTrackToResponse(encoding.decode(i))
+			}));
 		} else data = convertDecodedTrackToResponse(encoding.decode(track));
 
-		res.writeHead(200, "OK", Constants.baseHTTPResponseHeaders).write(JSON.stringify(data));
-		return res.end();
+		return res.writeHead(200, Constants.STRINGS.OK, Constants.baseHTTPResponseHeaders).end(JSON.stringify(data));
+	} else {
+		const filtered = plugins.filter(p => !!p.routeHandler);
+		for (const plugin of filtered) {
+			await plugin.routeHandler!(reqUrl, req, res);
+		}
 	}
 
-	res.writeHead(404, "Not Found", Constants.baseHTTPResponseHeaders).write("Not Found");
-	return res.end();
+	res.writeHead(404, Constants.STRINGS.NOT_FOUND, Constants.baseHTTPResponseHeaders).end(Constants.STRINGS.NOT_FOUND);
 }
 
 function convertDecodedTrackToResponse(data: import("@lavalink/encoding").TrackInfo) {
@@ -520,26 +517,29 @@ process.title = "Volcano";
 
 let pushToEnd: import("./types.js").Plugin | undefined = undefined;
 
-for (const file of await fs.promises.readdir(path.join(dirname, "./sources"))) {
-	if (!file.endsWith(".js")) continue;
-	const module = await import(`file://${path.join(dirname, "./sources", file)}`);
+const sources = path.join(dirname, "./sources");
+for (const file of await fs.promises.readdir(sources)) {
+	if (!file.endsWith(Constants.STRINGS.DOT_JS)) continue;
+	const module = await import(`file://${path.join(sources, file)}`);
 	const constructed: import("./types.js").Plugin = new module.default();
 	constructed.setVariables?.(logger);
 	await constructed.initialize?.();
-	if (constructed.source === "http") pushToEnd = constructed;
+	if (constructed.source === Constants.STRINGS.HTTP) pushToEnd = constructed;
 	else plugins.push(constructed);
 }
 
-const isDir = await fs.promises.stat(path.join(dirname, "../plugins")).then(s => s.isDirectory()).catch(() => false);
+const pluginsDir = path.join(dirname, "../plugins");
+const isDir = await fs.promises.stat(pluginsDir).then(s => s.isDirectory()).catch(() => false);
 if (isDir) {
-	for (const file of await fs.promises.readdir(path.join(dirname, "../plugins"))) {
-		if (!file.endsWith(".js")) continue;
-		const module = await import(`file://${path.join(dirname, "../plugins", file)}`);
+	for (const file of await fs.promises.readdir(pluginsDir)) {
+		if (!file.endsWith(Constants.STRINGS.DOT_JS)) continue;
+		const module = await import(`file://${path.join(pluginsDir, file)}`);
 		const constructed: import("./types.js").Plugin = new module.default();
 		constructed.setVariables?.(logger);
 		await constructed.initialize?.();
+		if (plugins.find(p => p.source && constructed.source && p.source === constructed.source)) logger.warn(`Plugin for ${constructed.source} has duplicates and could possibly be unused`);
 		plugins.push(constructed);
-		rootLog(`Loaded plugin for ${constructed.source}`);
+		if (constructed.source) rootLog(`Loaded plugin for ${constructed.source}`);
 	}
 }
 

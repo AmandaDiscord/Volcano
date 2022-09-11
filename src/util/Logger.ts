@@ -1,28 +1,30 @@
 import { BackTracker } from "backtracker";
 
+import Constants from "../Constants.js";
+
 const workerNameMaxLogLength = 10;
 const scopeNameMaxLogLength = 15;
 
 function stringify(data: any, ignoreQuotes?: boolean) {
-	if (typeof data === "bigint") return `${data.toString()}n`;
-	else if (typeof data === "object" && data !== null && !Array.isArray(data)) {
+	if (typeof data === Constants.STRINGS.BIGINT) return `${data.toString()}n`;
+	else if (typeof data === Constants.STRINGS.OBJECT && data !== null && !Array.isArray(data)) {
 		const references = new Set<any>();
 		return JSON.stringify(step(data, references));
-	} else if (Array.isArray(data)) return `[${data.map(i => stringify(i)).join(",")}]`;
-	else if (typeof data === "string" && !ignoreQuotes) return `"${data}"`;
+	} else if (Array.isArray(data)) return `[${data.map(i => stringify(i)).join(Constants.STRINGS.COMMA)}]`;
+	else if (typeof data === Constants.STRINGS.STRING && !ignoreQuotes) return `"${data}"`;
 	else return String(data);
 }
 
 function step(object: any, references: Set<any>): any {
 	const rebuilt = {};
 	for (const key of Object.keys(object)) {
-		if (typeof object[key] === "object" && object[key] !== null && !Array.isArray(object[key])) {
-			if (references.has(object[key])) rebuilt[key] = "[Circular]";
+		if (typeof object[key] === Constants.STRINGS.OBJECT && object[key] !== null && !Array.isArray(object[key])) {
+			if (references.has(object[key])) rebuilt[key] = Constants.STRINGS.CIRCULAR;
 			else {
 				references.add(object[key]);
 				rebuilt[key] = step(object[key], references);
 			}
-		} else if (Array.isArray(object[key])) return `[${object[key].map(i => stringify(i)).join(",")}]`;
+		} else if (Array.isArray(object[key])) return `[${object[key].map(i => stringify(i)).join(Constants.STRINGS.COMMA)}]`;
 		else rebuilt[key] = stringify(object[key], true);
 	}
 
@@ -36,17 +38,17 @@ const logger = {
 	getPrefix: (type: "warn" | "info" | "error", worker: string) => {
 		const first = BackTracker.stack[1];
 		const scope = `${first.filename}:${first.line}:${first.column}`;
-		const color = type === "warn" ? "\x1b[93m" : type === "error" ? "\x1b[91m" : "\x1b[92m";
-		return `\x1b[90m${new Date().toISOString().replace("T", " ").replace("Z", "")} ${color}${type.toUpperCase()} \x1b[35m${process.pid} \x1b[0m--- [${" ".repeat((workerNameMaxLogLength - worker.length) < 1 ? 1 : workerNameMaxLogLength - worker.length)}${worker}] \x1b[36m${scope}${" ".repeat((scopeNameMaxLogLength - scope.length) < 1 ? 1 : scopeNameMaxLogLength - scope.length)}\x1b[0m :`;
+		const color = type === Constants.STRINGS.WARN ? "\x1b[93m" : type === Constants.STRINGS.ERROR ? "\x1b[91m" : "\x1b[92m";
+		return `\x1b[90m${new Date().toISOString().replace(Constants.STRINGS.T, Constants.STRINGS.SPACE).replace(Constants.STRINGS.Z, Constants.STRINGS.EMPTY_STRING)} ${color}${type.toUpperCase()} \x1b[35m${process.pid} \x1b[0m--- [${" ".repeat((workerNameMaxLogLength - worker.length) < 1 ? 1 : workerNameMaxLogLength - worker.length)}${worker}] \x1b[36m${scope}${" ".repeat((scopeNameMaxLogLength - scope.length) < 1 ? 1 : scopeNameMaxLogLength - scope.length)}\x1b[0m :`;
 	},
-	warn: (message: any, worker = "main") => {
-		logger.post(false, `${logger.getPrefix("warn", worker)} ${stringify(message, true)}`);
+	warn: (message: any, worker = Constants.STRINGS.MAIN) => {
+		logger.post(false, `${logger.getPrefix(Constants.STRINGS.WARN, worker)} ${stringify(message, true)}`);
 	},
-	info: (message: any, worker = "main") => {
-		logger.post(false, `${logger.getPrefix("info", worker)} ${stringify(message, true)}`);
+	info: (message: any, worker = Constants.STRINGS.MAIN) => {
+		logger.post(false, `${logger.getPrefix(Constants.STRINGS.INFO, worker)} ${stringify(message, true)}`);
 	},
-	error: (message: any, worker = "main") => {
-		logger.post(true, `${logger.getPrefix("error", worker)} ${stringify(message, true)}`);
+	error: (message: any, worker = Constants.STRINGS.MAIN) => {
+		logger.post(true, `${logger.getPrefix(Constants.STRINGS.ERROR, worker)} ${stringify(message, true)}`);
 	}
 };
 

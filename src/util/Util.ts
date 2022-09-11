@@ -15,18 +15,19 @@ export function processLoad(): Promise<number> {
 	});
 }
 
-export function standardErrorHandler(e: Error | string, response: import("http").ServerResponse, payload: any, llLog: typeof import("./Logger.js").default.info, loadType: "LOAD_FAILED" | "NO_MATCHES" = "LOAD_FAILED", severity = "COMMON"): void {
+const errorRegex = /(Error|ERROR):? ?/;
+
+export function standardErrorHandler(e: Error | string, response: import("http").ServerResponse, payload: any, llLog: typeof import("./Logger.js").default.info, loadType: "LOAD_FAILED" | "NO_MATCHES" = Constants.STRINGS.LOAD_FAILED, severity = Constants.STRINGS.COMMON): void {
 	llLog(`Load failed\n${e}`);
-	response.writeHead(200, "OK", Constants.baseHTTPResponseHeaders).write(JSON.stringify(Object.assign(payload, { loadType: loadType, exception: { message: (typeof e === "string" ? e : e.message || "").split("\n").slice(-1)[0].replace(/(Error|ERROR):? ?/, ""), severity: severity } })));
-	response.end();
+	response.writeHead(200, Constants.STRINGS.OK, Constants.baseHTTPResponseHeaders).end(JSON.stringify(Object.assign(payload, { loadType: loadType, exception: { message: (typeof e === Constants.STRINGS.STRING ? e as string : (e as Error).message || Constants.STRINGS.EMPTY_STRING).split(Constants.STRINGS.NEW_LINE).slice(-1)[0].replace(errorRegex, Constants.STRINGS.EMPTY_STRING), severity: severity } })));
 }
 
 export function isObject(val: any) {
-	return typeof val === "function" || (typeof val === "object" && val !== null && !Array.isArray(val));
+	return typeof val === Constants.STRINGS.FUNCTION || (typeof val === Constants.STRINGS.OBJECT && val !== null && !Array.isArray(val));
 }
 
 export function isValidKey(key: string) {
-	return key !== "__proto__" && key !== "constructor" && key !== "prototype";
+	return key !== Constants.STRINGS.PROTO && key !== Constants.STRINGS.CONSTRUCTOR && key !== Constants.STRINGS.PROTOTYPE;
 }
 
 export function mixin<T extends Record<string, any>, S extends Array<Record<string, any>>>(target: T, ...sources: S): import("../types.js").Mixin<T, S> {
@@ -46,44 +47,4 @@ function step(target: Record<string, any>, val: Record<string, any>, key: string
 	else target[key] = val;
 }
 
-export function getIPv6(ip: string, strategy: typeof import("../Constants.js").defaultOptions["lavalink"]["server"]["ratelimit"]["strategy"]): string {
-	if (!isIPv6(ip)) throw Error("Invalid IPv6 format");
-	const [rawAddr, rawMask] = ip.split("/");
-	let base10Mask = parseInt(rawMask);
-	if (!base10Mask || base10Mask > 128 || base10Mask < 24) throw Error("Invalid IPv6 subnet");
-	const base10addr = normalizeIP(rawAddr);
-	const randomAddr = new Array(8).fill(1).map(() => Math.floor(Math.random() * 0xffff));
-
-	const mergedAddr = randomAddr.map((randomItem, idx) => {
-		const staticBits = Math.min(base10Mask, 16);
-		base10Mask -= staticBits;
-		const mask = 0xffff - ((2 ** (16 - staticBits)) - 1);
-		return (base10addr[idx] & mask) + (randomItem & (mask ^ 0xffff));
-	});
-	const final = mergedAddr.map(x => x.toString(16)).join(":");
-	if (lavalinkConfig.lavalink.server.ratelimit.excludedIps.includes(final)) return getIPv6(ip, strategy);
-	return final;
-}
-
-
-const IPV6_REGEX = /^(([0-9a-f]{1,4}:)(:[0-9a-f]{1,4}){1,6}|([0-9a-f]{1,4}:){1,2}(:[0-9a-f]{1,4}){1,5}|([0-9a-f]{1,4}:){1,3}(:[0-9a-f]{1,4}){1,4}|([0-9a-f]{1,4}:){1,4}(:[0-9a-f]{1,4}){1,3}|([0-9a-f]{1,4}:){1,5}(:[0-9a-f]{1,4}){1,2}|([0-9a-f]{1,4}:){1,6}(:[0-9a-f]{1,4})|([0-9a-f]{1,4}:){1,7}(([0-9a-f]{1,4})|:))\/(1[0-1]\d|12[0-8]|\d{1,2})$/;
-export function isIPv6(ip: string) {
-	return Boolean(IPV6_REGEX.test(ip));
-}
-
-export function normalizeIP(ip: string) {
-	const parts = ip.split("::").map(x => x.split(":"));
-	const partStart = parts[0] || [];
-	const partEnd = parts[1] || [];
-	partEnd.reverse();
-	const fullIP: Array<number> = new Array(8).fill(0);
-	for (let i = 0; i < Math.min(partStart.length, 8); i++) {
-		fullIP[i] = parseInt(partStart[i], 16) || 0;
-	}
-	for (let i = 0; i < Math.min(partEnd.length, 8); i++) {
-		fullIP[7 - i] = parseInt(partEnd[i], 16) || 0;
-	}
-	return fullIP;
-}
-
-export default { processLoad, standardErrorHandler, isObject, isValidKey, mixin, step, getIPv6, isIPv6, normalizeIP };
+export default { processLoad, standardErrorHandler, isObject, isValidKey, mixin, step };
