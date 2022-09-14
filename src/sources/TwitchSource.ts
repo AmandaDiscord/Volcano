@@ -46,8 +46,8 @@ class TwitchSource implements Plugin {
 				{
 					title: Constants.STRINGS.TWITCH_STREAM,
 					author: user[1],
-					uri: `https://www.twitch.tv/$${user[1]}`,
-					identifier: `https://www.twitch.tv/$${user[1]}`,
+					uri: `https://www.twitch.tv/${user[1]}`,
+					identifier: `https://www.twitch.tv/${user[1]}`,
 					length: 0,
 					isStream: true
 				}
