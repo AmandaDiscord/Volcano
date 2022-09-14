@@ -31,7 +31,7 @@
  * @property {string} [source]
  * @property {string} [searchShort]
  * @property {(resource: string, isResourceSearch: boolean) => boolean} [canBeUsed]
- * @property {(resource: string, isResourceSearch: boolean) => { entries: Array<TrackInfo>, plData?: { name: string; selectedTrack: number; } } | Promise<{ entries: Array<TrackInfo>, plData?: { name: string; selectedTrack: number; } }>} [infoHandler]
+ * @property {(resource: string, isResourceSearch: boolean) => { entries: Array<TrackInfo>, plData?: { name: string; selectedTrack?: number; } } | Promise<{ entries: Array<TrackInfo>, plData?: { name: string; selectedTrack?: number; } }>} [infoHandler]
  * @property {(info: import("@lavalink/encoding").TrackInfo, usingFFMPEG: boolean) => { type?: import("@discordjs/voice").StreamType; stream: import("stream").Readable } | Promise<{ type?: import("@discordjs/voice").StreamType; stream: import("stream").Readable }>} [streamHandler]
  */
 

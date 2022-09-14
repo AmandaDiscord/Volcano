@@ -8,6 +8,8 @@ import type { Plugin } from "../types.js";
 
 const usableRegex = /^https:\/\/[^.]+.bandcamp.com\/(?:album|track)\/[^/]+/;
 const streamRegex = /(https:\/\/t4\.bcbits\.com\/stream\/[^}]+)/;
+const durationRegex = /^P(\d{2})H(\d{2})M(\d{2})S$/;
+const trackRegex = /\/track\//;
 
 class BandcampSource implements Plugin {
 	public source = "bandcamp";
@@ -18,12 +20,21 @@ class BandcampSource implements Plugin {
 
 	public async infoHandler(resource: string) {
 		const html = await fetch(resource, { redirect: Constants.STRINGS.FOLLOW, headers: Constants.baseHTTPRequestHeaders }).then(d => d.text());
-		const parser = htmlParse.default(html);
-		const head = parser.getElementsByTagName("head")[0];
-		const type = head.querySelector("meta[property=\"og:type\"]")?.getAttribute("content") || "track";
-		const title: [string, string] = head.querySelector("meta[property=\"og:title\"]")?.getAttribute("content")?.split(", by ") as [string, string] || [`Unknown ${type}`, "Unknown author"];
-		const url = head.querySelector("meta[property=\"og:url\"]")?.getAttribute("content") || resource;
-		return { entries: [{ uri: url, title: title[0], author: title[1], length: 0, identifier: url, isStream: false }] };
+		const data = BandcampSource.parse(html);
+		const value: Awaited<ReturnType<NonNullable<Plugin["infoHandler"]>>> = { entries: [] };
+		if (data["@type"].includes("MusicAlbum")) {
+			value.plData = { name: data.name };
+			const toFetch: Array<string> = data.albumRelease.filter(r => !!r["@id"].match(trackRegex)).map(i => i["@id"]);
+			await Promise.all(toFetch.map(async url => {
+				const html2 = await fetch(url, { redirect: Constants.STRINGS.FOLLOW, headers: Constants.baseHTTPRequestHeaders }).then(d => d.text());
+				const data2 = BandcampSource.parse(html2);
+				value.entries.push(BandcampSource.trackToResource(data2));
+			}));
+		} else {
+			value.entries.push(BandcampSource.trackToResource(data));
+			if (data.inAlbum) value.plData = { name: data.inAlbum.name, selectedTrack: data.additionalProperty.find(p => p.name === "tracknum")?.value || 1 };
+		}
+		return value;
 	}
 
 	public async streamHandler(info: import("@lavalink/encoding").TrackInfo) {
@@ -37,6 +48,35 @@ class BandcampSource implements Plugin {
 		if (!body) throw new Error(Constants.STRINGS.INVALID_STREAM_RESPONSE);
 
 		return { stream: Readable.fromWeb(body as import("stream/web").ReadableStream<any>) };
+	}
+
+	private static parse(html: string) {
+		const parser = htmlParse.default(html);
+		const head = parser.getElementsByTagName("head")[0];
+		const script = head.querySelector("script[type=\"application/ld+json\"]")?.innerHTML || "{}";
+		const data = JSON.parse(script);
+		if (!data.name) throw new Error("CANNOT_EXTRACT_BANDCAMP_INFO");
+		return data;
+	}
+
+	private static trackToResource(track: any): import("../types.js").TrackInfo {
+		return {
+			title: track.name,
+			author: track.byArtist.name,
+			identifier: track["@id"],
+			uri: track["@id"],
+			length: BandcampSource.getDurationFromString(track.duration),
+			isStream: false
+		};
+	}
+
+	private static getDurationFromString(duration: string) {
+		const match = duration?.match(durationRegex);
+		if (!match) return 0;
+		const hours = Number(match[1]);
+		const minutes = Number(match[2]);
+		const seconds = Number(match[3]);
+		return (seconds * 1000) + (minutes * 60 * 1000) + (hours * 60 * 60 * 1000);
 	}
 }
 

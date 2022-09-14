@@ -186,7 +186,7 @@ export interface Plugin {
 	setVariables?(loggr: Pick<typeof import("./util/Logger.js")["default"], "info" | "warn" | "error">): unknown;
 	mutateFilters?(filters: Array<string>, options: PlayerFilterOptions): unknown;
 	canBeUsed?(resource: string, isResourceSearch: boolean): boolean;
-	infoHandler?(resource: string, isResourceSearch: boolean): { entries: Array<TrackInfo>, plData?: { name: string; selectedTrack: number; } } | Promise<{ entries: Array<TrackInfo>, plData?: { name: string; selectedTrack: number; } }>;
+	infoHandler?(resource: string, isResourceSearch: boolean): { entries: Array<TrackInfo>, plData?: { name: string; selectedTrack?: number; } } | Promise<{ entries: Array<TrackInfo>, plData?: { name: string; selectedTrack?: number; } }>;
 	streamHandler?(info: import("@lavalink/encoding").TrackInfo, usingFFMPEG: boolean): { type?: import("@discordjs/voice").StreamType; stream: import("stream").Readable } | Promise<{ type?: import("@discordjs/voice").StreamType; stream: import("stream").Readable }>;
 	onWSMessage?(packet: Record<any, any>, socket: import("ws").WebSocket): unknown;
 	routeHandler?(url: URL, req: import("http").IncomingMessage, res: import("http").ServerResponse): unknown;
