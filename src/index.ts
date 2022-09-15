@@ -377,7 +377,7 @@ const serverLoopInterval: NodeJS.Timeout = setInterval(async () => {
 	}
 }, 1000 * 60);
 
-const IDRegex = /(\w{1,4})search:?(.+)/;
+const IDRegex = /(?:(\w{1,4})search:)?(.+)/;
 
 async function serverHandler(req: import("http").IncomingMessage, res: import("http").ServerResponse): Promise<unknown> {
 	const reqUrl = new URL(req.url || Constants.STRINGS.SLASH, `http://${req.headers.host}`);

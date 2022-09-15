@@ -35,8 +35,9 @@
  * @property {(info: import("@lavalink/encoding").TrackInfo, usingFFMPEG: boolean) => { type?: import("@discordjs/voice").StreamType; stream: import("stream").Readable } | Promise<{ type?: import("@discordjs/voice").StreamType; stream: import("stream").Readable }>} [streamHandler]
  */
 
-import htmlParse from "node-html-parser";
 import { Readable } from "stream";
+
+import htmlParse from "node-html-parser";
 
 /** @implements {PluginInterface} */
 class SpotifyPlugin {
