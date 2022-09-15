@@ -172,7 +172,7 @@ class Queue {
 		this.actions.seekTime = 0;
 		this.actions.initial = true;
 		if (!this.track) return;
-		this.play().catch(e => logger.error(util.inspect(e), `worker ${threadId}`));
+		this.play().catch(e => logger.error(util.inspect(e, true, Infinity, true), `worker ${threadId}`));
 	}
 
 	public async getResource(decoded: import("@lavalink/encoding").TrackInfo, meta: NonNullable<typeof this.track>): Promise<import("@discordjs/voice").AudioResource<import("@lavalink/encoding").TrackInfo>> {
@@ -234,7 +234,7 @@ class Queue {
 		try {
 			resource = await this.getResource(decoded, meta);
 		} catch (e) {
-			logger.error(util.inspect(e), `worker ${threadId}`);
+			logger.error(util.inspect(e, true, Infinity, true), `worker ${threadId}`);
 			parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: Constants.STRINGS.EVENT, type: Constants.STRINGS.TRACK_EXCEPTION_EVENT, guildId: this.guildID, track: this.track?.track || Constants.STRINGS.UNKNOWN, exception: e.name, message: e.message, severity: Constants.STRINGS.COMMON, cause: e.stack || new Error().stack || Constants.STRINGS.UNKNOWN }, clientID: this.clientID });
 		}
 		if (!resource) return;
@@ -320,7 +320,7 @@ class Queue {
 		const previousIndex = this._filters.indexOf(Constants.STRINGS.SEARCH_STRING);
 		if (previousIndex !== -1) this._filters.splice(previousIndex, 2);
 		this._filters.push(Constants.STRINGS.SEARCH_STRING, `${amount || 0}ms`);
-		if (!this.actions.applyingFilters) this.play().catch(e => logger.error(util.inspect(e), `worker ${threadId}`));
+		if (!this.actions.applyingFilters) this.play().catch(e => logger.error(util.inspect(e, true, Infinity, true), `worker ${threadId}`));
 		this.actions.applyingFilters = true;
 		this.actions.seekTime = amount;
 	}
@@ -359,7 +359,7 @@ class Queue {
 		}
 		const previouslyApplying = this.actions.applyingFilters;
 		this.actions.applyingFilters = true;
-		if (!previouslyApplying) this.play().catch(e => logger.error(util.inspect(e), `worker ${threadId}`));
+		if (!previouslyApplying) this.play().catch(e => logger.error(util.inspect(e, true, Infinity, true), `worker ${threadId}`));
 	}
 
 	public ffmpeg(args: Array<string>) {
@@ -367,7 +367,7 @@ class Queue {
 		this._filters.push(...args);
 		const previouslyApplying = this.actions.applyingFilters;
 		this.actions.applyingFilters = true;
-		if (!previouslyApplying) this.play().catch(e => logger.error(util.inspect(e), `worker ${threadId}`));
+		if (!previouslyApplying) this.play().catch(e => logger.error(util.inspect(e, true, Infinity, true), `worker ${threadId}`));
 	}
 }
 
@@ -458,8 +458,8 @@ function voiceAdapterCreator(userID: string, guildID: string): import("@discordj
 	};
 }
 
-process.on("unhandledRejection", e => logger.error(util.inspect(e), `worker ${threadId}`));
-process.on("uncaughtException", (e, origin) => logger.error(`${util.inspect(e)}\n${util.inspect(origin)}`, `worker ${threadId}`));
+process.on("unhandledRejection", e => logger.error(util.inspect(e, true, Infinity, true), `worker ${threadId}`));
+process.on("uncaughtException", (e, origin) => logger.error(`${util.inspect(e, true, Infinity, true)}\n${util.inspect(origin)}`, `worker ${threadId}`));
 
 // taken from https://github.com/yarnpkg/berry/blob/2cf0a8fe3e4d4bd7d4d344245d24a85a45d4c5c9/packages/yarnpkg-pnp/sources/loader/applyPatch.ts#L414-L435
 // Having Experimental warning show up once is "fine" but it's also printed

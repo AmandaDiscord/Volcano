@@ -41,7 +41,8 @@
     "sodium-native": "^3.4.1",
     "twitch-m3u8": "github:AmandaDiscord/twitch-m3u8",
     "ws": "^8.8.1",
-    "yaml": "^2.1.1"
+    "yaml": "^2.1.1",
+    "ytmusic-api": "^3.1.1"
   },
   "devDependencies": {
     "@types/node": "^18.7.14",

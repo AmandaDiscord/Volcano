@@ -377,7 +377,7 @@ const serverLoopInterval: NodeJS.Timeout = setInterval(async () => {
 	}
 }, 1000 * 60);
 
-const IDRegex = /(\w{1,4}search:)?(.+)/;
+const IDRegex = /(\w{1,4})search:?(.+)/;
 
 async function serverHandler(req: import("http").IncomingMessage, res: import("http").ServerResponse): Promise<unknown> {
 	const reqUrl = new URL(req.url || Constants.STRINGS.SLASH, `http://${req.headers.host}`);
@@ -423,7 +423,7 @@ async function serverHandler(req: import("http").IncomingMessage, res: import("h
 				if (result.plData) payload.playlistInfo = result.plData;
 			};
 
-			const searchablePlugin = plugins.find(p => p.searchShort && isSearch && match[1].startsWith(p.searchShort));
+			const searchablePlugin = plugins.find(p => p.searchShort && isSearch && match[1] === p.searchShort);
 			if (searchablePlugin && searchablePlugin.canBeUsed?.(resource, true)) {
 				if (searchablePlugin.source && lavalinkConfig.lavalink.server.sources[searchablePlugin.source] !== undefined && !lavalinkConfig.lavalink.server.sources[searchablePlugin.source]) return Util.standardErrorHandler(`${searchablePlugin.source} is not enabled`, res, payload, llLog, Constants.STRINGS.LOAD_FAILED);
 				if ((searchablePlugin.source === Constants.STRINGS.YOUTUBE || searchablePlugin.source === Constants.STRINGS.SOUNDCLOUD) && !lavalinkConfig.lavalink.server[`${searchablePlugin.source}SearchEnabled`]) return Util.standardErrorHandler(`${searchablePlugin.source} searching is not enabled`, res, payload, llLog, Constants.STRINGS.LOAD_FAILED);
@@ -520,10 +520,17 @@ let pushToEnd: import("./types.js").Plugin | undefined = undefined;
 const sources = path.join(dirname, "./sources");
 for (const file of await fs.promises.readdir(sources)) {
 	if (!file.endsWith(Constants.STRINGS.DOT_JS)) continue;
-	const module = await import(`file://${path.join(sources, file)}`);
-	const constructed: import("./types.js").Plugin = new module.default();
-	constructed.setVariables?.(logger);
-	await constructed.initialize?.();
+	let constructed: import("./types.js").Plugin;
+	try {
+		const module = await import(`file://${path.join(sources, file)}`);
+		constructed = new module.default();
+		constructed.setVariables?.(logger);
+		await constructed.initialize?.();
+	} catch (e) {
+		logger.warn(`Source from ${file} had errors when initializing and has been ignored from the source list`);
+		logger.error(util.inspect(e, true, Infinity, true));
+		continue;
+	}
 	if (constructed.source === Constants.STRINGS.HTTP) pushToEnd = constructed;
 	else plugins.push(constructed);
 }
@@ -533,10 +540,17 @@ const isDir = await fs.promises.stat(pluginsDir).then(s => s.isDirectory()).catc
 if (isDir) {
 	for (const file of await fs.promises.readdir(pluginsDir)) {
 		if (!file.endsWith(Constants.STRINGS.DOT_JS)) continue;
-		const module = await import(`file://${path.join(pluginsDir, file)}`);
-		const constructed: import("./types.js").Plugin = new module.default();
-		constructed.setVariables?.(logger);
-		await constructed.initialize?.();
+		let constructed: import("./types.js").Plugin;
+		try {
+			const module = await import(`file://${path.join(pluginsDir, file)}`);
+			constructed = new module.default();
+			constructed.setVariables?.(logger);
+			await constructed.initialize?.();
+		} catch (e) {
+			logger.warn(`Plugin from ${file} had errors when initializing and has been ignored from the plugin list`);
+			logger.error(util.inspect(e, true, Infinity, true));
+			continue;
+		}
 		if (plugins.find(p => p.source && constructed.source && p.source === constructed.source)) logger.warn(`Plugin for ${constructed.source} has duplicates and could possibly be unused`);
 		plugins.push(constructed);
 		if (constructed.source) rootLog(`Loaded plugin for ${constructed.source}`);
@@ -548,5 +562,5 @@ if (pushToEnd) plugins.push(pushToEnd);
 rootLog(`Started Launcher in ${(Date.now() - startTime) / 1000} seconds (Node running for ${process.uptime()})`);
 logger.warn("You can also safely ignore errors regarding the Fetch API being an experimental feature");
 
-process.on("unhandledRejection", e => logger.error(util.inspect(e)));
-process.on("uncaughtException", (e, origin) => logger.error(`${util.inspect(e)}\n${util.inspect(origin)}`));
+process.on("unhandledRejection", e => logger.error(util.inspect(e, true, Infinity, true)));
+process.on("uncaughtException", (e, origin) => logger.error(`${util.inspect(e, true, Infinity, true)}\n${util.inspect(origin)}`));
