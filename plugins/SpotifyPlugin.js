@@ -61,6 +61,7 @@ class SpotifyPlugin {
 	async infoHandler(resource) {
 		const response = await fetch(resource, { redirect: "follow" });
 		const data = await response.text();
+		// @ts-ignore
 		const parser = htmlParse.default(data);
 		const head = parser.getElementsByTagName("head")[0];
 
@@ -86,6 +87,7 @@ class SpotifyPlugin {
 	/** @param {import("@lavalink/encoding").TrackInfo} info */
 	async streamHandler(info) {
 		if (!info.uri) throw new Error("NO_URI");
+		// @ts-ignore
 		return fetch(info.uri, { redirect: "follow" }).then(d => ({ stream: Readable.fromWeb(d.body) }));
 	}
 }
