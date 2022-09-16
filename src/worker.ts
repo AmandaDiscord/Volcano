@@ -176,7 +176,7 @@ class Queue {
 	}
 
 	public async getResource(decoded: import("@lavalink/encoding").TrackInfo, meta: NonNullable<typeof this.track>): Promise<import("@discordjs/voice").AudioResource<import("@lavalink/encoding").TrackInfo>> {
-		if (!lavalinkConfig.lavalink.server.sources[decoded.source]) throw new Error(`${decoded.source.toUpperCase()}_NOT_ENABLED`);
+		if (lavalinkConfig.lavalink.server.sources[decoded.source] !== undefined && !lavalinkConfig.lavalink.server.sources[decoded.source]) throw new Error(`${decoded.source.toUpperCase()}_NOT_ENABLED`);
 
 		let output: import("stream").Readable | null = null;
 		let streamType: import("@discordjs/voice").StreamType | undefined = undefined;
