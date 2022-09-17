@@ -23,7 +23,7 @@
 /**
  * @typedef {Object} PluginInterface
  *
- * @property {(logger: Logger) => unknown} [setVariables]
+ * @property {(logger: Logger, utils: any) => unknown} [setVariables]
  * @property {() => unknown} [initialize]
  * @property {(filters: Array<string>, options: Record<any, any>) => unknown} [mutateFilters]
  * @property {(url: URL, req: import("http").IncomingMessage, res: import("http").ServerResponse) => unknown} [routeHandler]
@@ -35,8 +35,6 @@
  * @property {(info: import("@lavalink/encoding").TrackInfo, usingFFMPEG: boolean) => { type?: import("@discordjs/voice").StreamType; stream: import("stream").Readable } | Promise<{ type?: import("@discordjs/voice").StreamType; stream: import("stream").Readable }>} [streamHandler]
  */
 
-import { Readable } from "stream";
-
 import htmlParse from "node-html-parser";
 
 /** @implements {PluginInterface} */
@@ -44,6 +42,10 @@ class SpotifyPlugin {
 	constructor() {
 		/** @type {"spotify"} */
 		this.source = "spotify";
+	}
+
+	setVariables(_, utils) {
+		this.utils = utils;
 	}
 
 	/**
@@ -86,9 +88,7 @@ class SpotifyPlugin {
 
 	/** @param {import("@lavalink/encoding").TrackInfo} info */
 	async streamHandler(info) {
-		if (!info.uri) throw new Error("NO_URI");
-		// @ts-ignore
-		return fetch(info.uri, { redirect: "follow" }).then(d => ({ stream: Readable.fromWeb(d.body) }));
+		return this.utils.connect(info.uri);
 	}
 }
 

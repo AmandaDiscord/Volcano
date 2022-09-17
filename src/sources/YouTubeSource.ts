@@ -1,7 +1,6 @@
-import { Readable } from "stream";
-
 import * as dl from "play-dl";
 
+import Util from "../util/Util.js";
 import Constants from "../Constants.js";
 import type { Plugin } from "../types.js";
 
@@ -89,11 +88,9 @@ class YouTubeSource implements Plugin {
 		} else {
 			const i = await dl.video_info(info.uri!);
 			const selected = i.format[i.format.length - 1];
-			const response = await fetch(selected.url!, { redirect: Constants.STRINGS.FOLLOW, headers: Constants.baseHTTPRequestHeaders });
-			const body = response.body;
-			if (!body) throw new Error(Constants.STRINGS.INVALID_STREAM_RESPONSE);
+			const response = await Util.connect(selected.url!, { headers: Constants.baseHTTPRequestHeaders });
 
-			return { stream: Readable.fromWeb(body as import("stream/web").ReadableStream<any>) };
+			return { stream: response };
 		}
 	}
 

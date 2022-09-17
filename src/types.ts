@@ -183,7 +183,7 @@ export interface Plugin {
 	searchShort?: string;
 
 	initialize?(): unknown;
-	setVariables?(loggr: Pick<typeof import("./util/Logger.js")["default"], "info" | "warn" | "error">): unknown;
+	setVariables?(loggr: Pick<typeof import("./util/Logger.js")["default"], "info" | "warn" | "error">, Util: typeof import("./util/Util.js")): unknown;
 	mutateFilters?(filters: Array<string>, options: PlayerFilterOptions): unknown;
 	canBeUsed?(resource: string, isResourceSearch: boolean): boolean;
 	infoHandler?(resource: string, isResourceSearch: boolean): { entries: Array<TrackInfo>, plData?: { name: string; selectedTrack?: number; } } | Promise<{ entries: Array<TrackInfo>, plData?: { name: string; selectedTrack?: number; } }>;

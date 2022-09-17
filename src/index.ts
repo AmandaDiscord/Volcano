@@ -524,7 +524,7 @@ for (const file of await fs.promises.readdir(sources)) {
 	try {
 		const module = await import(`file://${path.join(sources, file)}`);
 		constructed = new module.default();
-		constructed.setVariables?.(logger);
+		constructed.setVariables?.(logger, Util as typeof import("./util/Util.js"));
 		await constructed.initialize?.();
 	} catch (e) {
 		logger.warn(`Source from ${file} had errors when initializing and has been ignored from the source list`);
@@ -544,7 +544,7 @@ if (isDir) {
 		try {
 			const module = await import(`file://${path.join(pluginsDir, file)}`);
 			constructed = new module.default();
-			constructed.setVariables?.(logger);
+			constructed.setVariables?.(logger, Util as typeof import("./util/Util.js"));
 			await constructed.initialize?.();
 		} catch (e) {
 			logger.warn(`Plugin from ${file} had errors when initializing and has been ignored from the plugin list`);

@@ -477,7 +477,7 @@ for (const file of await fs.promises.readdir(path.join(dirname, "./sources"))) {
 	if (!file.endsWith(".js")) continue;
 	const module = await import(`file://${path.join(dirname, "./sources", file)}`);
 	const constructed: import("./types.js").Plugin = new module.default();
-	constructed.setVariables?.(logger);
+	constructed.setVariables?.(logger, Util as typeof import("./util/Util.js"));
 	await constructed.initialize?.();
 	plugins.push(constructed);
 }
@@ -488,7 +488,7 @@ if (isDir) {
 		if (!file.endsWith(".js")) continue;
 		const module = await import(`file://${path.join(dirname, "../plugins", file)}`);
 		const constructed: import("./types.js").Plugin = new module.default();
-		constructed.setVariables?.(logger);
+		constructed.setVariables?.(logger, Util as typeof import("./util/Util.js"));
 		await constructed.initialize?.();
 		plugins.push(constructed);
 	}

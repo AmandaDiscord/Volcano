@@ -1,8 +1,7 @@
-import { Readable } from "stream";
-
 import htmlParse from "node-html-parser";
 import entities from "html-entities";
 
+import Util from "../util/Util.js";
 import Constants from "../Constants.js";
 import type { Plugin } from "../types.js";
 
@@ -43,11 +42,9 @@ class BandcampSource implements Plugin {
 		const head = parser.getElementsByTagName("head")[0];
 		const stream = head.toString().match(streamRegex);
 		if (!stream) throw new Error("NO_STREAM_URL");
-		const response = await fetch(entities.decode(stream[1].replace("&quot;", "")), { redirect: Constants.STRINGS.FOLLOW, headers: Constants.baseHTTPRequestHeaders });
-		const body = response.body;
-		if (!body) throw new Error(Constants.STRINGS.INVALID_STREAM_RESPONSE);
+		const response = await Util.connect(entities.decode(stream[1].replace("&quot;", "")), { headers: Constants.baseHTTPRequestHeaders });
 
-		return { stream: Readable.fromWeb(body as import("stream/web").ReadableStream<any>) };
+		return { stream: response };
 	}
 
 	private static parse(html: string) {
