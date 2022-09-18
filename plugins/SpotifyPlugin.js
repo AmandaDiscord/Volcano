@@ -88,7 +88,7 @@ class SpotifyPlugin {
 
 	/** @param {import("@lavalink/encoding").TrackInfo} info */
 	async streamHandler(info) {
-		return this.utils.connect(info.uri);
+		return { stream: await this.utils.connect(info.uri) };
 	}
 }
 
