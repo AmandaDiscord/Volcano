@@ -68,7 +68,7 @@ export async function connect(url: string, opts?: { method?: string; headers?: {
 	if (opts) mixin(options, opts);
 	const port = decoded.port.length ? Number(decoded.port) : (decoded.protocol === "https:" || decoded.protocol === "wss:" ? 443 : 80);
 	let socket: import("net").Socket;
-	const connectOptions = { host: decoded.host, port };
+	const connectOptions: import("tls").ConnectionOptions = { host: decoded.host, port, timeout: 10000, rejectUnauthorized: false, requestCert: true };
 
 	let res: Parameters<ConstructorParameters<PromiseConstructor>["0"]>["0"] | undefined = undefined;
 	const promise = new Promise(resolve => res = resolve);
@@ -85,11 +85,11 @@ export async function connect(url: string, opts?: { method?: string; headers?: {
 	};
 
 	if (port === 443) socket = tls.connect(connectOptions, cb);
-	else socket = net.connect(connectOptions, cb);
+	else socket = net.connect(connectOptions as import("net").NetConnectOpts, cb);
 
 	await Promise.race([promise, timerPromise]);
 
-	const request = `${options.method!.toUpperCase()} ${decoded.pathname}${decoded.searchParams.toString()} HTTP/1.0\n${Object.entries(options.headers).map(i => `${i[0]}: ${i[1]}`).join("\r\n")}\r\n\r\n`;
+	const request = `${options.method!.toUpperCase()} ${decoded.pathname}${decoded.search} HTTP/1.0\n${Object.entries(options.headers).map(i => `${i[0]}: ${i[1]}`).join("\r\n")}\r\n\r\n`;
 	socket.write(request);
 	return socket;
 }
