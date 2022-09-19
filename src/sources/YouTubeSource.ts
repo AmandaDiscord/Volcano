@@ -1,5 +1,8 @@
+import util from "util";
+
 import * as dl from "play-dl";
 
+import logger from "../util/Logger.js";
 import Util from "../util/Util.js";
 import Constants from "../Constants.js";
 import type { Plugin } from "../types.js";
@@ -76,7 +79,8 @@ class YouTubeSource implements Plugin {
 			};
 		}
 
-		const data = await dl.video_basic_info(resource);
+		const id = dl.extractID(resource);
+		const data = await dl.video_basic_info(id);
 
 		return { entries: [YouTubeSource.songResultToTrack(data.video_details)] };
 	}
@@ -96,9 +100,13 @@ class YouTubeSource implements Plugin {
 
 	private static songResultToTrack(i: import("play-dl").YouTubeVideo) {
 		const length = Math.round(i.durationInSec * 1000);
+		if (!i.id) {
+			logger.warn(`Video(?) didn't have ID attached to it:\n${util.inspect(i, true, 3, true)}`);
+			throw new Error("YOUTUBE_VIDEO_HAS_NO_ID");
+		}
 		return {
-			identifier: i.id!,
-			title: i.title!,
+			identifier: i.id,
+			title: i.title || Constants.STRINGS.UNKNOWN_TITLE,
 			length,
 			author: i.channel?.name || Constants.STRINGS.UNKNOWN_AUTHOR,
 			uri: `https://youtube.com/watch?v=${i.id}`,
