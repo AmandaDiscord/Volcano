@@ -47,6 +47,7 @@ import * as lamp from "play-dl";
 const keyDir = path.join(dirname, "../soundcloud.txt");
 
 const plugins: Array<import("./types.js").Plugin> = [];
+const baseSources = new Set<import("./types.js").Plugin>();
 
 async function keygen() {
 	const clientID = await lamp.getFreeClientID();
@@ -450,33 +451,34 @@ async function serverHandler(req: import("http").IncomingMessage, res: import("h
 	}
 
 	else if (reqPath === Constants.STRINGS.DECODETRACKS && req.method === Constants.STRINGS.GET) {
-		let track = query.get(Constants.STRINGS.TRACK) as string | Array<string> | null;
+		let track = query.get(Constants.STRINGS.TRACK) as string;
 		llLog(`Got request to decode for track "${track}"`);
+		if (track) track = entities.decode(track);
+		if (!track || typeof track !== Constants.STRINGS.STRING) return res.writeHead(400).end(JSON.stringify({ message: "invalid track" }));
+		let data;
 		try {
-			// @ts-expect-error
-			if (track) track = entities.decode(track);
-			// @ts-expect-error
-			const r = JSON.parse(track);
-			track = r;
-		} catch {
-			// Just do nothing
+			data = convertDecodedTrackToResponse(encoding.decode(track));
+		} catch (e) {
+			return res.writeHead(500).end(util.inspect(e, true, Infinity, false));
 		}
-		if (!track || !(typeof track === Constants.STRINGS.STRING || (Array.isArray(track) && track.every(i => typeof i === Constants.STRINGS.STRING)))) return Util.standardErrorHandler(Constants.STRINGS.INVALID_TRACK, res, {}, llLog);
-
-		let data: ReturnType<typeof convertDecodedTrackToResponse> | Array<{ track: string; info: ReturnType<typeof convertDecodedTrackToResponse> }> | undefined;
-
-		if (Array.isArray(track)) {
-			data = track.map(i => ({
-				track: i,
-				info: convertDecodedTrackToResponse(encoding.decode(i))
-			}));
-		} else data = convertDecodedTrackToResponse(encoding.decode(track));
-
 		return res.writeHead(200, Constants.STRINGS.OK, Constants.baseHTTPResponseHeaders).end(JSON.stringify(data));
-	} else {
-		const filtered = plugins.filter(p => !!p.routeHandler);
-		for (const plugin of filtered) {
-			await plugin.routeHandler!(reqUrl, req, res);
+	} else if (reqPath === Constants.STRINGS.DECODETRACKS && req.method === Constants.STRINGS.POST) {
+		let tracks: Array<string>;
+		try {
+			tracks = await Util.requestBody(req, 10000).then(d => JSON.parse(d.toString(Constants.STRINGS.UTF8)));
+			res.writeHead(200).end(JSON.stringify(tracks.map(t => convertDecodedTrackToResponse(encoding.decode(t)))));
+		} catch (e) {
+			return res.writeHead(500).end(util.inspect(e, true, Infinity, false));
+		}
+	} else if (reqPath === Constants.STRINGS.PLUGINS && req.method === Constants.STRINGS.GET) return res.writeHead(200).end(JSON.stringify(plugins.filter(p => !baseSources.has(p)).map(p => ({ name: p.constructor?.name || "unknown", version: p.version ?? "0.0.0" }))));
+	else {
+		try {
+			const filtered = plugins.filter(p => !!p.routeHandler);
+			for (const plugin of filtered) {
+				await plugin.routeHandler!(reqUrl, req, res);
+			}
+		} catch (e) {
+			return res.writeHead(500).end(util.inspect(e, true, Infinity, false));
 		}
 	}
 
@@ -526,6 +528,7 @@ for (const file of await fs.promises.readdir(sources)) {
 		constructed = new module.default();
 		constructed.setVariables?.(logger, Util as typeof import("./util/Util.js"));
 		await constructed.initialize?.();
+		baseSources.add(constructed);
 	} catch (e) {
 		logger.warn(`Source from ${file} had errors when initializing and has been ignored from the source list`);
 		logger.error(util.inspect(e, true, Infinity, true));

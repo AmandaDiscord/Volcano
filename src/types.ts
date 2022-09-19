@@ -181,6 +181,7 @@ export type TrackInfo = {
 export interface Plugin {
 	source?: string;
 	searchShort?: string;
+	version?: string;
 
 	initialize?(): unknown;
 	setVariables?(loggr: Pick<typeof import("./util/Logger.js")["default"], "info" | "warn" | "error">, Util: typeof import("./util/Util.js")): unknown;

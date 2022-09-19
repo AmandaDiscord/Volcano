@@ -138,4 +138,35 @@ export async function socketToRequest(socket: import("net").Socket): Promise<Ret
 	return Object.assign({ body: pt }, data);
 }
 
-export default { processLoad, standardErrorHandler, isObject, isValidKey, mixin, connect, parseHeaders, socketToRequest, noop };
+export function requestBody(req: import("http").IncomingMessage, timeout = 10000): Promise<Buffer> {
+	if (!req.headers["content-length"]) throw new Error("CONTENT_LENGTH_REQURED");
+	const sizeToMeet = req.headers["content-length"] ? Number(req.headers["content-length"]) : Infinity;
+	return new Promise<Buffer>((res, rej) => {
+		let timer: NodeJS.Timeout | null = null;
+		let totalSize = 0;
+		const chunks: Array<Buffer> = [];
+		function onData(chunk: Buffer) {
+			totalSize += chunk.byteLength;
+			if (totalSize > sizeToMeet) {
+				req.removeListener("data", onData);
+				req.removeListener("end", onEnd);
+				return rej(new Error("BYTE_SIZE_DOES_NOT_MATCH_LENGTH"));
+			}
+			chunks.push(chunk);
+		}
+		function onEnd() {
+			clearTimeout(timer!);
+			req.removeListener("data", onData);
+			res(Buffer.concat(chunks));
+		}
+		req.on("data", onData);
+		req.once("end", onEnd);
+		timer = setTimeout(() => {
+			req.removeListener("data", onData);
+			req.removeListener("end", onEnd);
+			rej(new Error("TIMEOUT_WAITING_FOR_BODY_REACHED"));
+		}, timeout);
+	});
+}
+
+export default { processLoad, standardErrorHandler, isObject, isValidKey, mixin, connect, parseHeaders, socketToRequest, noop, requestBody };
