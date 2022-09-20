@@ -17,8 +17,7 @@ What Volcano offers that LavaLink doesn't:
 - Is-Volcano handshake header
 
 What LavaLink offers that Volcano doesn't:
-- YouTube Music support
-- BandCamp Support
+- Some REST routes
 - All filter op properties
 - Better filtering
 - Better support for SHOUTCast/ICECast

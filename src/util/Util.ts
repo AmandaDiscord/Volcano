@@ -1,10 +1,13 @@
 import util from "util";
 import net from "net";
 import tls from "tls";
+import os from "os";
 import { PassThrough, pipeline } from "stream";
 
 import Constants from "../Constants.js";
 import Logger from "./Logger.js";
+
+const cpuCount = os.cpus().length;
 
 export function noop() { void 0; }
 
@@ -26,7 +29,7 @@ export function processLoad(): Promise<number> {
 const errorRegex = /(Error|ERROR):? ?/;
 
 export function standardErrorHandler(e: Error | string, response: import("http").ServerResponse, payload: any, llLog: typeof import("./Logger.js").default.info, loadType: "LOAD_FAILED" | "NO_MATCHES" = Constants.STRINGS.LOAD_FAILED, severity = Constants.STRINGS.COMMON): void {
-	llLog(`Load failed\n${util.inspect(e, true, Infinity, true)}`);
+	llLog(`Load failed\n${util.inspect(e, false, Infinity, true)}`);
 	response.writeHead(200, Constants.STRINGS.OK, Constants.baseHTTPResponseHeaders).end(JSON.stringify(Object.assign(payload, { loadType: loadType, exception: { message: (typeof e === Constants.STRINGS.STRING ? e as string : (e as Error).message || Constants.STRINGS.EMPTY_STRING).split(Constants.STRINGS.NEW_LINE).slice(-1)[0].replace(errorRegex, Constants.STRINGS.EMPTY_STRING), severity: severity } })));
 }
 
@@ -169,4 +172,55 @@ export function requestBody(req: import("http").IncomingMessage, timeout = 10000
 	});
 }
 
-export default { processLoad, standardErrorHandler, isObject, isValidKey, mixin, connect, parseHeaders, socketToRequest, noop, requestBody };
+// This is a proper rewrite of entersState. entersState does some weird stuff with Node internal methods which could lead to
+// events never firing and causing the thread to be locked and cause abort errors somehow.
+export function waitForResourceToEnterState(resource: import("@discordjs/voice").VoiceConnection, status: import("@discordjs/voice").VoiceConnectionStatus, timeoutMS: number): Promise<void>;
+export function waitForResourceToEnterState(resource: import("@discordjs/voice").AudioPlayer, status: import("@discordjs/voice").AudioPlayerStatus, timeoutMS: number): Promise<void>;
+export function waitForResourceToEnterState(resource: import("@discordjs/voice").VoiceConnection | import("@discordjs/voice").AudioPlayer, status: import("@discordjs/voice").VoiceConnectionStatus | import("@discordjs/voice").AudioPlayerStatus, timeoutMS: number): Promise<void> {
+	return new Promise((res, rej) => {
+		if (resource.state.status === status) res(void 0);
+		let timeout: NodeJS.Timeout | undefined = undefined;
+		function onStateChange(_oldState: import("@discordjs/voice").VoiceConnectionState | import("@discordjs/voice").AudioPlayerState, newState: import("@discordjs/voice").VoiceConnectionState | import("@discordjs/voice").AudioPlayerState) {
+			if (newState.status !== status) return;
+			if (timeout) clearTimeout(timeout);
+			(resource as import("@discordjs/voice").AudioPlayer).removeListener(Constants.STRINGS.STATE_CHANGE, onStateChange);
+			return res(void 0);
+		}
+		(resource as import("@discordjs/voice").AudioPlayer).on(Constants.STRINGS.STATE_CHANGE, onStateChange);
+		timeout = setTimeout(() => {
+			(resource as import("@discordjs/voice").AudioPlayer).removeListener(Constants.STRINGS.STATE_CHANGE, onStateChange);
+			rej(new Error("Didn't enter state in time"));
+		}, timeoutMS);
+	});
+}
+
+export async function getStats(): Promise<import("../types.js").Stats> {
+	const memory = process.memoryUsage();
+	const free: number = memory.heapTotal - memory.heapUsed;
+	const pload: number = await processLoad();
+	const osload: Array<number> = os.loadavg();
+	const threadStats: Array<{ players: number; playingPlayers: number; }> = await lavalinkThreadPool.broadcast({ op: Constants.workerOPCodes.STATS });
+	return {
+		players: threadStats.reduce((acc, cur) => acc + cur.players, 0),
+		playingPlayers: threadStats.reduce((acc, cur) => acc + cur.playingPlayers, 0),
+		uptime: process.uptime() * 1000,
+		memory: {
+			reservable: memory.heapTotal - free,
+			used: memory.heapUsed,
+			free: free,
+			allocated: memory.rss
+		},
+		cpu: {
+			cores: cpuCount,
+			systemLoad: osload[0],
+			lavalinkLoad: pload
+		},
+		frameStats: {
+			sent: 0,
+			nulled: 0,
+			deficit: 0
+		}
+	};
+}
+
+export default { processLoad, standardErrorHandler, isObject, isValidKey, mixin, connect, parseHeaders, socketToRequest, noop, requestBody, waitForResourceToEnterState, getStats };

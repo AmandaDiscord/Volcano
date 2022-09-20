@@ -1,6 +1,6 @@
 {
   "name": "volcano",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "A light-weight LavaLink compatible replacement",
   "main": "dist/index.js",
   "type": "module",
@@ -9,7 +9,7 @@
     "start": "node --enable-source-maps --optimize_for_size ."
   },
   "engines": {
-    "node": ">=16.9.0",
+    "node": ">=18.0.0",
     "npm": ">=8.0.0"
   },
   "repository": {
@@ -33,8 +33,8 @@
     "ffmpeg-static": "^5.1.0",
     "html-entities": "^2.3.3",
     "m3u8stream": "^0.8.6",
-    "music-metadata": "^8.0.1",
-    "node-html-parser": "^6.0.0",
+    "music-metadata": "^8.1.0",
+    "node-html-parser": "^6.1.0",
     "opusscript": "^0.0.8",
     "play-dl": "^1.9.5",
     "prism-media": "^1.3.4",
@@ -45,10 +45,10 @@
     "ytmusic-api": "^3.1.1"
   },
   "devDependencies": {
-    "@types/node": "^18.7.14",
+    "@types/node": "^18.7.18",
     "@types/ws": "^8.5.3",
-    "@typescript-eslint/eslint-plugin": "^5.37.0",
-    "@typescript-eslint/parser": "^5.37.0",
+    "@typescript-eslint/eslint-plugin": "^5.38.0",
+    "@typescript-eslint/parser": "^5.38.0",
     "eslint": "^8.23.1",
     "typescript": "^4.8.3"
   },

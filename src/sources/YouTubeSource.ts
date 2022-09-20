@@ -101,7 +101,7 @@ class YouTubeSource implements Plugin {
 	private static songResultToTrack(i: import("play-dl").YouTubeVideo) {
 		const length = Math.round(i.durationInSec * 1000);
 		if (!i.id) {
-			logger.warn(`Video(?) didn't have ID attached to it:\n${util.inspect(i, true, 3, true)}`);
+			logger.warn(`Video(?) didn't have ID attached to it:\n${util.inspect(i, false, 3, true)}`);
 			throw new Error("YOUTUBE_VIDEO_HAS_NO_ID");
 		}
 		return {

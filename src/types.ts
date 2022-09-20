@@ -1,9 +1,5 @@
 type OPCodes = typeof import("./Constants.js")["OPCodes"];
 
-export type Complete<T> = {
-	[K in keyof T]-?: Complete<T[K]>;
-}
-
 type AnyObject = { [k: string | number | symbol]: any };
 
 export type Mixin<T extends AnyObject, SR extends Array<AnyObject>> = SR extends Array<infer O> ? T & O : never;
@@ -183,12 +179,12 @@ export interface Plugin {
 	searchShort?: string;
 	version?: string;
 
-	initialize?(): unknown;
-	setVariables?(loggr: Pick<typeof import("./util/Logger.js")["default"], "info" | "warn" | "error">, Util: typeof import("./util/Util.js")): unknown;
-	mutateFilters?(filters: Array<string>, options: PlayerFilterOptions): unknown;
+	initialize?(): any;
+	setVariables?(loggr: Pick<typeof import("./util/Logger.js")["default"], "info" | "warn" | "error">, Util: typeof import("./util/Util.js")): any;
+	mutateFilters?(filters: Array<string>, options: PlayerFilterOptions): any;
 	canBeUsed?(resource: string, isResourceSearch: boolean): boolean;
 	infoHandler?(resource: string, isResourceSearch: boolean): { entries: Array<TrackInfo>, plData?: { name: string; selectedTrack?: number; } } | Promise<{ entries: Array<TrackInfo>, plData?: { name: string; selectedTrack?: number; } }>;
 	streamHandler?(info: import("@lavalink/encoding").TrackInfo, usingFFMPEG: boolean): { type?: import("@discordjs/voice").StreamType; stream: import("stream").Readable } | Promise<{ type?: import("@discordjs/voice").StreamType; stream: import("stream").Readable }>;
-	onWSMessage?(packet: Record<any, any>, socket: import("ws").WebSocket): unknown;
-	routeHandler?(url: URL, req: import("http").IncomingMessage, res: import("http").ServerResponse): unknown;
+	onWSMessage?(packet: Record<any, any>, socket: import("ws").WebSocket): any;
+	routeHandler?(url: URL, req: import("http").IncomingMessage, res: import("http").ServerResponse): any;
 }

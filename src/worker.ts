@@ -1,13 +1,11 @@
 import { parentPort as parentport, threadId } from "worker_threads";
-import path from "path";
-import fs from "fs";
-import { fileURLToPath } from "url";
 import util from "util";
+
+import "./loaders/keys.js";
 
 import * as Discord from "@discordjs/voice";
 import * as encoding from "@lavalink/encoding";
 import prism from "prism-media";
-import yaml from "yaml";
 
 if (!parentport) throw new Error("THREAD_IS_PARENT");
 const parentPort = parentport;
@@ -15,16 +13,6 @@ const parentPort = parentport;
 import Constants from "./Constants.js";
 import logger from "./util/Logger.js";
 import Util from "./util/Util.js";
-const configDir: string = path.join(process.cwd(), "./application.yml");
-let cfgparsed: import("./types.js").LavaLinkConfig;
-
-if (fs.existsSync(configDir)) {
-	const cfgyml: string = fs.readFileSync(configDir, { encoding: Constants.STRINGS.UTF8 });
-	cfgparsed = yaml.parse(cfgyml);
-} else cfgparsed = {};
-
-global.lavalinkConfig = Util.mixin({}, Constants.defaultOptions, cfgparsed) as typeof Constants.defaultOptions;
-import * as lamp from "play-dl";
 
 const queues = new Map<string, Queue>();
 const methodMap = new Map<string, import("@discordjs/voice").DiscordGatewayAdapterLibraryMethods>();
@@ -38,66 +26,6 @@ const reportInterval = setInterval(() => {
 }, lavalinkConfig.lavalink.server.playerUpdateInterval * 1000);
 
 parentPort.once("close", () => clearInterval(reportInterval));
-
-const codeReasons = {
-	4001: "You sent an invalid opcode.",
-	4002: "You sent a invalid payload in your identifying to the Gateway.",
-	4003: "You sent a payload before identifying with the Gateway.",
-	4004: "The token you sent in your identify payload is incorrect.",
-	4005: "You sent more than one identify payload. Stahp.",
-	4006: "Your session is no longer valid.",
-	4009: "Your session has timed out.",
-	4011: "We can't find the server you're trying to connect to.",
-	4012: "We didn't recognize the protocol you sent.",
-	4014: "Channel was deleted, you were kicked, voice server changed, or the main gateway session was dropped. Should not reconnect.",
-	4015: "The server crashed. Our bad! Try resuming.",
-	4016: "We didn't recognize your encryption."
-};
-
-const plugins: Array<import("./types.js").Plugin> = [];
-
-const dirname = fileURLToPath(path.dirname(import.meta.url));
-const keyDir = path.join(dirname, "../soundcloud.txt");
-
-async function keygen() {
-	const clientID = await lamp.getFreeClientID();
-	if (!clientID) throw new Error("SOUNDCLOUD_KEY_NO_CREATE");
-	fs.writeFileSync(keyDir, clientID, { encoding: Constants.STRINGS.UTF8 });
-	lamp.setToken({ soundcloud : { client_id : clientID } });
-}
-
-if (fs.existsSync(keyDir)) {
-	if (Date.now() - fs.statSync(keyDir).mtime.getTime() >= (1000 * 60 * 60 * 24 * 7)) keygen();
-	else {
-		const APIKey = fs.readFileSync(keyDir, { encoding: Constants.STRINGS.UTF8 });
-		await lamp.setToken({ soundcloud: { client_id: APIKey } });
-	}
-} else await keygen();
-
-await lamp.setToken({ useragent: [Constants.fakeAgent] });
-if (lavalinkConfig.lavalink.server.youtubeCookie) await lamp.setToken({ youtube: { cookie: lavalinkConfig.lavalink.server.youtubeCookie } });
-
-// This is a proper rewrite of entersState. entersState does some weird stuff with Node internal methods which could lead to
-// events never firing and causing the thread to be locked and cause abort errors somehow.
-function waitForResourceToEnterState(resource: Discord.VoiceConnection, status: Discord.VoiceConnectionStatus, timeoutMS: number): Promise<void>;
-function waitForResourceToEnterState(resource: Discord.AudioPlayer, status: Discord.AudioPlayerStatus, timeoutMS: number): Promise<void>;
-function waitForResourceToEnterState(resource: Discord.VoiceConnection | Discord.AudioPlayer, status: Discord.VoiceConnectionStatus | Discord.AudioPlayerStatus, timeoutMS: number): Promise<void> {
-	return new Promise((res, rej) => {
-		if (resource.state.status === status) res(void 0);
-		let timeout: NodeJS.Timeout | undefined = undefined;
-		function onStateChange(_oldState: Discord.VoiceConnectionState | Discord.AudioPlayerState, newState: Discord.VoiceConnectionState | Discord.AudioPlayerState) {
-			if (newState.status !== status) return;
-			if (timeout) clearTimeout(timeout);
-			(resource as Discord.AudioPlayer).removeListener(Constants.STRINGS.STATE_CHANGE, onStateChange);
-			return res(void 0);
-		}
-		(resource as Discord.AudioPlayer).on(Constants.STRINGS.STATE_CHANGE, onStateChange);
-		timeout = setTimeout(() => {
-			(resource as Discord.AudioPlayer).removeListener(Constants.STRINGS.STATE_CHANGE, onStateChange);
-			rej(new Error("Didn't enter state in time"));
-		}, timeoutMS);
-	});
-}
 
 class Queue {
 	public connection: import("@discordjs/voice").VoiceConnection;
@@ -119,16 +47,16 @@ class Queue {
 			if (newState.status === Discord.VoiceConnectionStatus.Disconnected) {
 				try {
 					await Promise.race([
-						waitForResourceToEnterState(this.connection, Discord.VoiceConnectionStatus.Signalling, 5000),
-						waitForResourceToEnterState(this.connection, Discord.VoiceConnectionStatus.Connecting, 5000)
+						Util.waitForResourceToEnterState(this.connection, Discord.VoiceConnectionStatus.Signalling, 5000),
+						Util.waitForResourceToEnterState(this.connection, Discord.VoiceConnectionStatus.Connecting, 5000)
 					]);
 				} catch {
-					if (newState.reason === Discord.VoiceConnectionDisconnectReason.WebSocketClose) parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: Constants.STRINGS.EVENT, type: Constants.STRINGS.WEBSOCKET_CLOSE_EVENT, guildId: this.guildID, code: newState.closeCode, reason: codeReasons[newState.closeCode], byRemote: true }, clientID: this.clientID });
+					if (newState.reason === Discord.VoiceConnectionDisconnectReason.WebSocketClose) parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: Constants.STRINGS.EVENT, type: Constants.STRINGS.WEBSOCKET_CLOSE_EVENT, guildId: this.guildID, code: newState.closeCode, reason: Constants.VoiceWSCloseCodes[newState.closeCode], byRemote: true }, clientID: this.clientID });
 				}
 			} else if (newState.status === Discord.VoiceConnectionStatus.Destroyed && !this.actions.destroyed) parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: Constants.STRINGS.EVENT, type: Constants.STRINGS.WEBSOCKET_CLOSE_EVENT, guildId: this.guildID, code: 4000, reason: "IDK what happened. All I know is that the connection was destroyed prematurely", byRemote: true }, clientID: this.clientID });
 			else if (newState.status === Discord.VoiceConnectionStatus.Connecting || newState.status === Discord.VoiceConnectionStatus.Signalling) {
 				try {
-					await waitForResourceToEnterState(this.connection, Discord.VoiceConnectionStatus.Ready, Constants.VoiceConnectionConnectThresholdMS);
+					await Util.waitForResourceToEnterState(this.connection, Discord.VoiceConnectionStatus.Ready, Constants.VoiceConnectionConnectThresholdMS);
 				} catch {
 					parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: Constants.STRINGS.EVENT, type: Constants.STRINGS.WEBSOCKET_CLOSE_EVENT, guildId: this.guildID, code: 4000, reason: `Couldn't connect in time (${Constants.VoiceConnectionConnectThresholdMS}ms)`, byRemote: false }, clientID: this.clientID });
 				}
@@ -172,7 +100,7 @@ class Queue {
 		this.actions.seekTime = 0;
 		this.actions.initial = true;
 		if (!this.track) return;
-		this.play().catch(e => logger.error(util.inspect(e, true, Infinity, true), `worker ${threadId}`));
+		this.play().catch(e => logger.error(util.inspect(e, false, Infinity, true), `worker ${threadId}`));
 	}
 
 	public async getResource(decoded: import("@lavalink/encoding").TrackInfo, meta: NonNullable<typeof this.track>): Promise<import("@discordjs/voice").AudioResource<import("@lavalink/encoding").TrackInfo>> {
@@ -183,7 +111,7 @@ class Queue {
 
 		const useFFMPEG = !!this._filters.length || !!meta.start;
 
-		const found = plugins.find(p => p.source === decoded.source);
+		const found = lavalinkPlugins.find(p => p.source === decoded.source);
 		if (found) {
 			const result = await found.streamHandler?.(decoded, useFFMPEG);
 			if (result) {
@@ -234,7 +162,7 @@ class Queue {
 		try {
 			resource = await this.getResource(decoded, meta);
 		} catch (e) {
-			logger.error(util.inspect(e, true, Infinity, true), `worker ${threadId}`);
+			logger.error(util.inspect(e, false, Infinity, true), `worker ${threadId}`);
 			parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: Constants.STRINGS.EVENT, type: Constants.STRINGS.TRACK_EXCEPTION_EVENT, guildId: this.guildID, track: this.track?.track || Constants.STRINGS.UNKNOWN, exception: e.name, message: e.message, severity: Constants.STRINGS.COMMON, cause: e.stack || new Error().stack || Constants.STRINGS.UNKNOWN }, clientID: this.clientID });
 		}
 		if (!resource) return;
@@ -249,7 +177,7 @@ class Queue {
 		else if (this.actions.volume !== 1.0) this.volume(this.actions.volume);
 		const track = this.track;
 		try {
-			await waitForResourceToEnterState(this.player, Discord.AudioPlayerStatus.Playing, lavalinkConfig.lavalink.server.trackStuckThresholdMs);
+			await Util.waitForResourceToEnterState(this.player, Discord.AudioPlayerStatus.Playing, lavalinkConfig.lavalink.server.trackStuckThresholdMs);
 			this.actions.shouldntCallFinish = false;
 			this.actions.stopping = false;
 		} catch {
@@ -320,7 +248,7 @@ class Queue {
 		const previousIndex = this._filters.indexOf(Constants.STRINGS.SEARCH_STRING);
 		if (previousIndex !== -1) this._filters.splice(previousIndex, 2);
 		this._filters.push(Constants.STRINGS.SEARCH_STRING, `${amount || 0}ms`);
-		if (!this.actions.applyingFilters) this.play().catch(e => logger.error(util.inspect(e, true, Infinity, true), `worker ${threadId}`));
+		if (!this.actions.applyingFilters) this.play().catch(e => logger.error(util.inspect(e, false, Infinity, true), `worker ${threadId}`));
 		this.actions.applyingFilters = true;
 		this.actions.seekTime = amount;
 	}
@@ -354,12 +282,12 @@ class Queue {
 		if (filters.lowPass) toApply.push(`lowpass=f=${500 / filters.lowPass.smoothing}`);
 
 		this._filters.push(...toApply);
-		for (const plugin of plugins) {
+		for (const plugin of lavalinkPlugins) {
 			await plugin.mutateFilters?.(this._filters, filters);
 		}
 		const previouslyApplying = this.actions.applyingFilters;
 		this.actions.applyingFilters = true;
-		if (!previouslyApplying) this.play().catch(e => logger.error(util.inspect(e, true, Infinity, true), `worker ${threadId}`));
+		if (!previouslyApplying) this.play().catch(e => logger.error(util.inspect(e, false, Infinity, true), `worker ${threadId}`));
 	}
 
 	public ffmpeg(args: Array<string>) {
@@ -367,7 +295,7 @@ class Queue {
 		this._filters.push(...args);
 		const previouslyApplying = this.actions.applyingFilters;
 		this.actions.applyingFilters = true;
-		if (!previouslyApplying) this.play().catch(e => logger.error(util.inspect(e, true, Infinity, true), `worker ${threadId}`));
+		if (!previouslyApplying) this.play().catch(e => logger.error(util.inspect(e, false, Infinity, true), `worker ${threadId}`));
 	}
 }
 
@@ -395,7 +323,7 @@ parentPort.on(Constants.STRINGS.MESSAGE, async (packet: { data?: import("./types
 			} else {
 				if (packet.broadcasted) parentPort.postMessage({ op: Constants.workerOPCodes.REPLY, data: true, threadID: packet.threadID });
 				q = queues.get(key)!;
-				if (packet.data!.noReplace === true && q.player.state.status === Discord.AudioPlayerStatus.Playing) return logger.info(Constants.STRINGS.NO_REPLACE_SKIP, `worker ${threadId}`);
+				if (packet.data!.noReplace === true && q.player.state.status === Discord.AudioPlayerStatus.Playing) return lavalinkLog(Constants.STRINGS.NO_REPLACE_SKIP, `worker ${threadId}`);
 				q.queue({ track: packet.data!.track!, start: Number(packet.data!.startTime || Constants.STRINGS.ZERO), end: Number(packet.data!.endTime || Constants.STRINGS.ZERO), volume: Number(packet.data!.volume || Constants.STRINGS.ONE_HUNDRED), pause: packet.data!.pause || false });
 			}
 			break;
@@ -458,40 +386,7 @@ function voiceAdapterCreator(userID: string, guildID: string): import("@discordj
 	};
 }
 
-process.on("unhandledRejection", e => logger.error(util.inspect(e, true, Infinity, true), `worker ${threadId}`));
-process.on("uncaughtException", (e, origin) => logger.error(`${util.inspect(e, true, Infinity, true)}\n${util.inspect(origin)}`, `worker ${threadId}`));
-
-// taken from https://github.com/yarnpkg/berry/blob/2cf0a8fe3e4d4bd7d4d344245d24a85a45d4c5c9/packages/yarnpkg-pnp/sources/loader/applyPatch.ts#L414-L435
-// Having Experimental warning show up once is "fine" but it's also printed
-// for each Worker that is created so it ends up spamming stderr.
-// Since that doesn't provide any value we suppress the warning.
-const originalEmit = process.emit;
-// @ts-expect-error - TS complains about the return type of originalEmit.apply
-process.emit = function (name, data) {
-	if (name === Constants.STRINGS.WARNING && typeof data === Constants.STRINGS.OBJECT && data.name === Constants.STRINGS.EXPERIMENTAL_WARNING) return false;
-	// eslint-disable-next-line prefer-rest-params
-	return originalEmit.apply(process, arguments as unknown as Parameters<typeof process.emit>);
-};
-
-for (const file of await fs.promises.readdir(path.join(dirname, "./sources"))) {
-	if (!file.endsWith(".js")) continue;
-	const module = await import(`file://${path.join(dirname, "./sources", file)}`);
-	const constructed: import("./types.js").Plugin = new module.default();
-	constructed.setVariables?.(logger, Util as typeof import("./util/Util.js"));
-	await constructed.initialize?.();
-	plugins.push(constructed);
-}
-
-const isDir = await fs.promises.stat(path.join(dirname, "../plugins")).then(s => s.isDirectory()).catch(() => false);
-if (isDir) {
-	for (const file of await fs.promises.readdir(path.join(dirname, "../plugins"))) {
-		if (!file.endsWith(".js")) continue;
-		const module = await import(`file://${path.join(dirname, "../plugins", file)}`);
-		const constructed: import("./types.js").Plugin = new module.default();
-		constructed.setVariables?.(logger, Util as typeof import("./util/Util.js"));
-		await constructed.initialize?.();
-		plugins.push(constructed);
-	}
-}
+process.on("unhandledRejection", e => logger.error(util.inspect(e, false, Infinity, true), `worker ${threadId}`));
+process.on("uncaughtException", (e, origin) => logger.error(`${util.inspect(e, false, Infinity, true)}\n${util.inspect(origin)}`, `worker ${threadId}`));
 
 parentPort.postMessage({ op: Constants.workerOPCodes.READY });

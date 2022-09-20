@@ -129,7 +129,7 @@ class ThreadPool extends ThreadBasedReplier {
 				if (msg.op === Constants.workerOPCodes.MESSAGE) return this.emit(Constants.STRINGS.MESSAGE, worker.threadId, msg);
 			});
 
-			worker.on(Constants.STRINGS.ERROR, e => logger.error(util.inspect(e, true, Infinity, true)));
+			worker.on(Constants.STRINGS.ERROR, e => logger.error(util.inspect(e, false, Infinity, true)));
 
 			worker.once(Constants.STRINGS.EXIT, () => onWorkerExit(newID, worker, this));
 		});
@@ -137,7 +137,7 @@ class ThreadPool extends ThreadBasedReplier {
 
 	public async dump(): Promise<void> {
 		await Promise.all([...this.children.values()].map(async child => {
-			const stream = await child.getHeapSnapshot().catch(e => logger.error(util.inspect(e, true, Infinity, true)));
+			const stream = await child.getHeapSnapshot().catch(e => logger.error(util.inspect(e, false, Infinity, true)));
 			if (stream) {
 				const write = fs.createWriteStream(path.join(Constants.STRINGS.PATH_UP, Constants.STRINGS.PATH_UP, `worker-${child.threadId}-snapshot-${Date.now()}.heapsnapshot`));
 				stream.pipe(write);
@@ -186,7 +186,7 @@ async function onWorkerExit(id: string, worker: Worker, pool: ThreadPool) {
 			})
 		]);
 	} catch {
-		const stream = await worker.getHeapSnapshot().catch(e => logger.error(util.inspect(e, true, Infinity, true)));
+		const stream = await worker.getHeapSnapshot().catch(e => logger.error(util.inspect(e, false, Infinity, true)));
 		if (stream) {
 			const write = fs.createWriteStream(path.join(Constants.STRINGS.PATH_UP, Constants.STRINGS.PATH_UP, `worker-${id}-snapshot-${Date.now()}.heapsnapshot`));
 			stream.pipe(write);
