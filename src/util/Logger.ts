@@ -9,7 +9,7 @@ function stringify(data: any, ignoreQuotes?: boolean) {
 	if (typeof data === Constants.STRINGS.BIGINT) return `${data.toString()}n`;
 	else if (typeof data === Constants.STRINGS.OBJECT && data !== null && !Array.isArray(data)) {
 		const references = new Set<any>();
-		return JSON.stringify(step(data, references));
+		return `{${Object.entries(step(data, references)).map(e => `${stringify(e[0], true)}:${stringify(e[1])}`).join(Constants.STRINGS.COMMA)}}`;
 	} else if (Array.isArray(data)) return `[${data.map(i => stringify(i)).join(Constants.STRINGS.COMMA)}]`;
 	else if (typeof data === Constants.STRINGS.STRING && !ignoreQuotes) return `"${data}"`;
 	else return String(data);
@@ -24,7 +24,7 @@ function step(object: any, references: Set<any>): any {
 				references.add(object[key]);
 				rebuilt[key] = step(object[key], references);
 			}
-		} else if (Array.isArray(object[key])) return `[${object[key].map(i => stringify(i)).join(Constants.STRINGS.COMMA)}]`;
+		} else if (Array.isArray(object[key])) rebuilt[key] = object[key].map(i => stringify(i)).join(Constants.STRINGS.COMMA);
 		else rebuilt[key] = stringify(object[key], true);
 	}
 

@@ -22,8 +22,11 @@ class HTTPSource implements Plugin {
 		if (redirects > 3) throw new Error("TOO_MANY_REDIRECTS");
 		const stream = await Util.connect(url, { headers: Constants.baseHTTPRequestHeaders });
 		const data = await Util.socketToRequest(stream);
-		if (redirectStatusCodes.includes(data.status) && data.headers["location"]) return this.followURLS(data.headers["location"], redirects++);
-		else return data;
+		if (redirectStatusCodes.includes(data.status) && data.headers["location"]) {
+			data.end();
+			data.destroy();
+			return this.followURLS(data.headers["location"], redirects++);
+		} else return data;
 	}
 
 	public async infoHandler(resource: string) {
@@ -34,10 +37,11 @@ class HTTPSource implements Plugin {
 		let chunked = false;
 
 		const data = await HTTPSource.followURLS(resource);
+		console.log(data);
 
 		const mimeMatch = data.headers[Constants.STRINGS.CONTENT_TYPE]?.match(mimeRegex);
 		if (mimeMatch && mimeMatch[1] === Constants.STRINGS.APPLICATION && !supportedApplicationTypes.includes(mimeMatch[2])) {
-			data.body.destroy();
+			data.destroy();
 			throw new Error(Constants.STRINGS.UNSUPPORTED_FILE_TYPE);
 		}
 
@@ -51,7 +55,7 @@ class HTTPSource implements Plugin {
 		// Is stream chunked? (SKIPS A LOT OF CHECKS AND JUST RUNS WITH IT)
 		// Will be more than just ice-cast in the future
 		if (isCast) {
-			data.body.destroy();
+			data.destroy();
 			parsed = { common: {}, format: {} } as IAudioMetadata;
 
 			// Fill in ice cast data if applicable so track info doesn't always fallback to Unknown.
@@ -60,14 +64,20 @@ class HTTPSource implements Plugin {
 				if (data.headers[Constants.STRINGS.ICY_NAME]) parsed!.common.title = data.headers[Constants.STRINGS.ICY_NAME] as string;
 			}
 		} else if (data.headers[Constants.STRINGS.CONTENT_TYPE] === Constants.STRINGS.APPLICATION_X_MPEG_URL) {
-			data.body.destroy();
+			data.destroy();
 			parsed = { common: {}, format: {} } as IAudioMetadata;
 		} else {
-			const timer = new Promise((_, rej) => setTimeout(() => rej(new Error(Constants.STRINGS.TIMEOUT_REACHED)), 10000));
-			parsed = await Promise.race<[Promise<unknown>, Promise<IAudioMetadata>]>([
-				timer,
-				parseStream(data.body, { mimeType: data.headers[Constants.STRINGS.CONTENT_TYPE] || undefined, size: data.headers[Constants.STRINGS.CONTENT_LENGTH] ? Number(data.headers[Constants.STRINGS.CONTENT_LENGTH]) : undefined, url: resource }, { skipCovers: true, skipPostHeaders: true, includeChapters: false, duration: true })
-			]) as IAudioMetadata;
+			const promise = parseStream(data, {
+				mimeType: data.headers[Constants.STRINGS.CONTENT_TYPE] || undefined,
+				size: data.headers[Constants.STRINGS.CONTENT_LENGTH] ? Number(data.headers[Constants.STRINGS.CONTENT_LENGTH]) : undefined,
+				url: resource
+			}, {
+				skipCovers: true,
+				skipPostHeaders: true,
+				includeChapters: false,
+				duration: true
+			});
+			parsed = await Util.createTimeoutForPromise(promise, 10000);
 			if (parsed.format.container) probe = parsed.format.container;
 		}
 
@@ -94,7 +104,8 @@ class HTTPSource implements Plugin {
 		if (info.probeInfo!.raw === Constants.STRINGS.X_MPEG_URL || info.uri!.endsWith(Constants.STRINGS.DOT_M3U8)) return { stream: m3u8(info.uri!) };
 		else {
 			const response = await Util.connect(info.uri!, { headers: Constants.baseHTTPRequestHeaders });
-			return { stream: response };
+			const passed = await Util.socketToRequest(response);
+			return { stream: passed };
 		}
 	}
 }

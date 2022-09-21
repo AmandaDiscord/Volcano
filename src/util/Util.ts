@@ -2,7 +2,7 @@ import util from "util";
 import net from "net";
 import tls from "tls";
 import os from "os";
-import { PassThrough, pipeline } from "stream";
+import { pipeline, Transform } from "stream";
 
 import Constants from "../Constants.js";
 import Logger from "./Logger.js";
@@ -58,7 +58,38 @@ function step(target: Record<string, any>, val: Record<string, any>, key: string
 	else target[key] = val;
 }
 
-export async function connect(url: string, opts?: { method?: string; headers?: { [header: string]: any } }): Promise<import("net").Socket> {
+export async function createTimeoutForPromise<T>(promise: PromiseLike<T>, timeout: number): Promise<T> {
+	let timer: NodeJS.Timeout | undefined = undefined;
+	const timerPromise = new Promise<T>((_, reject) => {
+		timer = setTimeout(() => reject(new Error(Constants.STRINGS.TIMEOUT_REACHED)), timeout);
+	});
+	const value = await Promise.race([promise, timerPromise]);
+	if (timer) clearTimeout(timer);
+	return value;
+}
+
+function getHostname(host: string): string {
+	if (host[0] === "[") {
+		const idx = host.indexOf("]");
+		return host.substr(1, idx - 1);
+	}
+
+	const idx = host.indexOf(":");
+	if (idx === -1) return host;
+
+	return host.substr(0, idx);
+}
+
+function getServerName(host?: string) {
+	if (!host) return null;
+
+	const servername = getHostname(host);
+	if (net.isIP(servername)) return "";
+
+	return servername;
+}
+
+export async function connect(url: string, opts?: { method?: string; keepAlive?: boolean; headers?: { [header: string]: any } }): Promise<import("net").Socket> {
 	const decoded = new URL(url);
 	const options = {
 		method: Constants.STRINGS.GET,
@@ -70,29 +101,21 @@ export async function connect(url: string, opts?: { method?: string; headers?: {
 	};
 	if (opts) mixin(options, opts);
 	const port = decoded.port.length ? Number(decoded.port) : (decoded.protocol === "https:" || decoded.protocol === "wss:" ? 443 : 80);
+	const servername = getServerName(decoded.host) || undefined;
 	let socket: import("net").Socket;
-	const connectOptions: import("tls").ConnectionOptions = { host: decoded.host, port, timeout: 10000, rejectUnauthorized: false, requestCert: true };
+	const connectOptions: import("tls").ConnectionOptions = { host: decoded.host, port, rejectUnauthorized: false, ALPNProtocols: ["http/1.1", "http/1.0", "icy"], servername };
 
 	let res: Parameters<ConstructorParameters<PromiseConstructor>["0"]>["0"] | undefined = undefined;
 	const promise = new Promise(resolve => res = resolve);
-	let timer: NodeJS.Timer | undefined = undefined;
-	const timerPromise = new Promise((_, reject) => {
-		timer = setTimeout(() => {
-			socket.destroy();
-			reject(new Error(Constants.STRINGS.TIMEOUT_REACHED));
-		}, 10000);
-	});
-	const cb = () => {
-		if (timer) clearTimeout(timer);
-		res!(void 0);
-	};
 
-	if (port === 443) socket = tls.connect(connectOptions, cb);
-	else socket = net.connect(connectOptions as import("net").NetConnectOpts, cb);
+	if (port === 443) socket = tls.connect(connectOptions, res);
+	else socket = net.connect(connectOptions as import("net").NetConnectOpts, res);
 
-	await Promise.race([promise, timerPromise]);
+	socket.setNoDelay(true);
 
-	const request = `${options.method!.toUpperCase()} ${decoded.pathname}${decoded.search} HTTP/1.0\n${Object.entries(options.headers).map(i => `${i[0]}: ${i[1]}`).join("\r\n")}\r\n\r\n`;
+	await createTimeoutForPromise(promise, 10000);
+
+	const request = `${options.method!.toUpperCase()} ${decoded.pathname}${decoded.search} HTTP/1.1\n${Object.entries(options.headers).map(i => `${i[0]}: ${i[1]}`).join("\r\n")}\r\n\r\n`;
 	socket.write(request);
 	return socket;
 }
@@ -100,45 +123,81 @@ export async function connect(url: string, opts?: { method?: string; headers?: {
 const responseRegex = /((?:HTTP\/[\d.]+)|(?:ICY)) (\d+) ?(.+)?/;
 const headerRegex = /([^:]+): *([^\r\n]+)/;
 
-export function parseHeaders(data: Buffer): { protocol: string; status: number; message: string | null; headers: { [header: string]: string }; remaining: Buffer; } {
-	const string = data.toString(Constants.STRINGS.UTF8);
-	const lines = string.split("\n");
-	const match = (lines[0] || "").match(responseRegex);
-	if (!match) {
-		Logger.warn(`First line in Buffer isn't an HTTP or ICY status: ${lines[0]}`);
-		return { protocol: "UNKNOWN", status: 0, message: null, headers: {}, remaining: data };
-	}
-	const headers = {};
-	let passed = 1;
-	for (const line of lines.slice(1)) {
-		const header = line.match(headerRegex);
-		if (!header) break;
-		passed++;
-		headers[header[1].toLowerCase()] = header[2];
-	}
-	return { protocol: match[1], status: Number(match[2]), message: match[3], headers, remaining: Buffer.from(lines.slice(passed).join("\n")) };
+interface ConnectionResponseEvents {
+	headers: [ConnectionResponse["headers"]];
 }
 
-export async function socketToRequest(socket: import("net").Socket): Promise<ReturnType<typeof parseHeaders> & { body: import("stream").Readable }> {
-	let timer: NodeJS.Timer | undefined = undefined;
-	const timerPromise = new Promise<ReturnType<typeof parseHeaders>>((_, reject) => {
-		timer = setTimeout(() => {
-			socket.destroy();
-			reject(new Error(Constants.STRINGS.TIMEOUT_REACHED));
-		}, 10000);
+export interface ConnectionResponse {
+	addListener<E extends keyof ConnectionResponseEvents>(event: E, listener: (...args: ConnectionResponseEvents[E]) => any): this;
+	emit<E extends keyof ConnectionResponseEvents>(event: E, ...args: ConnectionResponseEvents[E]): boolean;
+	eventNames(): Array<keyof ConnectionResponseEvents>;
+	listenerCount(event: keyof ConnectionResponseEvents): number;
+	listeners(event: keyof ConnectionResponseEvents): Array<(...args: Array<any>) => any>;
+	off<E extends keyof ConnectionResponseEvents>(event: E, listener: (...args: ConnectionResponseEvents[E]) => any): this;
+	on<E extends keyof ConnectionResponseEvents>(event: E, listener: (...args: ConnectionResponseEvents[E]) => any): this;
+	once<E extends keyof ConnectionResponseEvents>(event: E, listener: (...args: ConnectionResponseEvents[E]) => any): this;
+	prependListener<E extends keyof ConnectionResponseEvents>(event: E, listener: (...args: ConnectionResponseEvents[E]) => any): this;
+	prependOnceListener<E extends keyof ConnectionResponseEvents>(event: E, listener: (...args: ConnectionResponseEvents[E]) => any): this;
+	rawListeners(event: keyof ConnectionResponseEvents): Array<(...args: Array<any>) => any>;
+	removeAllListeners(event?: keyof ConnectionResponseEvents): this;
+	removeListener<E extends keyof ConnectionResponseEvents>(event: E, listener: (...args: ConnectionResponseEvents[E]) => any): this;
+}
+
+export class ConnectionResponse extends Transform {
+	private headersReceived = false;
+	public headers: { [header: string]: string };
+	public protocol: string;
+	public status: number;
+	public message: string;
+
+	public _transform(chunk: Buffer, encoding: BufferEncoding, callback: import("stream").TransformCallback): void {
+		if (this.headersReceived) return callback(null, chunk);
+		this.headersReceived = true;
+		const string = chunk.toString(Constants.STRINGS.UTF8);
+		const lines = string.split("\n");
+		const match = (lines[0] || "").match(responseRegex);
+		if (!match) {
+			Logger.warn(`First line in Buffer isn't an HTTP or ICY status: ${lines[0]}`);
+			this.protocol = "UNKNOWN";
+			this.status = 0;
+			this.message = "";
+			this.headers = {};
+			this.emit("headers", this.headers);
+			return callback(null, chunk);
+		}
+		const headers = {};
+		let passed = 1;
+		for (const line of lines.slice(1)) {
+			const header = line.match(headerRegex);
+			if (!header) break;
+			passed++;
+			headers[header[1].toLowerCase()] = header[2];
+		}
+		const sliced = lines.slice(passed + 2);
+		this.protocol = match[1];
+		this.status = Number(match[2]);
+		this.message = match[3] || "";
+		this.headers = headers;
+		this.emit("headers", this.headers);
+		if (!sliced.length) return void 0;
+		const remaining = Buffer.from(sliced.join("\n"), Constants.STRINGS.UTF8);
+		return callback(null, remaining);
+	}
+}
+
+export async function socketToRequest(socket: import("net").Socket): Promise<ConnectionResponse> {
+	const response = pipeline(socket, new ConnectionResponse(), noop);
+	const promise = new Promise<ConnectionResponse>(res => {
+		response.once("headers", () => res(response));
 	});
-	const dataProm = new Promise<ReturnType<typeof parseHeaders>>(res => {
-		socket.once("readable", () => {
-			if (timer) clearTimeout(timer);
-			const d = parseHeaders(socket.read());
-			res(d);
-		});
-	});
-	const data: ReturnType<typeof parseHeaders> = await Promise.race([timerPromise, dataProm]);
-	const pt = new PassThrough();
-	pipeline(socket, pt, noop);
-	setImmediate(() => pt.write(data.remaining));
-	return Object.assign({ body: pt }, data);
+	try {
+		await createTimeoutForPromise(promise, 10000);
+	} catch (e) {
+		socket.destroy();
+		socket.removeAllListeners();
+		throw e;
+	}
+	return response;
 }
 
 export function requestBody(req: import("http").IncomingMessage, timeout = 10000): Promise<Buffer> {
@@ -223,4 +282,4 @@ export async function getStats(): Promise<import("../types.js").Stats> {
 	};
 }
 
-export default { processLoad, standardErrorHandler, isObject, isValidKey, mixin, connect, parseHeaders, socketToRequest, noop, requestBody, waitForResourceToEnterState, getStats };
+export default { processLoad, standardErrorHandler, isObject, isValidKey, mixin, connect, socketToRequest, noop, requestBody, waitForResourceToEnterState, getStats, createTimeoutForPromise, ConnectionResponse };

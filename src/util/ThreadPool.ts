@@ -5,7 +5,7 @@ import path from "path";
 import util from "util";
 
 import logger from "./Logger.js";
-
+import Util from "./Util.js";
 import Constants from "../Constants.js";
 
 class SingleUseMap<K, V> extends Map<K, V> {
@@ -179,12 +179,7 @@ class ThreadPool extends ThreadBasedReplier {
 async function onWorkerExit(id: string, worker: Worker, pool: ThreadPool) {
 	let timer: NodeJS.Timeout | undefined;
 	try {
-		await Promise.race([
-			worker.terminate(),
-			new Promise((_, rej) => {
-				timer = setTimeout(() => rej(new Error(Constants.STRINGS.TIMEOUT_REACHED)), 5000);
-			})
-		]);
+		await Util.createTimeoutForPromise(worker.terminate(), 5000);
 	} catch {
 		const stream = await worker.getHeapSnapshot().catch(e => logger.error(util.inspect(e, false, Infinity, true)));
 		if (stream) {
