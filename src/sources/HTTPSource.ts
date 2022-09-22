@@ -37,7 +37,6 @@ class HTTPSource implements Plugin {
 		let chunked = false;
 
 		const data = await HTTPSource.followURLS(resource);
-		console.log(data);
 
 		const mimeMatch = data.headers[Constants.STRINGS.CONTENT_TYPE]?.match(mimeRegex);
 		if (mimeMatch && mimeMatch[1] === Constants.STRINGS.APPLICATION && !supportedApplicationTypes.includes(mimeMatch[2])) {
