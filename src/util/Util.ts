@@ -45,14 +45,14 @@ export function mixin<T extends Record<string, any>, S extends Array<Record<stri
 	for (const obj of sources) {
 		if (isObject(obj)) {
 			for (const key in obj) {
-				if (isValidKey(key)) step(target, obj[key], key);
+				if (isValidKey(key)) mixinStep(target, obj[key], key);
 			}
 		}
 	}
 	return target as unknown as import("../types.js").Mixin<T, S>;
 }
 
-function step(target: Record<string, any>, val: Record<string, any>, key: string) {
+function mixinStep(target: Record<string, any>, val: Record<string, any>, key: string) {
 	const obj = target[key];
 	if (isObject(val) && isObject(obj)) mixin(obj, val);
 	else target[key] = val;
@@ -116,7 +116,7 @@ export async function connect(url: string, opts?: { method?: string; keepAlive?:
 	await createTimeoutForPromise(promise, 10000);
 
 	const request = `${options.method!.toUpperCase()} ${decoded.pathname}${decoded.search} HTTP/1.1\n${Object.entries(options.headers).map(i => `${i[0]}: ${i[1]}`).join("\r\n")}\r\n\r\n`;
-	socket.write(request);
+	if (socket.writable) socket.write(request);
 	return socket;
 }
 
@@ -125,6 +125,7 @@ const headerRegex = /([^:]+): *([^\r\n]+)/;
 
 interface ConnectionResponseEvents {
 	headers: [ConnectionResponse["headers"]];
+	readable: [];
 }
 
 export interface ConnectionResponse {
@@ -151,7 +152,11 @@ export class ConnectionResponse extends Transform {
 	public message: string;
 
 	public _transform(chunk: Buffer, encoding: BufferEncoding, callback: import("stream").TransformCallback): void {
-		if (this.headersReceived) return callback(null, chunk);
+		if (this.headersReceived) {
+			this.push(chunk);
+			return callback();
+		}
+
 		this.headersReceived = true;
 		const string = chunk.toString(Constants.STRINGS.UTF8);
 		const lines = string.split("\n");
@@ -163,25 +168,28 @@ export class ConnectionResponse extends Transform {
 			this.message = "";
 			this.headers = {};
 			this.emit("headers", this.headers);
-			return callback(null, chunk);
+			this.push(chunk);
+			callback();
+		} else {
+			const headers = {};
+			let passed = 1;
+			for (const line of lines.slice(1)) {
+				const header = line.match(headerRegex);
+				if (!header) break;
+				passed++;
+				headers[header[1].toLowerCase()] = header[2];
+			}
+			const sliced = lines.slice(passed + 2);
+			this.protocol = match[1];
+			this.status = Number(match[2]);
+			this.message = match[3] || "";
+			this.headers = headers;
+			this.emit("headers", this.headers);
+			if (!sliced.length) return callback();
+			const remaining = Buffer.from(sliced.join("\n"));
+			this.push(remaining);
+			callback();
 		}
-		const headers = {};
-		let passed = 1;
-		for (const line of lines.slice(1)) {
-			const header = line.match(headerRegex);
-			if (!header) break;
-			passed++;
-			headers[header[1].toLowerCase()] = header[2];
-		}
-		const sliced = lines.slice(passed + 2);
-		this.protocol = match[1];
-		this.status = Number(match[2]);
-		this.message = match[3] || "";
-		this.headers = headers;
-		this.emit("headers", this.headers);
-		if (!sliced.length) return void 0;
-		const remaining = Buffer.from(sliced.join("\n"), Constants.STRINGS.UTF8);
-		return callback(null, remaining);
 	}
 }
 
@@ -193,6 +201,7 @@ export async function socketToRequest(socket: import("net").Socket): Promise<Con
 	try {
 		await createTimeoutForPromise(promise, 10000);
 	} catch (e) {
+		socket.end();
 		socket.destroy();
 		socket.removeAllListeners();
 		throw e;
@@ -282,4 +291,35 @@ export async function getStats(): Promise<import("../types.js").Stats> {
 	};
 }
 
-export default { processLoad, standardErrorHandler, isObject, isValidKey, mixin, connect, socketToRequest, noop, requestBody, waitForResourceToEnterState, getStats, createTimeoutForPromise, ConnectionResponse };
+const quoteRegex = /"/g;
+
+export function stringify(data: any, ignoreQuotes?: boolean) {
+	if (typeof data === Constants.STRINGS.BIGINT) return `${data.toString()}n`;
+	else if (typeof data === Constants.STRINGS.OBJECT && data !== null && !Array.isArray(data)) {
+		const references = new Set<any>();
+		return `{${Object.entries(stringifyStep(data, references)).map(e => `${stringify(e[0])}:${stringify(e[1])}`).join(Constants.STRINGS.COMMA)}}`;
+	} else if (Array.isArray(data)) return `[${data.map(i => stringify(i)).join(Constants.STRINGS.COMMA)}]`;
+	else if (typeof data === Constants.STRINGS.STRING && !ignoreQuotes) return `"${data.replace(quoteRegex, "\\\"")}"`;
+	else return String(data);
+}
+
+export function stringifyStep(object: any, references: Set<any>): any {
+	const rebuilt = {};
+	for (const key of Object.keys(object)) {
+		if (key[0] === Constants.STRINGS.UNDERSCORE) continue;
+		if (object[key] === undefined) continue;
+		if (typeof object[key] === Constants.STRINGS.OBJECT && object[key] !== null && !Array.isArray(object[key])) {
+			if (typeof object[key] === "function") continue;
+			if (references.has(object[key])) rebuilt[key] = Constants.STRINGS.CIRCULAR;
+			else {
+				references.add(object[key]);
+				rebuilt[key] = stringifyStep(object[key], references);
+			}
+		} else if (Array.isArray(object[key])) rebuilt[key] = object[key].map(i => typeof i === "object" ? stringifyStep(i, references) : i);
+		else rebuilt[key] = object[key];
+	}
+
+	return rebuilt;
+}
+
+export default { processLoad, standardErrorHandler, isObject, isValidKey, mixin, connect, socketToRequest, noop, requestBody, waitForResourceToEnterState, getStats, createTimeoutForPromise, ConnectionResponse, stringify };

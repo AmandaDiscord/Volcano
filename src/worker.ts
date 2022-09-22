@@ -32,7 +32,7 @@ class Queue {
 	public clientID: string;
 	public guildID: string;
 	public track: { track: string; start: number; end: number; volume: number; pause: boolean } | undefined = undefined;
-	public player = Discord.createAudioPlayer();
+	public player = Discord.createAudioPlayer({ behaviors: { noSubscriber: Discord.NoSubscriberBehavior.Play } });
 	public resource: import("@discordjs/voice").AudioResource<import("@lavalink/encoding").TrackInfo> | null = null;
 	public actions = { initial: true, stopping: false, volume: 1.0, applyingFilters: false, shouldntCallFinish: false, trackPausing: false, seekTime: 0, destroyed: false, rate: 1.0, paused: false };
 	public _filters: Array<string> = [];
@@ -71,7 +71,7 @@ class Queue {
 				if (!this.actions.stopping && !this.actions.shouldntCallFinish) parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: Constants.STRINGS.EVENT, type: Constants.STRINGS.TRACK_END_EVENT, guildId: this.guildID, reason: Constants.STRINGS.FINISHED }, clientID: this.clientID });
 				this.actions.stopping = false;
 				this.actions.shouldntCallFinish = false;
-			} else if (newState.status === Discord.AudioPlayerStatus.Playing && oldState.status !== Discord.AudioPlayerStatus.Paused) {
+			} else if (newState.status === Discord.AudioPlayerStatus.Playing && oldState.status !== Discord.AudioPlayerStatus.Paused && oldState.status !== Discord.AudioPlayerStatus.AutoPaused) {
 				if (this.actions.trackPausing) this.pause();
 				this.actions.trackPausing = false;
 				if ((!this.actions.shouldntCallFinish || this.actions.initial) && this.track) parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: Constants.STRINGS.EVENT, type: Constants.STRINGS.TRACK_START_EVENT, guildId: this.guildID, track: this.track.track }, clientID: this.clientID });

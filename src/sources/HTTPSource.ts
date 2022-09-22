@@ -1,4 +1,5 @@
 import { IAudioMetadata, parseStream } from "music-metadata";
+import { StreamType } from "@discordjs/voice";
 import m3u8 from "m3u8stream";
 
 import Constants from "../Constants.js";
@@ -9,6 +10,7 @@ const mimeRegex = /^(audio|video|application)\/(.+)$/;
 const httpRegex = /^https?:\/\//;
 const supportedApplicationTypes = [Constants.STRINGS.OGG, Constants.STRINGS.X_MPEG_URL];
 const redirectStatusCodes = [301, 302, 303, 307, 308];
+const pcmTypes = ["pcm", "wav"];
 
 class HTTPSource implements Plugin {
 	public source = Constants.STRINGS.HTTP;
@@ -40,6 +42,7 @@ class HTTPSource implements Plugin {
 
 		const mimeMatch = data.headers[Constants.STRINGS.CONTENT_TYPE]?.match(mimeRegex);
 		if (mimeMatch && mimeMatch[1] === Constants.STRINGS.APPLICATION && !supportedApplicationTypes.includes(mimeMatch[2])) {
+			data.end();
 			data.destroy();
 			throw new Error(Constants.STRINGS.UNSUPPORTED_FILE_TYPE);
 		}
@@ -54,6 +57,7 @@ class HTTPSource implements Plugin {
 		// Is stream chunked? (SKIPS A LOT OF CHECKS AND JUST RUNS WITH IT)
 		// Will be more than just ice-cast in the future
 		if (isCast) {
+			data.end();
 			data.destroy();
 			parsed = { common: {}, format: {} } as IAudioMetadata;
 
@@ -63,6 +67,7 @@ class HTTPSource implements Plugin {
 				if (data.headers[Constants.STRINGS.ICY_NAME]) parsed!.common.title = data.headers[Constants.STRINGS.ICY_NAME] as string;
 			}
 		} else if (data.headers[Constants.STRINGS.CONTENT_TYPE] === Constants.STRINGS.APPLICATION_X_MPEG_URL) {
+			data.end();
 			data.destroy();
 			parsed = { common: {}, format: {} } as IAudioMetadata;
 		} else {
@@ -76,8 +81,14 @@ class HTTPSource implements Plugin {
 				includeChapters: false,
 				duration: true
 			});
-			parsed = await Util.createTimeoutForPromise(promise, 10000);
-			if (parsed.format.container) probe = parsed.format.container;
+			try {
+				parsed = await Util.createTimeoutForPromise(promise, 5000);
+				if (parsed.format.container) probe = parsed.format.container;
+			} catch {
+				parsed = { common: {}, format: {} } as IAudioMetadata;
+			}
+			data.end();
+			data.destroy();
 		}
 
 		return {
@@ -88,23 +99,27 @@ class HTTPSource implements Plugin {
 					identifier: resource,
 					uri: resource,
 					length: Math.round((parsed.format.duration || 0) * 1000),
-					isStream: chunked
+					isStream: chunked,
+					probeInfo: {
+						raw: probe,
+						name: probe,
+						parameters: null
+					}
 				}
-			],
-			probeInfo: {
-				raw: probe,
-				name: probe,
-				parameters: null
-			}
+			]
 		};
 	}
 
 	public async streamHandler(info: import("@lavalink/encoding").TrackInfo) {
-		if (info.probeInfo!.raw === Constants.STRINGS.X_MPEG_URL || info.uri!.endsWith(Constants.STRINGS.DOT_M3U8)) return { stream: m3u8(info.uri!) };
+		if (info.probeInfo!.raw === Constants.STRINGS.X_MPEG_URL || info.uri!.endsWith(Constants.STRINGS.DOT_M3U8)) return { stream: m3u8(info.uri!), type: StreamType.Arbitrary };
 		else {
 			const response = await Util.connect(info.uri!, { headers: Constants.baseHTTPRequestHeaders });
 			const passed = await Util.socketToRequest(response);
-			return { stream: passed };
+			let type: StreamType | undefined = undefined;
+			if (info.probeInfo!.raw === Constants.STRINGS.OGG) type = StreamType.OggOpus;
+			else if (info.probeInfo!.raw === "opus") type = StreamType.Opus;
+			else if (pcmTypes.includes(info.probeInfo!.raw)) type = StreamType.Raw;
+			return { stream: passed, type };
 		}
 	}
 }

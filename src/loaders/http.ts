@@ -29,7 +29,7 @@ const paths: {
 			const id = url.searchParams.get(Constants.STRINGS.IDENTIFIER);
 			const payload = {
 				playlistInfo: {},
-				tracks: [] as Array<any>
+				tracks: [] as Array<{ track: string; info: import("@lavalink/encoding").TrackInfo }>
 			};
 
 			if (!id || typeof id !== Constants.STRINGS.STRING) return Util.standardErrorHandler(Constants.STRINGS.INVALID_IDENTIFIER, res, payload, lavalinkLog);
@@ -45,31 +45,35 @@ const paths: {
 			const resource = match[2];
 
 			if (!resource) return Util.standardErrorHandler(Constants.STRINGS.INVALID_IDENTIFIER, res, payload, lavalinkLog);
-
-			const searchablePlugin = lavalinkPlugins.find(p => p.searchShort && isSearch && match[1] === p.searchShort);
-			if (searchablePlugin && searchablePlugin.canBeUsed?.(resource, true)) {
-				if (searchablePlugin.source && lavalinkConfig.lavalink.server.sources[searchablePlugin.source] !== undefined && !lavalinkConfig.lavalink.server.sources[searchablePlugin.source]) return Util.standardErrorHandler(`${searchablePlugin.source} is not enabled`, res, payload, lavalinkLog, Constants.STRINGS.LOAD_FAILED);
-				if ((searchablePlugin.source === Constants.STRINGS.YOUTUBE || searchablePlugin.source === Constants.STRINGS.SOUNDCLOUD) && !lavalinkConfig.lavalink.server[`${searchablePlugin.source}SearchEnabled`]) return Util.standardErrorHandler(`${searchablePlugin.source} searching is not enabled`, res, payload, lavalinkLog, Constants.STRINGS.LOAD_FAILED);
-				const result = await searchablePlugin.infoHandler?.(resource, true);
-				if (result && searchablePlugin.source) assignResults(result, searchablePlugin.source, payload);
-			} else {
-				const found = lavalinkPlugins.find(p => p.canBeUsed?.(resource, false));
-				if (found) {
-					if (found.source && lavalinkConfig.lavalink.server.sources[found.source] !== undefined && !lavalinkConfig.lavalink.server.sources[found.source]) return Util.standardErrorHandler(`${found.source} is not enabled`, res, payload, lavalinkLog, Constants.STRINGS.LOAD_FAILED);
-					const result = await found.infoHandler?.(resource, false);
-					if (result && found.source) assignResults(result, found.source, payload);
+			try {
+				const searchablePlugin = lavalinkPlugins.find(p => p.searchShort && isSearch && match[1] === p.searchShort);
+				if (searchablePlugin && searchablePlugin.canBeUsed?.(resource, true)) {
+					if (searchablePlugin.source && lavalinkConfig.lavalink.server.sources[searchablePlugin.source] !== undefined && !lavalinkConfig.lavalink.server.sources[searchablePlugin.source]) return Util.standardErrorHandler(`${searchablePlugin.source} is not enabled`, res, payload, lavalinkLog, Constants.STRINGS.LOAD_FAILED);
+					if ((searchablePlugin.source === Constants.STRINGS.YOUTUBE || searchablePlugin.source === Constants.STRINGS.SOUNDCLOUD) && !lavalinkConfig.lavalink.server[`${searchablePlugin.source}SearchEnabled`]) return Util.standardErrorHandler(`${searchablePlugin.source} searching is not enabled`, res, payload, lavalinkLog, Constants.STRINGS.LOAD_FAILED);
+					const result = await searchablePlugin.infoHandler?.(resource, true);
+					if (result && searchablePlugin.source) assignResults(result, searchablePlugin.source, payload);
 				} else {
-					const yt = lavalinkPlugins.find(p => p.source === Constants.STRINGS.YOUTUBE)!;
-					const result = await yt.infoHandler?.(resource, true);
-					if (result) assignResults(result, yt.source!, payload);
+					const found = lavalinkPlugins.find(p => p.canBeUsed?.(resource, false));
+					if (found) {
+						if (found.source && lavalinkConfig.lavalink.server.sources[found.source] !== undefined && !lavalinkConfig.lavalink.server.sources[found.source]) return Util.standardErrorHandler(`${found.source} is not enabled`, res, payload, lavalinkLog, Constants.STRINGS.LOAD_FAILED);
+						const result = await found.infoHandler?.(resource, false);
+						if (result && found.source) assignResults(result, found.source, payload);
+					} else {
+						const yt = lavalinkPlugins.find(p => p.source === Constants.STRINGS.YOUTUBE)!;
+						const result = await yt.infoHandler?.(resource, true);
+						if (result) assignResults(result, yt.source!, payload);
+					}
 				}
-			}
 
-			if (payload.tracks.length === 0) return Util.standardErrorHandler(Constants.STRINGS.NO_MATCHES_LOWER, res, payload, lavalinkLog, Constants.STRINGS.NO_MATCHES);
-			return res.writeHead(200, Constants.STRINGS.OK, Constants.baseHTTPResponseHeaders)
-				.end(JSON.stringify(Object.assign({
-					loadType: payload.tracks.length > 1 && isSearch ? Constants.STRINGS.SEARCH_RESULT : payload.playlistInfo[Constants.STRINGS.NAME] ? Constants.STRINGS.PLAYLIST_LOADED : Constants.STRINGS.TRACK_LOADED
-				}, payload)));
+				if (payload.tracks.length === 0) return Util.standardErrorHandler(Constants.STRINGS.NO_MATCHES_LOWER, res, payload, lavalinkLog, Constants.STRINGS.NO_MATCHES);
+				else if (payload.tracks.length === 1) lavalinkLog(`Loaded track ${payload.tracks[0].info.title}`);
+				return res.writeHead(200, Constants.STRINGS.OK, Constants.baseHTTPResponseHeaders)
+					.end(JSON.stringify(Object.assign({
+						loadType: payload.tracks.length > 1 && isSearch ? Constants.STRINGS.SEARCH_RESULT : payload.playlistInfo[Constants.STRINGS.NAME] ? Constants.STRINGS.PLAYLIST_LOADED : Constants.STRINGS.TRACK_LOADED
+					}, payload)));
+			} catch (e) {
+				return Util.standardErrorHandler(e, res, payload, lavalinkLog, "LOAD_FAILED", "COMMON");
+			}
 		}
 	},
 
