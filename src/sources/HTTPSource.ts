@@ -114,12 +114,11 @@ class HTTPSource implements Plugin {
 		if (info.probeInfo!.raw === Constants.STRINGS.X_MPEG_URL || info.uri!.endsWith(Constants.STRINGS.DOT_M3U8)) return { stream: m3u8(info.uri!), type: StreamType.Arbitrary };
 		else {
 			const response = await Util.connect(info.uri!, { headers: Constants.baseHTTPRequestHeaders });
-			const passed = await Util.socketToRequest(response);
 			let type: StreamType | undefined = undefined;
 			if (info.probeInfo!.raw === Constants.STRINGS.OGG) type = StreamType.OggOpus;
 			else if (info.probeInfo!.raw === "opus") type = StreamType.Opus;
 			else if (pcmTypes.includes(info.probeInfo!.raw)) type = StreamType.Raw;
-			return { stream: passed, type };
+			return { stream: response, type };
 		}
 	}
 }
