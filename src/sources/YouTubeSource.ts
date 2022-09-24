@@ -7,7 +7,7 @@ import Util from "../util/Util.js";
 import Constants from "../Constants.js";
 import type { Plugin } from "../types.js";
 
-const usableRegex = /^https?:\/\/[^.]+?.?youtu\.?be/;
+const usableRegex = /^https?:\/\/(?:\w+)?\.?youtu\.?be(?:.com)?\/(?:watch\?v=)?\w+/;
 
 class YouTubeSource implements Plugin {
 	public source = Constants.STRINGS.YOUTUBE;
