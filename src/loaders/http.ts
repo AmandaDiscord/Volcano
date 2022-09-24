@@ -112,7 +112,10 @@ const paths: {
 function assignResults(result: Awaited<ReturnType<NonNullable<import("../types.js").Plugin["infoHandler"]>>>, source: string, payload) {
 	payload.tracks = result.entries.map(t => ({
 		track: encoding.encode(Object.assign({ flags: 1, version: 2, source: source, position: BigInt(0), probeInfo: t[Constants.STRINGS.PROBE_INFO] }, t, { length: BigInt(t.length) })),
-		info: Object.assign({ position: 0 }, t)
+		info: Object.assign({ position: 0 }, (() => {
+			delete t[Constants.STRINGS.PROBE_INFO];
+			return t;
+		})())
 	}));
 	if (result.plData) payload.playlistInfo = result.plData;
 }
