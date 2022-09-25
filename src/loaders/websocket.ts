@@ -176,20 +176,6 @@ async function onClientMessage(socket: import("ws").WebSocket, data: import("ws"
 		void lavalinkThreadPool.broadcast(pl);
 		break;
 	}
-	case Constants.OPCodes.DUMP: {
-		lavalinkThreadPool.dump();
-		break;
-	}
-	case Constants.OPCodes.PING: {
-		const payload = { op: Constants.STRINGS.PONG } as { op: "pong"; ping?: number };
-		if (msg.guildId) {
-			const threadStats: Array<{ pings: { [guildId: string]: number }; }> = await lavalinkThreadPool.broadcast({ op: Constants.workerOPCodes.STATS });
-			for (const worker of threadStats)
-				if (worker.pings[msg.guildId] !== undefined) payload.ping = worker.pings[msg.guildId];
-		}
-		socket.send(JSON.stringify(payload));
-		break;
-	}
 	default:
 		lavalinkPlugins.forEach(p => p.onWSMessage?.(msg, socket));
 		break;
