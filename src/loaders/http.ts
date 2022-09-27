@@ -81,7 +81,7 @@ const paths: {
 		methods: [Constants.STRINGS.GET, Constants.STRINGS.POST],
 		async handle(req, res, url) {
 			if (req.method === Constants.STRINGS.GET) {
-				let track = url.searchParams.get(Constants.STRINGS.TRACK) as string;
+				let track = url.searchParams.get(Constants.STRINGS.TRACK);
 				lavalinkLog(`Got request to decode for track "${track}"`);
 				if (track) track = entities.decode(track);
 				if (!track || typeof track !== Constants.STRINGS.STRING) return res.writeHead(400, "Bad request", Constants.baseHTTPResponseHeaders).end(JSON.stringify({ message: "invalid track" }));

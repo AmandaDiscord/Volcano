@@ -199,7 +199,7 @@ async function onClientClose(socket: import("ws").WebSocket, userID: string, clo
 
 				if (index !== -1) entry!.splice(index, 1);
 
-				socketDeleteTimeouts.delete(found.resumeKey as string);
+				socketDeleteTimeouts.delete(found.resumeKey!);
 
 				if (entry!.length === 0) connections.delete(userID);
 

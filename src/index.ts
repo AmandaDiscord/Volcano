@@ -83,8 +83,10 @@ async function serverHandler(req: import("http").IncomingMessage, res: import("h
 	try {
 		const url = new URL(req.url || Constants.STRINGS.SLASH, `http://${req.headers.host || "localhost"}`);
 
+		const isInvalidPassword = !!lavalinkConfig.lavalink.server.password.length && (!req.headers.authorization || req.headers.authorization !== String(lavalinkConfig.lavalink.server.password));
+
 		// This is just for rest. Upgrade requests for the websocket are handled in the http upgrade event.
-		if (url.pathname !== Constants.STRINGS.SLASH && lavalinkConfig.lavalink.server.password && (!req.headers.authorization || req.headers.authorization !== String(lavalinkConfig.lavalink.server.password))) {
+		if (url.pathname !== Constants.STRINGS.SLASH && isInvalidPassword) {
 			logger.warn(`Authorization missing for ${req.socket.remoteAddress} on ${req.method!.toUpperCase()} ${url.pathname}`);
 			return res.writeHead(401, Constants.STRINGS.UNAUTHORIZED, Object.assign({}, Constants.baseHTTPResponseHeaders, { [Constants.STRINGS.CONTENT_TYPE_CAPPED]: Constants.STRINGS.TEXT_PLAIN })).end(Constants.STRINGS.UNAUTHORIZED);
 		}
@@ -110,7 +112,7 @@ async function serverHandler(req: import("http").IncomingMessage, res: import("h
 	}
 }
 
-http.listen(lavalinkConfig.server.port as number, lavalinkConfig.server.address, () => lavalinkRootLog("Volcano is ready to accept connections."));
+http.listen(lavalinkConfig.server.port, lavalinkConfig.server.address, () => lavalinkRootLog("Volcano is ready to accept connections."));
 lavalinkRootLog(`Server started on port(s) ${lavalinkConfig.server.port} (http)`);
 lavalinkRootLog(`Started Launcher in ${(Date.now() - startTime) / 1000} seconds (Node running for ${process.uptime()})`);
 

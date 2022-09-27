@@ -73,7 +73,7 @@ class YouTubeSource implements Plugin {
 			return {
 				entries: entries.map(YouTubeSource.songResultToTrack),
 				plData: {
-					name: pl.title as string,
+					name: pl.title!,
 					selectedTrack: url?.searchParams.get(Constants.STRINGS.INDEX) ? Number(url.searchParams.get(Constants.STRINGS.INDEX)) : 0
 				}
 			};

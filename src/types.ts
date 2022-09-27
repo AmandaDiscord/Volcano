@@ -2,6 +2,8 @@ type OPCodes = typeof import("./Constants.js")["OPCodes"];
 
 type AnyObject = { [k: string | number | symbol]: any };
 
+export type UnpackRecord<T> = T extends Record<any, infer R> ? R : never;
+
 export type Mixin<T extends AnyObject, SR extends Array<AnyObject>> = SR extends Array<infer O> ? T & O : never;
 
 export type LavaLinkConfig = {

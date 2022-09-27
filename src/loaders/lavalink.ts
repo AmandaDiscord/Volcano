@@ -26,11 +26,10 @@ global.lavalinkThreadPool = new ThreadPool({ size: os.cpus().length, dir: path.j
 // for each Worker that is created so it ends up spamming stderr.
 // Since that doesn't provide any value we suppress the warning.
 const originalEmit = process.emit;
-// @ts-expect-error - TS complains about the return type of originalEmit.apply
-process.emit = function (name: string, data: any) {
+process.emit = function(name: any, ...args: Array<any>): any {
+	const data = args[0];
 	if (name === Constants.STRINGS.WARNING && typeof data === Constants.STRINGS.OBJECT && data.name === Constants.STRINGS.EXPERIMENTAL_WARNING) return false;
-	// eslint-disable-next-line prefer-rest-params
-	return originalEmit.apply(process, arguments as unknown as Parameters<typeof process.emit>);
+	return originalEmit.apply(process, [name, ...args] as [any, any]);
 };
 
 let pushToEnd: import("../types.js").Plugin | undefined = undefined;
@@ -67,7 +66,7 @@ setTimeout(async () => {
 				const module = await import(`file://${path.join(pluginsDir, file)}`);
 				constructed = new module.default();
 				constructed.setVariables?.(logger, Util as typeof import("../util/Util.js"));
-				await constructed.initialize?.() as Promise<any>;
+				await constructed.initialize?.();
 			} catch (e) {
 				if (isMainThread) {
 					logger.warn(`Plugin from ${file} had errors when initializing and has been ignored from the plugin list`);

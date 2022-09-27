@@ -96,8 +96,8 @@ class ThreadPool extends ThreadBasedReplier {
 
 	private async getOrCreate(): Promise<[string, Worker]> {
 		if (this.children.size < this.count) return this.spawn();
-		const leastBusy = [...this.taskSizeMap.keys()].reduce((pre, cur) => Math.min(this.taskSizeMap.get(pre) || Infinity, this.taskSizeMap.get(cur) as number) === this.taskSizeMap.get(pre) ? pre : cur);
-		return [leastBusy, this.children.get(leastBusy) as Worker];
+		const leastBusy = [...this.taskSizeMap.keys()].reduce((pre, cur) => Math.min(this.taskSizeMap.get(pre) || Infinity, this.taskSizeMap.get(cur)!) === this.taskSizeMap.get(pre) ? pre : cur);
+		return [leastBusy, this.children.get(leastBusy)!];
 	}
 
 	private spawn(): Promise<[string, Worker]> {

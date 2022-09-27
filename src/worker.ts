@@ -360,8 +360,8 @@ parentPort.on(Constants.STRINGS.MESSAGE, async (packet: { data?: import("./types
 		}
 		}
 	} else if (packet.op === Constants.workerOPCodes.VOICE_SERVER) {
-		methodMap.get(`${packet.data!.clientID}.${packet.data!.guildId}`)?.onVoiceStateUpdate({ channel_id: Constants.STRINGS.EMPTY_STRING as any, guild_id: packet.data!.guildId as any, user_id: packet.data!.clientID as any, session_id: packet.data!.sessionId!, deaf: false, self_deaf: false, mute: false, self_mute: false, self_video: false, suppress: false, request_to_speak_timestamp: null });
-		methodMap.get(`${packet.data!.clientID}.${packet.data!.guildId}`)?.onVoiceServerUpdate({ guild_id: packet.data!.guildId as any, token: packet.data!.event!.token, endpoint: packet.data!.event!.endpoint });
+		methodMap.get(`${packet.data!.clientID}.${packet.data!.guildId}`)?.onVoiceStateUpdate({ channel_id: Constants.STRINGS.EMPTY_STRING, guild_id: packet.data!.guildId, user_id: packet.data!.clientID!, session_id: packet.data!.sessionId!, deaf: false, self_deaf: false, mute: false, self_mute: false, self_video: false, suppress: false, request_to_speak_timestamp: null });
+		methodMap.get(`${packet.data!.clientID}.${packet.data!.guildId}`)?.onVoiceServerUpdate({ guild_id: packet.data!.guildId, token: packet.data!.event!.token, endpoint: packet.data!.event!.endpoint });
 	} else if (packet.op === Constants.workerOPCodes.DELETE_ALL) {
 		const forUser = [...queues.values()].filter(q => q.clientID === packet.data!.clientID);
 		parentPort.postMessage({ op: Constants.workerOPCodes.REPLY, data: forUser.length, threadID: packet.threadID });
