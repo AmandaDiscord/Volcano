@@ -50,7 +50,7 @@ export const defaultOptions = {
 } as RequiredObjectDeep<import("./types.js").LavaLinkConfig>;
 
 export const baseHTTPResponseHeaders = {
-	"Lavalink-Api-Version": lavalinkMajor,
+	"Lavalink-Api-Version": "3",
 	"Content-Type": "application/json"
 };
 
