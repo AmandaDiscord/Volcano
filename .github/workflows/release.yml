@@ -1,0 +1,23 @@
+name: Build
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup Node
+        uses: actions/setup-node@v1
+        with:
+          node-version: '18.x'
+
+      - name: Install, Compile, and create build info
+        run: |
+          npm install
+          npm run compile
+          npm run create-release
+
+      - name: Delete Source files
+        run: rmdir -r /src

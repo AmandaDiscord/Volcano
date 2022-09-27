@@ -15,8 +15,8 @@ export type Path = {
 const paths: {
 	[path: string]: Path;
 } = {
-	"/": {
-		methods: ["GET"],
+	[Constants.STRINGS.SLASH]: {
+		methods: [Constants.STRINGS.GET],
 		handle(req, res) {
 			return res.writeHead(200, Constants.STRINGS.OK, Object.assign({}, Constants.baseHTTPResponseHeaders, { [Constants.STRINGS.CONTENT_TYPE_CAPPED]: Constants.STRINGS.TEXT_PLAIN }))
 				.end(Constants.STRINGS.OK_BOOMER);
@@ -24,7 +24,7 @@ const paths: {
 	},
 
 	[Constants.STRINGS.LOADTRACKS]: {
-		methods: ["GET"],
+		methods: [Constants.STRINGS.GET],
 		async handle(req, res, url) {
 			const id = url.searchParams.get(Constants.STRINGS.IDENTIFIER);
 			const payload = {
@@ -72,39 +72,46 @@ const paths: {
 						loadType: payload.tracks.length > 1 && isSearch ? Constants.STRINGS.SEARCH_RESULT : payload.playlistInfo[Constants.STRINGS.NAME] ? Constants.STRINGS.PLAYLIST_LOADED : Constants.STRINGS.TRACK_LOADED
 					}, payload)));
 			} catch (e) {
-				return Util.standardErrorHandler(e, res, payload, lavalinkLog, "LOAD_FAILED", "COMMON");
+				return Util.standardErrorHandler(e, res, payload, lavalinkLog, Constants.STRINGS.LOAD_FAILED, Constants.STRINGS.COMMON);
 			}
 		}
 	},
 
 	[Constants.STRINGS.DECODETRACKS]: {
-		methods: ["GET", "POST"],
+		methods: [Constants.STRINGS.GET, Constants.STRINGS.POST],
 		async handle(req, res, url) {
-			if (req.method === "GET") {
+			if (req.method === Constants.STRINGS.GET) {
 				let track = url.searchParams.get(Constants.STRINGS.TRACK) as string;
 				lavalinkLog(`Got request to decode for track "${track}"`);
 				if (track) track = entities.decode(track);
-				if (!track || typeof track !== Constants.STRINGS.STRING) return res.writeHead(400).end(JSON.stringify({ message: "invalid track" }));
+				if (!track || typeof track !== Constants.STRINGS.STRING) return res.writeHead(400, "Bad request", Constants.baseHTTPResponseHeaders).end(JSON.stringify({ message: "invalid track" }));
 				const data = convertDecodedTrackToResponse(encoding.decode(track));
 				return res.writeHead(200, Constants.STRINGS.OK, Constants.baseHTTPResponseHeaders).end(JSON.stringify(data));
 			} else {
 				const body = await Util.requestBody(req, 10000);
 				const array = JSON.parse(body.toString()) as Array<string>;
-				return res.writeHead(200, Constants.STRINGS.OK).end(JSON.stringify(array.map(t => convertDecodedTrackToResponse(encoding.decode(t)))));
+				return res.writeHead(200, Constants.STRINGS.OK, Constants.baseHTTPResponseHeaders).end(JSON.stringify(array.map(t => convertDecodedTrackToResponse(encoding.decode(t)))));
 			}
 		}
 	},
 
 	[Constants.STRINGS.PLUGINS]: {
-		methods: ["GET"],
+		methods: [Constants.STRINGS.GET],
 		handle(req, res) {
-			return res.writeHead(200)
+			return res.writeHead(200, Constants.STRINGS.OK, Constants.baseHTTPResponseHeaders)
 				.end(JSON.stringify(lavalinkPlugins.filter(p => !lavalinkSources.has(p))
 					.map(p => ({
-						name: p.constructor?.name || "unknown",
+						name: p.constructor?.name || Constants.STRINGS.UNKNOWN,
 						version: p.version ?? "0.0.0"
 					}))
 				));
+		},
+	},
+
+	"/version": {
+		methods: [Constants.STRINGS.GET],
+		handle(req, res) {
+			return res.writeHead(200, Constants.STRINGS.OK, Object.assign({}, Constants.baseHTTPResponseHeaders, { [Constants.STRINGS.CONTENT_TYPE_CAPPED]: Constants.STRINGS.TEXT_PLAIN })).end(`${lavalinkVersion}_null`);
 		},
 	}
 };

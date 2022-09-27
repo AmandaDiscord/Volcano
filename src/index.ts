@@ -22,8 +22,13 @@ try {
 	username = "unknown user";
 }
 
-const pkgFile = await fs.promises.readFile(path.join(lavalinkDirname, "../package.json"), Constants.STRINGS.UTF8);
-const pkg = JSON.parse(pkgFile);
+const pkg = await fs.promises.readFile(path.join(lavalinkDirname, "../package.json"), Constants.STRINGS.UTF8).then(JSON.parse);
+
+const buildInfo = await fs.promises.readFile(path.join(lavalinkDirname, "buildinfo.json"), Constants.STRINGS.UTF8).then(JSON.parse).catch(() => ({
+	build_time: null as number | null,
+	branch: Constants.STRINGS.UNKNOWN,
+	commit: Constants.STRINGS.UNKNOWN
+}));
 
 if (lavalinkConfig.spring.main["banner-mode"] === "log")
 	lavalinkRootLog("\n\n" +
@@ -38,6 +43,9 @@ if (lavalinkConfig.spring.main["banner-mode"] === "log")
 const properties = {
 	Version: pkg.version,
 	"Lavalink version": lavalinkVersion,
+	"Build time": buildInfo.build_time ? new Date(buildInfo.build_time).toUTCString() : Constants.STRINGS.UNKNOWN,
+	Branch: buildInfo.branch,
+	Commit: buildInfo.commit !== Constants.STRINGS.UNKNOWN ? buildInfo.commit.slice(0, 6) : buildInfo.commit,
 	Node: process.version.replace("v", Constants.STRINGS.EMPTY_STRING),
 	Downloader: pkg.dependencies["play-dl"].replace("^", Constants.STRINGS.EMPTY_STRING)
 };
@@ -97,7 +105,7 @@ async function serverHandler(req: import("http").IncomingMessage, res: import("h
 
 		if (!res.headersSent && res.writable) return res.writeHead(404, Constants.STRINGS.NOT_FOUND, Constants.baseHTTPResponseHeaders).end(Constants.STRINGS.NOT_FOUND);
 	} catch (e) {
-		if (!res.headersSent) res.writeHead(500);
+		if (!res.headersSent) res.writeHead(500, "Internal server error", Object.assign({}, Constants.baseHTTPResponseHeaders, { [Constants.STRINGS.CONTENT_TYPE_CAPPED]: Constants.STRINGS.TEXT_PLAIN }));
 		if (res.writable) res.end(util.inspect(e, false, Infinity, false));
 	}
 }

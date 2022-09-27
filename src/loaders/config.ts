@@ -11,7 +11,7 @@ const configDir: string = path.join(process.cwd(), "./application.yml");
 let cfgparsed: LavaLinkConfig;
 
 if (fs.existsSync(configDir)) {
-	const cfgyml: string = await fs.promises.readFile(configDir, { encoding: "utf-8" });
+	const cfgyml: string = await fs.promises.readFile(configDir, { encoding: Constants.STRINGS.UTF8 });
 	cfgparsed = yaml.parse(cfgyml);
 } else cfgparsed = {};
 

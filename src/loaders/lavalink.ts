@@ -17,7 +17,7 @@ global.lavalinkRootLog = logger[config.lavalinkConfig.logging.level.root?.toLowe
 global.lavalinkLog = logger[config.lavalinkConfig.logging.level.lavalink?.toLowerCase?.()] ?? logger.info;
 global.lavalinkPlugins = [];
 global.lavalinkSources = new Set();
-global.lavalinkVersion = "3.5";
+global.lavalinkVersion = "3.5.1";
 global.lavalinkMajor = lavalinkVersion.split(".")[0];
 global.lavalinkThreadPool = new ThreadPool({ size: os.cpus().length, dir: path.join(lavalinkDirname, "./worker.js") });
 

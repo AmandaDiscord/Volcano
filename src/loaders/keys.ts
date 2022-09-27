@@ -1,6 +1,5 @@
 import path from "path";
 import fs from "fs";
-import { fileURLToPath } from "url";
 
 import * as dl from "play-dl";
 
@@ -9,7 +8,6 @@ import Constants from "../Constants.js";
 import lavalink from "./lavalink.js";
 
 const keyDir = path.join(lavalink.lavalinkDirname, "../soundcloud.txt");
-global.dirname = fileURLToPath(path.dirname(import.meta.url));
 
 async function keygen() {
 	const clientID = await dl.getFreeClientID();
