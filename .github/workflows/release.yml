@@ -20,4 +20,4 @@ jobs:
           npm run create-release
 
       - name: Delete Source files
-        run: rmdir -r /src
+        run: rmdir -rf /src
