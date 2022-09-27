@@ -19,5 +19,15 @@ jobs:
           npm run compile
           npm run create-release
 
-      - name: Delete Source files
-        run: rm -rf /src
+      - uses: actions/upload-artifact@v3
+        with:
+          name: build-artifact
+          path: |
+            dist/
+            scripts/
+            LICENSE
+            package.json
+            PLUGINS.md
+            Procfile
+            PUBLIC_SERVERS.md
+            README.md
