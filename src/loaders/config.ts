@@ -5,7 +5,7 @@ import yaml from "yaml";
 
 import Constants from "../Constants.js";
 import Util from "../util/Util.js";
-import type { LavaLinkConfig } from "../types.js";
+import type { LavaLinkConfig } from "volcano-sdk/types.js";
 
 const configDir: string = path.join(process.cwd(), "./application.yml");
 let cfgparsed: LavaLinkConfig;

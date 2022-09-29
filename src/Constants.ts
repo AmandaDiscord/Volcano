@@ -47,7 +47,7 @@ export const defaultOptions = {
 			lavalink: "INFO"
 		}
 	}
-} as RequiredObjectDeep<import("./types.js").LavaLinkConfig>;
+} as RequiredObjectDeep<import("volcano-sdk/types.js").LavaLinkConfig>;
 
 export const baseHTTPResponseHeaders = {
 	"Lavalink-Api-Version": "3",

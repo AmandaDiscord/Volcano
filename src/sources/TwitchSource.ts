@@ -1,14 +1,15 @@
 import twitch from "twitch-m3u8";
 import m3u8 from "m3u8stream";
 
+import { Plugin } from "volcano-sdk";
+
 import Constants from "../Constants.js";
-import type { Plugin } from "../types.js";
 
 const usableRegex = /^https:\/\/www\.twitch.\tv/;
 const vodRegex = /\/videos\/(\d+)$/;
 const channelRegex = /twitch\.tv\/([^/]+)/;
 
-class TwitchSource implements Plugin {
+class TwitchSource extends Plugin {
 	public source = Constants.STRINGS.TWITCH;
 
 	public canBeUsed(resource: string) {

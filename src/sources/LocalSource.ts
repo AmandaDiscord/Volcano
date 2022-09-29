@@ -2,11 +2,11 @@ import fs from "fs";
 import path from "path";
 
 import { parseStream } from "music-metadata";
+import { Plugin } from "volcano-sdk";
 
 import Constants from "../Constants.js";
-import type { Plugin } from "../types.js";
 
-class LocalSource implements Plugin {
+class LocalSource extends Plugin {
 	public source = Constants.STRINGS.LOCAL;
 
 	public canBeUsed(resource: string) {

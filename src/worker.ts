@@ -109,18 +109,30 @@ class Queue {
 		let output: import("stream").Readable | null = null;
 		let streamType: import("@discordjs/voice").StreamType | undefined = undefined;
 
-		const useFFMPEG = !!this._filters.length || !!meta.start;
+		let useFFMPEG = !!this._filters.length || !!meta.start;
 
 		const found = lavalinkPlugins.find(p => p.source === decoded.source);
 		if (found) {
 			const result = await found.streamHandler?.(decoded, useFFMPEG);
 			if (result) {
 				output = result.stream;
-				streamType = result.type;
+				streamType = result.type as Discord.StreamType;
 			}
 		} else throw new Error(`${decoded.source.toUpperCase()}_NOT_IMPLEMENTED`);
 
-		if (!output) throw new Error(`NO_OUTPUT_TYPE_${decoded.source.toUpperCase()}_FILTERS_${String(!!this._filters.length).toUpperCase()}_PREVIOUS_${String(!this.actions.initial).toUpperCase()}`);
+		if (!output) throw new Error(`NO_OUTPUT_TYPE_${decoded.source.toUpperCase()}_FILTERS_${String(useFFMPEG).toUpperCase()}_PREVIOUS_${String(!this.actions.initial).toUpperCase()}`);
+
+		for (const plugin of lavalinkPlugins) {
+			if (plugin.streamPipeline) {
+				const data = await plugin.streamPipeline(output!, this._filters);
+				output = data.stream;
+				if (data.type) streamType = data.type as Discord.StreamType;
+			}
+		}
+
+		// The code is duped because filters can be mutated
+		if (!output) throw new Error(`NO_OUTPUT_TYPE_${decoded.source.toUpperCase()}_FILTERS_${String(useFFMPEG).toUpperCase()}_PREVIOUS_${String(!this.actions.initial).toUpperCase()}`);
+		useFFMPEG = !!this._filters.length || !!meta.start;
 
 		if (useFFMPEG) {
 			this.actions.shouldntCallFinish = true;
@@ -282,9 +294,6 @@ class Queue {
 		if (filters.lowPass) toApply.push(`lowpass=f=${500 / filters.lowPass.smoothing}`);
 
 		this._filters.push(...toApply);
-		for (const plugin of lavalinkPlugins) {
-			await plugin.mutateFilters?.(this._filters, filters);
-		}
 		const previouslyApplying = this.actions.applyingFilters;
 		this.actions.applyingFilters = true;
 		if (!previouslyApplying) this.play().catch(e => logger.error(util.inspect(e, false, Infinity, true), `worker ${threadId}`));

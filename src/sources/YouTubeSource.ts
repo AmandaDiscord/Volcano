@@ -1,25 +1,32 @@
 import util from "util";
+import { isMainThread } from "worker_threads";
 
 import * as dl from "play-dl";
+import ytmapi from "ytmusic-api";
+import { Plugin } from "volcano-sdk";
 
 import logger from "../util/Logger.js";
 import Util from "../util/Util.js";
 import Constants from "../Constants.js";
-import type { Plugin } from "../types.js";
 
+const ytm = new ytmapi.default();
 const usableRegex = /^https?:\/\/(?:\w+)?\.?youtu\.?be(?:.com)?\/(?:watch\?v=)?\w+/;
 
-class YouTubeSource implements Plugin {
+class YouTubeSource extends Plugin {
 	public source = Constants.STRINGS.YOUTUBE;
-	public searchShort = Constants.STRINGS.YT;
+	public searchShorts = [Constants.STRINGS.YT, "ytm"];
 
-	public canBeUsed(resource: string, isSourceSearch: boolean) {
-		if (isSourceSearch) return true;
+	public async initialize() {
+		if (isMainThread) await ytm.initialize();
+	}
+
+	public canBeUsed(resource: string, searchShort?: string) {
+		if (searchShort && this.searchShorts.includes(searchShort)) return true;
 		else return !!resource.match(usableRegex);
 	}
 
-	public async infoHandler(resource: string, isSourceSearch: boolean) {
-		if (isSourceSearch) {
+	public async infoHandler(resource: string, searchShort?: string) {
+		if (searchShort === Constants.STRINGS.YT) {
 			const validated = dl.yt_validate(resource);
 			if (validated) {
 				try {
@@ -55,6 +62,18 @@ class YouTubeSource implements Plugin {
 				if (found) return { entries: [YouTubeSource.songResultToTrack(found)] };
 				return { entries: searchResults.map(YouTubeSource.songResultToTrack) };
 			}
+		} else if (searchShort === "ytm") {
+			const tracks = await ytm.searchSongs(resource);
+			return {
+				entries: tracks.map(t => ({
+					title: t.name,
+					author: t.artists[0]?.name || Constants.STRINGS.UNKNOWN_AUTHOR,
+					identifier: t.videoId,
+					uri: `https://youtube.com/watch?v=${t.videoId}`,
+					length: Math.round(t.duration * 1000),
+					isStream: t.duration === 0
+				}))
+			};
 		}
 
 		let url: URL | undefined = undefined;

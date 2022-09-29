@@ -1,16 +1,16 @@
 import htmlParse from "node-html-parser";
 import entities from "html-entities";
+import { Plugin } from "volcano-sdk";
 
 import Util from "../util/Util.js";
 import Constants from "../Constants.js";
-import type { Plugin } from "../types.js";
 
 const usableRegex = /^https:\/\/[^.]+.bandcamp.com\/(?:album|track)\/[^/]+/;
 const streamRegex = /(https:\/\/t4\.bcbits\.com\/stream\/[^}]+)/;
 const durationRegex = /^P(\d{2})H(\d{2})M(\d{2})S$/;
 const trackRegex = /\/track\//;
 
-class BandcampSource implements Plugin {
+class BandcampSource extends Plugin {
 	public source = "bandcamp";
 
 	public canBeUsed(resource: string) {
@@ -56,7 +56,7 @@ class BandcampSource implements Plugin {
 		return data;
 	}
 
-	private static trackToResource(track: any): import("../types.js").TrackInfo {
+	private static trackToResource(track: any): import("volcano-sdk/types.js").TrackInfo {
 		return {
 			title: track.name,
 			author: track.byArtist.name,

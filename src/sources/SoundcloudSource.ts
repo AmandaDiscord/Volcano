@@ -1,23 +1,23 @@
 import * as dl from "play-dl";
+import { Plugin } from "volcano-sdk";
 
 import Constants from "../Constants.js";
-import type { Plugin } from "../types.js";
 
 const identifierRegex = /^O:/;
 const usableRegex = /^https:\/\/soundcloud.com/;
 
-class SoundcloudSource implements Plugin {
+class SoundcloudSource extends Plugin {
 	public source = Constants.STRINGS.SOUNDCLOUD;
-	public searchShort = Constants.STRINGS.SC;
+	public searchShorts = [Constants.STRINGS.SC];
 
-	public canBeUsed(resource: string, isSourceSearch: boolean) {
-		if (isSourceSearch) return true;
+	public canBeUsed(resource: string, searchShort?: string) {
+		if (searchShort === this.searchShorts[0]) return true;
 		else return !!resource.match(usableRegex);
 	}
 
-	public async infoHandler(resource: string, isSourceSearch: boolean) {
+	public async infoHandler(resource: string, searchShort?: string) {
 		const e = new Error(Constants.STRINGS.SOUNDCLOUD_NOT_FETCHABLE_RESOURCE);
-		if (isSourceSearch) {
+		if (searchShort === this.searchShorts[0]) {
 			const results = await dl.search(resource, { source: { soundcloud: Constants.STRINGS.TRACKS } });
 			return { entries: results.map(SoundcloudSource.songResultToTrack) };
 		}

@@ -1,61 +1,6 @@
 type OPCodes = typeof import("./Constants.js")["OPCodes"];
 
-type AnyObject = { [k: string | number | symbol]: any };
-
 export type UnpackRecord<T> = T extends Record<any, infer R> ? R : never;
-
-export type Mixin<T extends AnyObject, SR extends Array<AnyObject>> = SR extends Array<infer O> ? T & O : never;
-
-export type LavaLinkConfig = {
-	server?: {
-		port?: number;
-		address?: string;
-	};
-	spring?: {
-		main?: {
-			"banner-mode"?: "log";
-		};
-	};
-	lavalink?: {
-		server?: {
-			password?: string;
-			youtubeCookie?: string;
-			sources?: {
-				youtube?: boolean,
-				bandcamp?: boolean,
-				soundcloud?: boolean,
-				twitch?: boolean,
-				http?: boolean,
-				local?: boolean
-			};
-			trackStuckThresholdMs: number;
-			youtubePlaylistLoadLimit?: number;
-			playerUpdateInterval?: number;
-			youtubeSearchEnabled?: boolean;
-			youtubeTimeout?: number;
-			soundcloudSearchEnabled?: boolean;
-			"gc-warnings"?: boolean;
-			ratelimit?: {
-				ipBlocks?: Array<string>;
-				excludedIps?: Array<string>;
-				strategy?: "RotateOnBan" | "LoadBalance" | "NanoSwitch" | "RotatingNanoSwitch";
-				searchTriggersFail?: boolean;
-				retryLimit?: number;
-			};
-		};
-	};
-	logging?: {
-		file?: {
-			"max-history"?: number;
-			"max-size"?: string;
-		};
-		path?: string;
-		level?: {
-			root?: "INFO" | "WARN" | "ERROR";
-			lavalink?: "INFO" | "WARN" | "ERROR";
-		};
-	};
-}
 
 export type PlayerFilterOptions = {
 	volume?: number;
@@ -166,27 +111,3 @@ export type Stats = {
 	};
 	uptime: number;
 };
-
-export type TrackInfo = {
-	title: string;
-	author: string;
-	identifier: string;
-	uri: string;
-	length: number;
-	isStream: boolean;
-}
-
-export interface Plugin {
-	source?: string;
-	searchShort?: string;
-	version?: string;
-
-	initialize?(): any;
-	setVariables?(loggr: Pick<typeof import("./util/Logger.js")["default"], "info" | "warn" | "error">, Util: typeof import("./util/Util.js")): any;
-	mutateFilters?(filters: Array<string>, options: PlayerFilterOptions): any;
-	canBeUsed?(resource: string, isResourceSearch: boolean): boolean;
-	infoHandler?(resource: string, isResourceSearch: boolean): { entries: Array<TrackInfo>, plData?: { name: string; selectedTrack?: number; } } | Promise<{ entries: Array<TrackInfo>, plData?: { name: string; selectedTrack?: number; } }>;
-	streamHandler?(info: import("@lavalink/encoding").TrackInfo, usingFFMPEG: boolean): { type?: import("@discordjs/voice").StreamType; stream: import("stream").Readable } | Promise<{ type?: import("@discordjs/voice").StreamType; stream: import("stream").Readable }>;
-	onWSMessage?(packet: Record<any, any>, socket: import("ws").WebSocket): any;
-	routeHandler?(url: URL, req: import("http").IncomingMessage, res: import("http").ServerResponse): any;
-}

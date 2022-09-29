@@ -2,9 +2,10 @@ import { IAudioMetadata, parseStream } from "music-metadata";
 import { StreamType } from "@discordjs/voice";
 import m3u8 from "m3u8stream";
 
+import { Plugin } from "volcano-sdk";
+
 import Constants from "../Constants.js";
 import Util from "../util/Util.js";
-import type { Plugin } from "../types.js";
 
 const mimeRegex = /^(audio|video|application)\/(.+)$/;
 const httpRegex = /^https?:\/\//;
@@ -12,7 +13,7 @@ const supportedApplicationTypes = [Constants.STRINGS.OGG, Constants.STRINGS.X_MP
 const redirectStatusCodes = [301, 302, 303, 307, 308];
 const pcmTypes = ["pcm", "wav"];
 
-class HTTPSource implements Plugin {
+class HTTPSource extends Plugin {
 	public source = Constants.STRINGS.HTTP;
 
 	public canBeUsed(resource: string) {
@@ -44,7 +45,7 @@ class HTTPSource implements Plugin {
 		if (mimeMatch && mimeMatch[1] === Constants.STRINGS.APPLICATION && !supportedApplicationTypes.includes(mimeMatch[2])) {
 			data.end();
 			data.destroy();
-			throw new Error(Constants.STRINGS.UNSUPPORTED_FILE_TYPE);
+			throw new Error(`${Constants.STRINGS.UNSUPPORTED_FILE_TYPE} ${data.headers[Constants.STRINGS.CONTENT_TYPE]}`);
 		}
 
 		Object.keys(data.headers).forEach(key => {

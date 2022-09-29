@@ -33,7 +33,7 @@ export function standardErrorHandler(e: Error | string, response: import("http")
 	response.writeHead(200, Constants.STRINGS.OK, Constants.baseHTTPResponseHeaders).end(JSON.stringify(Object.assign(payload, { loadType: loadType, exception: { message: (typeof e === Constants.STRINGS.STRING ? e as string : (e as Error).message || Constants.STRINGS.EMPTY_STRING).split(Constants.STRINGS.NEW_LINE).slice(-1)[0].replace(errorRegex, Constants.STRINGS.EMPTY_STRING), severity: severity } })));
 }
 
-export function isObject(val: any) {
+export function isObject<T>(val: T): val is Record<any, any> {
 	return typeof val === Constants.STRINGS.FUNCTION || (typeof val === Constants.STRINGS.OBJECT && val !== null && !Array.isArray(val));
 }
 
@@ -41,7 +41,7 @@ export function isValidKey(key: string) {
 	return key !== Constants.STRINGS.PROTO && key !== Constants.STRINGS.CONSTRUCTOR && key !== Constants.STRINGS.PROTOTYPE;
 }
 
-export function mixin<T extends Record<string, any>, S extends Array<Record<string, any>>>(target: T, ...sources: S): import("../types.js").Mixin<T, S> {
+export function mixin<T extends Record<string, any>, S extends Array<Record<string, any>>>(target: T, ...sources: S): import("volcano-sdk/types.js").Mixin<T, S> {
 	for (const obj of sources) {
 		if (isObject(obj)) {
 			for (const key in obj) {
@@ -49,7 +49,7 @@ export function mixin<T extends Record<string, any>, S extends Array<Record<stri
 			}
 		}
 	}
-	return target as unknown as import("../types.js").Mixin<T, S>;
+	return target as unknown as import("volcano-sdk/types.js").Mixin<T, S>;
 }
 
 function mixinStep(target: Record<string, any>, val: Record<string, any>, key: string) {
@@ -123,10 +123,7 @@ export async function connect(url: string, opts?: { method?: string; keepAlive?:
 const responseRegex = /((?:HTTP\/[\d.]+)|(?:ICY)) (\d+) ?(.+)?/;
 const headerRegex = /([^:]+): *([^\r\n]+)/;
 
-interface ConnectionResponseEvents {
-	headers: [ConnectionResponse["headers"]];
-	readable: [];
-}
+type ConnectionResponseEvents = import("volcano-sdk/types.js").ConnectionResponseEvents
 
 export interface ConnectionResponse {
 	addListener<E extends keyof ConnectionResponseEvents>(event: E, listener: (...args: ConnectionResponseEvents[E]) => any): this;

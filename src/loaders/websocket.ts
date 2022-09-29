@@ -177,7 +177,7 @@ async function onClientMessage(socket: import("ws").WebSocket, data: import("ws"
 		break;
 	}
 	default:
-		lavalinkPlugins.forEach(p => p.onWSMessage?.(msg, socket));
+		lavalinkPlugins.forEach(p => p.onWSMessage?.(msg, socket as any));
 		break;
 	}
 }
