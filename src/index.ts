@@ -119,3 +119,5 @@ lavalinkRootLog(`Started Launcher in ${(Date.now() - startTime) / 1000} seconds 
 process.on("unhandledRejection", e => logger.error(util.inspect(e, false, Infinity, true)));
 process.on("uncaughtException", (e, origin) => logger.error(`${util.inspect(e, false, Infinity, true)}\n${util.inspect(origin)}`));
 process.title = "Volcano";
+
+import("./loaders/plugins.js");

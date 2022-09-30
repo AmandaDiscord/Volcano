@@ -398,4 +398,6 @@ function voiceAdapterCreator(userID: string, guildID: string): import("@discordj
 process.on("unhandledRejection", e => logger.error(util.inspect(e, false, Infinity, true), `worker ${threadId}`));
 process.on("uncaughtException", (e, origin) => logger.error(`${util.inspect(e, false, Infinity, true)}\n${util.inspect(origin)}`, `worker ${threadId}`));
 
+await import("./loaders/plugins.js");
+
 parentPort.postMessage({ op: Constants.workerOPCodes.READY });
