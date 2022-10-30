@@ -3,6 +3,7 @@ import { EventEmitter } from "events";
 import fs from "fs";
 import path from "path";
 import util from "util";
+import { pipeline } from "stream";
 
 import logger from "./Logger.js";
 import Util from "./Util.js";
@@ -140,7 +141,7 @@ class ThreadPool extends ThreadBasedReplier {
 			const stream = await child.getHeapSnapshot().catch(e => logger.error(util.inspect(e, false, Infinity, true)));
 			if (stream) {
 				const write = fs.createWriteStream(path.join(Constants.STRINGS.PATH_UP, Constants.STRINGS.PATH_UP, `worker-${child.threadId}-snapshot-${Date.now()}.heapsnapshot`));
-				stream.pipe(write);
+				pipeline(stream, write, Util.noop);
 			}
 		}));
 	}

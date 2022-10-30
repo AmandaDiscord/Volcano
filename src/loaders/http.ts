@@ -27,9 +27,9 @@ const paths: {
 		methods: [Constants.STRINGS.GET],
 		async handle(req, res, url) {
 			const id = url.searchParams.get(Constants.STRINGS.IDENTIFIER);
-			const payload = {
-				playlistInfo: {},
-				tracks: [] as Array<{ track: string; info: import("@lavalink/encoding").TrackInfo }>
+			const payload: import("lavalink-types").TrackLoadingResult = {
+				loadType: "NO_MATCHES",
+				tracks: []
 			};
 
 			if (!id || typeof id !== Constants.STRINGS.STRING) return Util.standardErrorHandler(Constants.STRINGS.INVALID_IDENTIFIER, res, payload, lavalinkLog);
@@ -62,7 +62,7 @@ const paths: {
 				else if (payload.tracks.length === 1) lavalinkLog(`Loaded track ${payload.tracks[0].info.title}`);
 				return res.writeHead(200, Constants.STRINGS.OK, Constants.baseHTTPResponseHeaders)
 					.end(JSON.stringify(Object.assign({
-						loadType: payload.tracks.length > 1 && isSearch ? Constants.STRINGS.SEARCH_RESULT : payload.playlistInfo[Constants.STRINGS.NAME] ? Constants.STRINGS.PLAYLIST_LOADED : Constants.STRINGS.TRACK_LOADED
+						loadType: payload.tracks.length > 1 && isSearch ? Constants.STRINGS.SEARCH_RESULT : payload.playlistInfo ? Constants.STRINGS.PLAYLIST_LOADED : Constants.STRINGS.TRACK_LOADED
 					}, payload)));
 			} catch (e) {
 				return Util.standardErrorHandler(e, res, payload, lavalinkLog, Constants.STRINGS.LOAD_FAILED, Constants.STRINGS.COMMON);
@@ -70,34 +70,39 @@ const paths: {
 		}
 	},
 
+	[Constants.STRINGS.DECODETRACK]: {
+		methods: [Constants.STRINGS.GET],
+		handle(req, res, url) {
+			let track = url.searchParams.get(Constants.STRINGS.TRACK);
+			lavalinkLog(`Got request to decode for track "${track}"`);
+			if (track) track = entities.decode(track);
+			if (!track || typeof track !== Constants.STRINGS.STRING) return res.writeHead(400, "Bad request", Constants.baseHTTPResponseHeaders).end(JSON.stringify({ message: "invalid track" }));
+			const data = convertDecodedTrackToResponse(encoding.decode(track));
+			return res.writeHead(200, Constants.STRINGS.OK, Constants.baseHTTPResponseHeaders).end(JSON.stringify(data));
+		}
+	},
+
 	[Constants.STRINGS.DECODETRACKS]: {
-		methods: [Constants.STRINGS.GET, Constants.STRINGS.POST],
-		async handle(req, res, url) {
-			if (req.method === Constants.STRINGS.GET) {
-				let track = url.searchParams.get(Constants.STRINGS.TRACK);
-				lavalinkLog(`Got request to decode for track "${track}"`);
-				if (track) track = entities.decode(track);
-				if (!track || typeof track !== Constants.STRINGS.STRING) return res.writeHead(400, "Bad request", Constants.baseHTTPResponseHeaders).end(JSON.stringify({ message: "invalid track" }));
-				const data = convertDecodedTrackToResponse(encoding.decode(track));
-				return res.writeHead(200, Constants.STRINGS.OK, Constants.baseHTTPResponseHeaders).end(JSON.stringify(data));
-			} else {
-				const body = await Util.requestBody(req, 10000);
-				const array = JSON.parse(body.toString()) as Array<string>;
-				return res.writeHead(200, Constants.STRINGS.OK, Constants.baseHTTPResponseHeaders).end(JSON.stringify(array.map(t => convertDecodedTrackToResponse(encoding.decode(t)))));
-			}
+		methods: [Constants.STRINGS.POST],
+		async handle(req, res) {
+			const body = await Util.requestBody(req, 10000);
+			const array = JSON.parse(body.toString()) as Array<string>;
+			const data = array.map(t => convertDecodedTrackToResponse(encoding.decode(t)));
+			return res.writeHead(200, Constants.STRINGS.OK, Constants.baseHTTPResponseHeaders).end(JSON.stringify(data));
 		}
 	},
 
 	[Constants.STRINGS.PLUGINS]: {
 		methods: [Constants.STRINGS.GET],
 		handle(req, res) {
+			const payload: Array<import("lavalink-types").PluginMeta> = lavalinkPlugins.filter(p => !lavalinkSources.has(p))
+				.map(p => ({
+					name: p.constructor?.name || Constants.STRINGS.UNKNOWN,
+					version: p.version ?? "0.0.0"
+				}));
+
 			return res.writeHead(200, Constants.STRINGS.OK, Constants.baseHTTPResponseHeaders)
-				.end(JSON.stringify(lavalinkPlugins.filter(p => !lavalinkSources.has(p))
-					.map(p => ({
-						name: p.constructor?.name || Constants.STRINGS.UNKNOWN,
-						version: p.version ?? "0.0.0"
-					}))
-				));
+				.end(JSON.stringify(payload));
 		},
 	},
 
@@ -109,18 +114,18 @@ const paths: {
 	}
 };
 
-function assignResults(result: Awaited<ReturnType<NonNullable<import("volcano-sdk").Plugin["infoHandler"]>>>, source: string, payload) {
+function assignResults(result: Awaited<ReturnType<NonNullable<import("volcano-sdk").Plugin["infoHandler"]>>>, source: string, payload: import("lavalink-types").TrackLoadingResult) {
 	payload.tracks = result.entries.map(t => ({
 		track: encoding.encode(Object.assign({ flags: 1, version: 2, source: source, position: BigInt(0), probeInfo: t[Constants.STRINGS.PROBE_INFO] }, t, { length: BigInt(t.length) })),
 		info: Object.assign({ position: 0 }, (() => {
 			delete t[Constants.STRINGS.PROBE_INFO];
-			return t;
+			return Object.assign({}, t, { isSeekable: !t.isStream, sourceName: source }) as typeof t & { isSeekable: boolean; sourceName: string; };
 		})())
 	}));
 	if (result.plData) payload.playlistInfo = result.plData;
 }
 
-function convertDecodedTrackToResponse(data: import("@lavalink/encoding").TrackInfo) {
+function convertDecodedTrackToResponse(data: import("@lavalink/encoding").TrackInfo): import("lavalink-types").TrackInfo {
 	return {
 		identifier: data.identifier,
 		isSeekable: !data.isStream,
@@ -130,8 +135,7 @@ function convertDecodedTrackToResponse(data: import("@lavalink/encoding").TrackI
 		position: Number(data.position),
 		title: data.title,
 		uri: data.uri,
-		sourceName: data.source,
-		probeInfo: data.probeInfo
+		sourceName: data.source
 	};
 }
 

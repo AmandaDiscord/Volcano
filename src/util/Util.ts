@@ -259,7 +259,7 @@ export function waitForResourceToEnterState(resource: import("@discordjs/voice")
 	});
 }
 
-export async function getStats(): Promise<import("../types.js").Stats> {
+export async function getStats(): Promise<import("lavalink-types").Stats> {
 	const memory = process.memoryUsage();
 	const free: number = memory.heapTotal - memory.heapUsed;
 	const pload: number = await processLoad();
@@ -300,7 +300,7 @@ export function stringify(data: any, ignoreQuotes?: boolean) {
 	else return String(data);
 }
 
-export function stringifyStep(object: any, references: Set<any>): any {
+function stringifyStep(object: any, references: Set<any>): any {
 	const rebuilt = {};
 	for (const key of Object.keys(object)) {
 		if (key[0] === Constants.STRINGS.UNDERSCORE) continue;

@@ -86,7 +86,7 @@ export const OPCodes = {
 	EVENT: "event" as const
 };
 
-export const defaultFilterValues: import("./types.js").PlayerFilterOptions = {
+export const defaultFilterValues: import("lavalink-types").Filters = {
 	volume: 1.0,
 	equalizer: [
 		{
@@ -265,6 +265,7 @@ export const STRINGS = {
 	NAME: "name",
 	PLAYLIST_LOADED: "PLAYLIST_LOADED",
 	TRACK_LOADED: "TRACK_LOADED",
+	DECODETRACK: "/decodetrack",
 	DECODETRACKS: "/decodetracks",
 	PLUGINS: "/plugins",
 	INVALID_TRACK: "Invalid or no track query string provided.",

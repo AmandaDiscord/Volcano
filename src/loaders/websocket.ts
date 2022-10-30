@@ -12,7 +12,7 @@ const playerMap = new Map<string, import("ws").WebSocket>();
 
 const serverLoopInterval: NodeJS.Timeout = setInterval(async () => {
 	const stats = await Util.getStats();
-	const payload: import("../types.js").OutboundPayload = Object.assign(stats, { op: Constants.STRINGS.STATS });
+	const payload = Object.assign(stats, { op: Constants.STRINGS.STATS });
 	const str: string = JSON.stringify(payload);
 	for (const client of wss.clients) {
 		if (client[Constants.STRINGS.IS_ALIVE] === false) return client.terminate();
@@ -34,8 +34,8 @@ wss.on("headers", (headers, request) => {
 });
 
 wss.on(Constants.STRINGS.CONNECTION, async (socket, request) => {
-	const userID: string = request.headers[Constants.STRINGS.USER_ID] as string;
-	const stats: import("../types.js").Stats = await Util.getStats();
+	const userID = request.headers[Constants.STRINGS.USER_ID] as string;
+	const stats: import("lavalink-types").Stats = await Util.getStats();
 	socket.send(JSON.stringify(Object.assign(stats, { op: Constants.STRINGS.STATS })));
 	socket.on(Constants.STRINGS.MESSAGE, data => onClientMessage(socket, data, userID));
 	socket[Constants.STRINGS.IS_ALIVE] = true;
@@ -143,7 +143,7 @@ async function onClientMessage(socket: import("ws").WebSocket, data: import("ws"
 	case Constants.OPCodes.VOICE_UPDATE: {
 		voiceServerStates.set(`${userID}.${msg.guildId}`, { clientID: userID, guildId: msg.guildId as string, sessionId: msg.sessionId as string, event: msg.event as any });
 
-		setTimeout(() => voiceServerStates.delete(`${userID}.${msg.guildId}`), 20000);
+		setTimeout(() => voiceServerStates.delete(`${userID}.${(msg as { guildId: string }).guildId}`), 20000);
 
 		void lavalinkThreadPool.broadcast({ op: Constants.workerOPCodes.VOICE_SERVER, data: voiceServerStates.get(`${userID}.${msg.guildId}`) });
 		break;

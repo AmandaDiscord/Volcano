@@ -21,9 +21,14 @@ class ExtraWSOPs extends Plugin {
 		else if (packet.op === "ping") {
 			const payload = { op: "pong" };
 			if (packet.guildId) {
+				/** @type {Array<{ playingPlayers: number; players: number; pings: { [guildID: string]: number }; }>} */
 				const threadStats = await global.lavalinkThreadPool.broadcast({ op: 6 });
-				for (const worker of threadStats)
-					if (worker.pings[packet.guildId] !== undefined) payload.ping = worker.pings[packet.guildId];
+				for (const worker of threadStats) {
+					if (worker.pings[packet.guildId] !== undefined) {
+						payload.ping = worker.pings[packet.guildId];
+						break;
+					}
+				}
 			}
 			socket.send(JSON.stringify(payload));
 		}

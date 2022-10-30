@@ -22,7 +22,7 @@ class BandcampSource extends Plugin {
 		const data = BandcampSource.parse(html);
 		const value: Awaited<ReturnType<NonNullable<Plugin["infoHandler"]>>> = { entries: [] };
 		if (data["@type"].includes("MusicAlbum")) {
-			value.plData = { name: data.name };
+			value.plData = { name: data.name, selectedTrack: 0 };
 			const toFetch: Array<string> = data.albumRelease.filter(r => !!r["@id"].match(trackRegex)).map(i => i["@id"]);
 			await Promise.all(toFetch.map(async url => {
 				const html2 = await fetch(url, { redirect: Constants.STRINGS.FOLLOW, headers: Constants.baseHTTPRequestHeaders }).then(d => d.text());
