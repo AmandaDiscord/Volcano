@@ -68,7 +68,7 @@ lavalinkThreadPool.on(Constants.STRINGS.DATA_REQ, (op, data) => {
 	if (op === Constants.workerOPCodes.VOICE_SERVER) {
 		const v = voiceServerStates.get(`${data.clientID}.${data.guildId}`);
 
-		if (v) lavalinkThreadPool.broadcast({ op: Constants.workerOPCodes.VOICE_SERVER, data: v });
+		if (v) lavalinkThreadPool.broadcast({ op: Constants.workerOPCodes.VOICE_SERVER, data: Object.assign(v, { op: "voiceUpdate" }) });
 	}
 });
 
@@ -125,8 +125,6 @@ async function onClientMessage(socket: import("ws").WebSocket, data: import("ws"
 		return;
 	}
 
-	lavalinkLog(msg);
-
 	const pl = { op: Constants.workerOPCodes.MESSAGE, data: Object.assign(msg, { clientID: userID }) };
 
 	switch (msg.op) {
@@ -160,6 +158,7 @@ async function onClientMessage(socket: import("ws").WebSocket, data: import("ws"
 		break;
 	}
 	case Constants.OPCodes.CONFIGURE_RESUMING: {
+		lavalinkLog(msg);
 		if (!msg.key) return;
 
 		const entry = connections.get(userID);
@@ -177,6 +176,7 @@ async function onClientMessage(socket: import("ws").WebSocket, data: import("ws"
 		break;
 	}
 	default:
+		lavalinkLog(msg);
 		lavalinkPlugins.forEach(p => p.onWSMessage?.(msg, socket as any));
 		break;
 	}

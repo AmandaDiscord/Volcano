@@ -100,7 +100,7 @@ class Queue {
 		this.actions.seekTime = 0;
 		this.actions.initial = true;
 		if (!this.track) return;
-		this.play().catch(e => logger.error(util.inspect(e, false, Infinity, true), `worker ${threadId}`));
+		this.play().catch(e => logger.error(util.inspect(e, false, Infinity, true)));
 	}
 
 	public async getResource(decoded: import("@lavalink/encoding").TrackInfo, meta: NonNullable<typeof this.track>): Promise<import("@discordjs/voice").AudioResource<import("@lavalink/encoding").TrackInfo>> {
@@ -174,7 +174,7 @@ class Queue {
 		try {
 			resource = await this.getResource(decoded, meta);
 		} catch (e) {
-			logger.error(util.inspect(e, false, Infinity, true), `worker ${threadId}`);
+			logger.error(util.inspect(e, false, Infinity, true));
 			parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: Constants.STRINGS.EVENT, type: Constants.STRINGS.TRACK_EXCEPTION_EVENT, guildId: this.guildID, track: this.track?.track || Constants.STRINGS.UNKNOWN, exception: { message: e.message, severity: Constants.STRINGS.COMMON, cause: e.stack || new Error().stack || Constants.STRINGS.UNKNOWN } } as import("lavalink-types").TrackExceptionEvent, clientID: this.clientID });
 		}
 		if (!resource) return;
@@ -202,7 +202,7 @@ class Queue {
 			// However, we're waiting for resource to transition from Idle => Playing, so it won't fire Idle again until another track is played.
 			this.resource = null;
 			parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: Constants.STRINGS.EVENT, type: Constants.STRINGS.TRACK_STUCK_EVENT, guildId: this.guildID, track: track.track || Constants.STRINGS.UNKNOWN, thresholdMs: lavalinkConfig.lavalink.server.trackStuckThresholdMs } as import("lavalink-types").TrackStuckEvent, clientID: this.clientID });
-			logger.warn(`${track.track ? encoding.decode(track.track).title : Constants.STRINGS.UNKNOWN} got stuck! Threshold surpassed: ${lavalinkConfig.lavalink.server.trackStuckThresholdMs}`, `worker ${threadId}`);
+			logger.warn(`${track.track ? encoding.decode(track.track).title : Constants.STRINGS.UNKNOWN} got stuck! Threshold surpassed: ${lavalinkConfig.lavalink.server.trackStuckThresholdMs}`);
 			this.track = undefined;
 			this.actions.shouldntCallFinish = false;
 			this.actions.stopping = false;
@@ -260,7 +260,7 @@ class Queue {
 		const previousIndex = this._filters.indexOf(Constants.STRINGS.SEARCH_STRING);
 		if (previousIndex !== -1) this._filters.splice(previousIndex, 2);
 		this._filters.push(Constants.STRINGS.SEARCH_STRING, `${amount || 0}ms`);
-		if (!this.actions.applyingFilters) this.play().catch(e => logger.error(util.inspect(e, false, Infinity, true), `worker ${threadId}`));
+		if (!this.actions.applyingFilters) this.play().catch(e => logger.error(util.inspect(e, false, Infinity, true)));
 		this.actions.applyingFilters = true;
 		this.actions.seekTime = amount;
 	}
@@ -296,7 +296,7 @@ class Queue {
 		this._filters.push(...toApply);
 		const previouslyApplying = this.actions.applyingFilters;
 		this.actions.applyingFilters = true;
-		if (!previouslyApplying) this.play().catch(e => logger.error(util.inspect(e, false, Infinity, true), `worker ${threadId}`));
+		if (!previouslyApplying) this.play().catch(e => logger.error(util.inspect(e, false, Infinity, true)));
 	}
 
 	public ffmpeg(args: Array<string>) {
@@ -304,7 +304,7 @@ class Queue {
 		this._filters.push(...args);
 		const previouslyApplying = this.actions.applyingFilters;
 		this.actions.applyingFilters = true;
-		if (!previouslyApplying) this.play().catch(e => logger.error(util.inspect(e, false, Infinity, true), `worker ${threadId}`));
+		if (!previouslyApplying) this.play().catch(e => logger.error(util.inspect(e, false, Infinity, true)));
 	}
 }
 
@@ -316,6 +316,8 @@ parentPort.on(Constants.STRINGS.MESSAGE, async (packet: { data?: import("./types
 		const guildID = (packet.data! as { guildId: string }).guildId;
 		const userID = packet.data!.clientID!;
 		const key = `${userID}.${guildID}`;
+		// @ts-expect-error
+		delete packet.data!.clientID;
 		const typed = packet.data!;
 		switch (typed.op) {
 
@@ -323,6 +325,7 @@ parentPort.on(Constants.STRINGS.MESSAGE, async (packet: { data?: import("./types
 			let q: Queue;
 			if (!queues.has(key)) {
 				if (packet.broadcasted) return parentPort.postMessage({ op: Constants.workerOPCodes.REPLY, data: false, threadID: packet.threadID });
+				lavalinkLog(typed);
 
 				// Channel IDs are never forwarded to LavaLink and are not really necessary in code except for in the instance of sending packets which isn't applicable.
 				Discord.joinVoiceChannel({ channelId: Constants.STRINGS.EMPTY_STRING, guildId: guildID, group: userID, adapterCreator: voiceAdapterCreator(userID, guildID) });
@@ -331,41 +334,69 @@ parentPort.on(Constants.STRINGS.MESSAGE, async (packet: { data?: import("./types
 				parentPort.postMessage({ op: Constants.workerOPCodes.VOICE_SERVER, data: { clientID: userID, guildId: guildID } });
 				q.queue({ track: typed.track, start: Number(typed.startTime || Constants.STRINGS.ZERO), end: Number(typed.endTime || Constants.STRINGS.ZERO), volume: Number(typed.volume || Constants.STRINGS.ONE_HUNDRED), pause: typed.pause || false });
 			} else {
+				lavalinkLog(typed);
 				if (packet.broadcasted) parentPort.postMessage({ op: Constants.workerOPCodes.REPLY, data: true, threadID: packet.threadID });
 				q = queues.get(key)!;
-				if (typed.noReplace === true && q.player.state.status === Discord.AudioPlayerStatus.Playing) return lavalinkLog(Constants.STRINGS.NO_REPLACE_SKIP, `worker ${threadId}`);
+				if (typed.noReplace === true && q.player.state.status === Discord.AudioPlayerStatus.Playing) return lavalinkLog(Constants.STRINGS.NO_REPLACE_SKIP);
 				q.queue({ track: typed.track, start: Number(typed.startTime || Constants.STRINGS.ZERO), end: Number(typed.endTime || Constants.STRINGS.ZERO), volume: Number(typed.volume || Constants.STRINGS.ONE_HUNDRED), pause: typed.pause || false });
 			}
 			break;
 		}
 		case Constants.OPCodes.DESTROY: {
-			queues.get(key)?.destroy();
+			const q = queues.get(key);
+			if (q) {
+				lavalinkLog(typed);
+				q.destroy();
+			}
 			break;
 		}
 		case Constants.OPCodes.PAUSE: {
 			const q = queues.get(key);
-			if (typed.pause) q?.pause();
-			else q?.resume();
+			if (q) {
+				lavalinkLog(typed);
+				if (typed.pause) q.pause();
+				else q.resume();
+			}
 			break;
 		}
 		case Constants.OPCodes.STOP: {
-			queues.get(key)?.stop();
+			const q = queues.get(key);
+			if (q) {
+				lavalinkLog(typed);
+				q.stop();
+			}
 			break;
 		}
 		case Constants.OPCodes.FILTERS: {
-			queues.get(key)?.filters(typed);
+			const q = queues.get(key);
+			if (q) {
+				lavalinkLog(typed);
+				q.filters(typed);
+			}
 			break;
 		}
 		case Constants.OPCodes.SEEK: {
-			queues.get(key)?.seek(typed.position);
+			const q = queues.get(key);
+			if (q) {
+				lavalinkLog(typed);
+				q.seek(typed.position);
+			}
 			break;
 		}
 		case Constants.OPCodes.FFMPEG: {
-			queues.get(key)?.ffmpeg(typed.args);
+			const q = queues.get(key);
+			if (q) {
+				lavalinkLog(typed);
+				q.ffmpeg(typed.args);
+			}
 			break;
 		}
 		case Constants.OPCodes.VOLUME: {
-			queues.get(key)?.volume(typed.volume / 100);
+			const q = queues.get(key);
+			if (q) {
+				lavalinkLog(typed);
+				q.volume(typed.volume / 100);
+			}
 			break;
 		}
 		}
@@ -373,8 +404,14 @@ parentPort.on(Constants.STRINGS.MESSAGE, async (packet: { data?: import("./types
 		const typed = packet.data!;
 		if (typed.op !== "voiceUpdate") return;
 		const guildID = (packet.data! as { guildId: string }).guildId;
-		methodMap.get(`${packet.data!.clientID}.${guildID}`)?.onVoiceStateUpdate({ channel_id: Constants.STRINGS.EMPTY_STRING, guild_id: guildID, user_id: packet.data!.clientID!, session_id: typed.sessionId, deaf: false, self_deaf: false, mute: false, self_mute: false, self_video: false, suppress: false, request_to_speak_timestamp: null });
-		methodMap.get(`${packet.data!.clientID}.${guildID}`)?.onVoiceServerUpdate({ guild_id: guildID, token: typed.event.token, endpoint: typed.event.endpoint });
+		const userID = typed.clientID;
+		const methods = methodMap.get(`${typed.clientID}.${guildID}`);
+		if (!methods) return;
+		// @ts-expect-error
+		delete typed.clientID;
+		lavalinkLog(typed);
+		methods.onVoiceStateUpdate({ channel_id: Constants.STRINGS.EMPTY_STRING, guild_id: guildID, user_id: userID, session_id: typed.sessionId, deaf: false, self_deaf: false, mute: false, self_mute: false, self_video: false, suppress: false, request_to_speak_timestamp: null });
+		methods.onVoiceServerUpdate({ guild_id: guildID, token: typed.event.token, endpoint: typed.event.endpoint });
 	} else if (packet.op === Constants.workerOPCodes.DELETE_ALL) {
 		const forUser = [...queues.values()].filter(q => q.clientID === packet.data!.clientID);
 		parentPort.postMessage({ op: Constants.workerOPCodes.REPLY, data: forUser.length, threadID: packet.threadID });
@@ -399,8 +436,8 @@ function voiceAdapterCreator(userID: string, guildID: string): import("@discordj
 	};
 }
 
-process.on("unhandledRejection", e => logger.error(util.inspect(e, false, Infinity, true), `worker ${threadId}`));
-process.on("uncaughtException", (e, origin) => logger.error(`${util.inspect(e, false, Infinity, true)}\n${util.inspect(origin)}`, `worker ${threadId}`));
+process.on("unhandledRejection", e => logger.error(util.inspect(e, false, Infinity, true)));
+process.on("uncaughtException", (e, origin) => logger.error(`${util.inspect(e, false, Infinity, true)}\n${util.inspect(origin)}`));
 
 await import("./loaders/plugins.js");
 
