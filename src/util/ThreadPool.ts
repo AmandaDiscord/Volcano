@@ -155,10 +155,7 @@ class ThreadPool extends ThreadBasedReplier {
 		const result = await new Promise<Array<any>>(res => {
 			const parts: Array<any> = [];
 			this.outgoingPersist.add(payload.threadID);
-			const timer = setTimeout(() => {
-				logger.warn(`Not all threads responded to packet: ${JSON.stringify(payload)}`);
-				res(parts);
-			}, 5000);
+			const timer = setTimeout(() => res(parts), 5000);
 			this.outgoing.set(payload.threadID, msg => {
 				parts.push(msg);
 				if (parts.length === expecting) {
