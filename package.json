@@ -42,8 +42,8 @@
     "play-dl": "^1.9.6",
     "prism-media": "^1.3.4",
     "sodium-native": "^3.4.1",
-    "twitch-m3u8": "github:AmandaDiscord/twitch-m3u8",
-    "volcano-sdk": "github:AmandaDiscord/VolcanoSDK",
+    "twitch-m3u8": "github:AmandaDiscord/twitch-m3u8#ba927b26fb3c5cb118d75c20f990c5cce8a1ae7a",
+    "volcano-sdk": "github:AmandaDiscord/VolcanoSDK#c9195e6891ec641ec9a9da3e7cb87a47fa6f8033",
     "ws": "^8.10.0",
     "yaml": "^2.1.3",
     "ytmusic-api": "^3.1.1"
@@ -54,7 +54,7 @@
     "@typescript-eslint/eslint-plugin": "^5.41.0",
     "@typescript-eslint/parser": "^5.41.0",
     "eslint": "^8.26.0",
-    "lavalink-types": "github:AmandaDiscord/LavalinkTypes",
+    "lavalink-types": "github:AmandaDiscord/LavalinkTypes#e2844e22d3f881220be9dd08a1982ac5fffa691b",
     "typescript": "^4.8.4"
   },
   "files": [
