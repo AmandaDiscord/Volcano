@@ -426,7 +426,6 @@ parentPort.on(Constants.STRINGS.MESSAGE, async (packet: { data?: import("./types
 		methods.onVoiceStateUpdate({ channel_id: Constants.STRINGS.EMPTY_STRING, guild_id: guildID, user_id: userID, session_id: typed.sessionId, deaf: false, self_deaf: false, mute: false, self_mute: false, self_video: false, suppress: false, request_to_speak_timestamp: null });
 		methods.onVoiceServerUpdate({ guild_id: guildID, token: typed.event.token, endpoint: typed.event.endpoint });
 	} else if (packet.op === Constants.workerOPCodes.DELETE_ALL) {
-		lavalinkLog("Delete all called");
 		const forUser = [...queues.values()].filter(q => q.clientID === packet.data!.clientID);
 		replyTo(packet.threadID, forUser.length);
 		for (const q of forUser) {
