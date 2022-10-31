@@ -28,9 +28,15 @@ export function processLoad(): Promise<number> {
 
 const errorRegex = /(Error|ERROR):? ?/;
 
-export function standardErrorHandler(e: Error | string, response: import("http").ServerResponse, payload: any, llLog: typeof import("./Logger.js").default.info, loadType: "LOAD_FAILED" | "NO_MATCHES" = Constants.STRINGS.LOAD_FAILED, severity = Constants.STRINGS.COMMON): void {
-	llLog(`Load failed\n${util.inspect(e, false, Infinity, true)}`);
-	response.writeHead(200, Constants.STRINGS.OK, Constants.baseHTTPResponseHeaders).end(JSON.stringify(Object.assign(payload, { loadType: loadType, exception: { message: (typeof e === Constants.STRINGS.STRING ? e as string : (e as Error).message || Constants.STRINGS.EMPTY_STRING).split(Constants.STRINGS.NEW_LINE).slice(-1)[0].replace(errorRegex, Constants.STRINGS.EMPTY_STRING), severity: severity } })));
+export function standardErrorHandler(e: Error | string, response: import("http").ServerResponse, payload: import("lavalink-types").TrackLoadingResult, severity = Constants.STRINGS.COMMON): void {
+	lavalinkLog(`Load failed\n${util.inspect(e, false, Infinity, true)}`);
+	payload.loadType = Constants.STRINGS.LOAD_FAILED;
+	payload.exception = {
+		message: (typeof e === Constants.STRINGS.STRING ? e as string : (e as Error).message || Constants.STRINGS.EMPTY_STRING).split(Constants.STRINGS.NEW_LINE).slice(-1)[0].replace(errorRegex, Constants.STRINGS.EMPTY_STRING),
+		severity: severity,
+		cause: (typeof e === Constants.STRINGS.STRING ? new Error().stack || Constants.STRINGS.UNKNOWN : (e as Error).name)
+	};
+	response.writeHead(200, Constants.STRINGS.OK, Constants.baseHTTPResponseHeaders).end(JSON.stringify(payload));
 }
 
 export function isObject<T>(val: T): val is Record<any, any> {

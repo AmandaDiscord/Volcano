@@ -28,28 +28,28 @@ const paths: {
 		async handle(req, res, url) {
 			const id = url.searchParams.get(Constants.STRINGS.IDENTIFIER);
 			const payload: import("lavalink-types").TrackLoadingResult = {
-				loadType: "NO_MATCHES",
+				loadType: Constants.STRINGS.NO_MATCHES,
 				tracks: []
 			};
 
-			if (!id || typeof id !== Constants.STRINGS.STRING) return Util.standardErrorHandler(Constants.STRINGS.INVALID_IDENTIFIER, res, payload, lavalinkLog);
+			if (!id || typeof id !== Constants.STRINGS.STRING) return Util.standardErrorHandler(Constants.STRINGS.INVALID_IDENTIFIER, res, payload);
 
 			const identifier = entities.decode(id);
 
 			lavalinkLog(`Got request to load for identifier "${identifier}"`);
 
 			const match = identifier.match(IDRegex);
-			if (!match) return Util.standardErrorHandler(Constants.STRINGS.IDENTIFIER_DIDNT_MATCH_REGEX, res, payload, lavalinkLog); // Should theoretically never happen, but TypeScript doesn't know this
+			if (!match) return Util.standardErrorHandler(Constants.STRINGS.IDENTIFIER_DIDNT_MATCH_REGEX, res, payload); // Should theoretically never happen, but TypeScript doesn't know this
 
 			const isSearch = !!match[1];
 			const resource = match[2];
 
-			if (!resource) return Util.standardErrorHandler(Constants.STRINGS.INVALID_IDENTIFIER, res, payload, lavalinkLog);
+			if (!resource) return Util.standardErrorHandler(Constants.STRINGS.INVALID_IDENTIFIER, res, payload);
 			try {
 				const searchablePlugin = lavalinkPlugins.find(p => p.canBeUsed?.(resource, match[1] || undefined));
 				if (searchablePlugin) {
-					if (searchablePlugin.source && lavalinkConfig.lavalink.server.sources[searchablePlugin.source] === false) return Util.standardErrorHandler(`${searchablePlugin.source} is not enabled`, res, payload, lavalinkLog, Constants.STRINGS.LOAD_FAILED);
-					if (searchablePlugin.source && lavalinkConfig.lavalink.server[`${searchablePlugin.source}SearchEnabled`] === false) return Util.standardErrorHandler(`${searchablePlugin.source} searching is not enabled`, res, payload, lavalinkLog, Constants.STRINGS.LOAD_FAILED);
+					if (searchablePlugin.source && lavalinkConfig.lavalink.server.sources[searchablePlugin.source] === false) return Util.standardErrorHandler(`${searchablePlugin.source} is not enabled`, res, payload);
+					if (searchablePlugin.source && lavalinkConfig.lavalink.server[`${searchablePlugin.source}SearchEnabled`] === false) return Util.standardErrorHandler(`${searchablePlugin.source} searching is not enabled`, res, payload);
 					const result = await searchablePlugin.infoHandler?.(resource, match[1] || undefined);
 					if (result && searchablePlugin.source) assignResults(result, searchablePlugin.source, payload);
 				} else {
@@ -58,14 +58,17 @@ const paths: {
 					if (result) assignResults(result, yt.source!, payload);
 				}
 
-				if (payload.tracks.length === 0) return Util.standardErrorHandler(Constants.STRINGS.NO_MATCHES_LOWER, res, payload, lavalinkLog, Constants.STRINGS.NO_MATCHES);
+				if (payload.tracks.length === 0) {
+					delete payload.playlistInfo;
+					return res.writeHead(200, Constants.STRINGS.OK, Constants.baseHTTPResponseHeaders).end(JSON.stringify(payload));
+				}
 				else if (payload.tracks.length === 1) lavalinkLog(`Loaded track ${payload.tracks[0].info.title}`);
-				return res.writeHead(200, Constants.STRINGS.OK, Constants.baseHTTPResponseHeaders)
-					.end(JSON.stringify(Object.assign({
-						loadType: payload.tracks.length > 1 && isSearch ? Constants.STRINGS.SEARCH_RESULT : payload.playlistInfo ? Constants.STRINGS.PLAYLIST_LOADED : Constants.STRINGS.TRACK_LOADED
-					}, payload)));
+				payload.loadType = (payload.tracks.length > 0 && isSearch)
+					? Constants.STRINGS.SEARCH_RESULT
+					: (payload.playlistInfo ? Constants.STRINGS.PLAYLIST_LOADED : Constants.STRINGS.TRACK_LOADED);
+				return res.writeHead(200, Constants.STRINGS.OK, Constants.baseHTTPResponseHeaders).end(JSON.stringify(payload));
 			} catch (e) {
-				return Util.standardErrorHandler(e, res, payload, lavalinkLog, Constants.STRINGS.LOAD_FAILED, Constants.STRINGS.COMMON);
+				return Util.standardErrorHandler(e, res, payload);
 			}
 		}
 	},

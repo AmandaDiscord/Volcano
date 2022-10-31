@@ -42,9 +42,9 @@ class ThreadBasedReplier extends EventEmitter {
 
 interface ThreadPoolEvents {
 	message: [number, any];
-	spawn: [string, Worker];
-	ready: [string, Worker];
-	death: [string];
+	spawn: [number, Worker];
+	ready: [number, Worker];
+	death: [number];
 	datareq: [number, any];
 }
 
@@ -72,19 +72,14 @@ type ThreadMessage = {
 class ThreadPool extends ThreadBasedReplier {
 	public count: number;
 	public dir: string;
-	public children = new Map<string, Worker>();
-	public taskSizeMap = new Map<string, number>();
-	private lastWorkerID = 0;
+	public children = new Map<number, Worker>();
+	public taskSizeMap = new Map<number, number>();
 
 	public constructor(options: { size: number; dir: string; }) {
 		super();
 
 		this.count = options.size;
 		this.dir = options.dir;
-	}
-
-	private nextWorkerID() {
-		return `${process.pid}_worker_${(++this.lastWorkerID)}`;
 	}
 
 	public async execute(message: ThreadMessage) {
@@ -95,30 +90,31 @@ class ThreadPool extends ThreadBasedReplier {
 		return this.baseRequest(message.op, message.data, (d) => worker.postMessage(d));
 	}
 
-	private async getOrCreate(): Promise<[string, Worker]> {
+	private async getOrCreate(): Promise<[number, Worker]> {
 		if (this.children.size < this.count) return this.spawn();
 		const leastBusy = [...this.taskSizeMap.keys()].reduce((pre, cur) => Math.min(this.taskSizeMap.get(pre) || Infinity, this.taskSizeMap.get(cur)!) === this.taskSizeMap.get(pre) ? pre : cur);
 		return [leastBusy, this.children.get(leastBusy)!];
 	}
 
-	private spawn(): Promise<[string, Worker]> {
+	private spawn(): Promise<[number, Worker]> {
 		return new Promise((res, rej) => {
-			const newID = this.nextWorkerID();
-			if (this.children.has(newID)) throw new Error(Constants.STRINGS.NEW_THREAD_EXISTS_IN_POOL);
 			const worker = new Worker(this.dir);
-			this.emit(Constants.STRINGS.SPAWN, newID, worker);
+			const id = worker.threadId;
+			this.children.set(id, worker);
+			this.emit(Constants.STRINGS.SPAWN, id, worker);
 
 			let ready = false;
 
 			worker.on(Constants.STRINGS.MESSAGE, msg => {
 				if (msg.op === Constants.workerOPCodes.READY) {
 					ready = true;
-					this.children.set(newID, worker);
-					this.emit(Constants.STRINGS.READY, newID, worker);
-					return res([newID, worker]);
+					this.emit(Constants.STRINGS.READY, id, worker);
+					return res([id, worker]);
 				}
-				if (!ready) return rej(new Error(Constants.STRINGS.THREAD_DID_NOT_COMMUNICATE_READY));
-				if (msg.op === Constants.workerOPCodes.CLOSE) return onWorkerExit(newID, worker, this);
+				if (!ready) {
+					this.children.delete(id);
+					return rej(new Error(Constants.STRINGS.THREAD_DID_NOT_COMMUNICATE_READY));
+				}
 
 				if (msg.op === Constants.workerOPCodes.VOICE_SERVER) return this.emit(Constants.STRINGS.DATA_REQ, msg.op, msg.data);
 
@@ -127,12 +123,12 @@ class ThreadPool extends ThreadBasedReplier {
 				if (msg.threadID && msg.op === Constants.workerOPCodes.REPLY && this.outgoing.has(msg.threadID) && !this.outgoingPersist.has(msg.threadID)) return this.outgoing.use(msg.threadID)!(msg.data);
 				else if (msg.threadID && msg.op === Constants.workerOPCodes.REPLY && this.outgoing.has(msg.threadID) && this.outgoingPersist.has(msg.threadID)) return this.outgoing.get(msg.threadID)!(msg.data);
 
-				if (msg.op === Constants.workerOPCodes.MESSAGE) return this.emit(Constants.STRINGS.MESSAGE, worker.threadId, msg);
+				if (msg.op === Constants.workerOPCodes.MESSAGE) return this.emit(Constants.STRINGS.MESSAGE, id, msg);
 			});
 
 			worker.on(Constants.STRINGS.ERROR, e => logger.error(util.inspect(e, false, Infinity, true)));
 
-			worker.once(Constants.STRINGS.EXIT, () => onWorkerExit(newID, worker, this));
+			worker.once(Constants.STRINGS.EXIT, () => onWorkerExit(id, worker, this));
 		});
 	}
 
@@ -146,7 +142,7 @@ class ThreadPool extends ThreadBasedReplier {
 		}));
 	}
 
-	public send(id: string, message: ThreadMessage) {
+	public send(id: number, message: ThreadMessage) {
 		if (!this.children.get(id)) throw new Error(Constants.STRINGS.THREAD_NOT_IN_POOL);
 		return this.baseRequest(message.op, message.data, (d) => this.children.get(id)!.postMessage(d));
 	}
@@ -159,13 +155,17 @@ class ThreadPool extends ThreadBasedReplier {
 		const result = await new Promise<Array<any>>(res => {
 			const parts: Array<any> = [];
 			this.outgoingPersist.add(payload.threadID);
+			const timer = setTimeout(() => {
+				logger.warn(`Not all threads responded to packet: ${JSON.stringify(payload)}`);
+				res(parts);
+			}, 5000);
 			this.outgoing.set(payload.threadID, msg => {
 				parts.push(msg);
-				if (parts.length === expecting) res(parts);
+				if (parts.length === expecting) {
+					clearTimeout(timer);
+					res(parts);
+				}
 			});
-			setTimeout(() => {
-				if (parts.length !== expecting) res(parts);
-			}, 5000);
 
 			for (const child of this.children.values()) {
 				child.postMessage(payload);
@@ -177,7 +177,7 @@ class ThreadPool extends ThreadBasedReplier {
 	}
 }
 
-async function onWorkerExit(id: string, worker: Worker, pool: ThreadPool) {
+async function onWorkerExit(id: number, worker: Worker, pool: ThreadPool) {
 	let timer: NodeJS.Timeout | undefined;
 	try {
 		await Util.createTimeoutForPromise(worker.terminate(), 5000);
@@ -187,7 +187,7 @@ async function onWorkerExit(id: string, worker: Worker, pool: ThreadPool) {
 			const write = fs.createWriteStream(path.join(Constants.STRINGS.PATH_UP, Constants.STRINGS.PATH_UP, `worker-${id}-snapshot-${Date.now()}.heapsnapshot`));
 			stream.pipe(write);
 		}
-		return logger.error(Constants.STRINGS.WORKER_NOT_TERMINATED_IN_TIME, id);
+		return logger.error(Constants.STRINGS.WORKER_NOT_TERMINATED_IN_TIME);
 	}
 	if (timer) clearTimeout(timer);
 	pool.taskSizeMap.delete(id);

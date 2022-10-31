@@ -140,7 +140,6 @@ export const defaultFilterValues: import("lavalink-types").Filters = {
 export const workerOPCodes = {
 	READY: 1 as const,
 	MESSAGE: 2 as const,
-	CLOSE: 3 as const,
 	ACKKNOWLEDGE: 4 as const,
 	REPLY: 5 as const,
 	STATS: 6 as const,
@@ -263,8 +262,8 @@ export const STRINGS = {
 	PROBE_INFO: "probeInfo" as const,
 	SEARCH_RESULT: "SEARCH_RESULT" as const,
 	NAME: "name",
-	PLAYLIST_LOADED: "PLAYLIST_LOADED",
-	TRACK_LOADED: "TRACK_LOADED",
+	PLAYLIST_LOADED: "PLAYLIST_LOADED" as const,
+	TRACK_LOADED: "TRACK_LOADED" as const,
 	DECODETRACK: "/decodetrack",
 	DECODETRACKS: "/decodetracks",
 	PLUGINS: "/plugins",

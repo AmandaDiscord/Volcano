@@ -1,4 +1,4 @@
-import { parentPort as parentport, threadId } from "worker_threads";
+import { parentPort as parentport } from "worker_threads";
 import util from "util";
 
 import "./loaders/keys.js";
@@ -25,7 +25,10 @@ const reportInterval = setInterval(() => {
 	}
 }, lavalinkConfig.lavalink.server.playerUpdateInterval * 1000);
 
-parentPort.once("close", () => clearInterval(reportInterval));
+parentPort.once("close", () => {
+	clearInterval(reportInterval);
+	setTimeout(() => process.exit(), 1000);
+});
 
 class Queue {
 	public connection: import("@discordjs/voice").VoiceConnection;
@@ -245,9 +248,7 @@ class Queue {
 		queues.delete(`${this.clientID}.${this.guildID}`);
 		if (queues.size === 0) {
 			clearInterval(reportInterval);
-			parentPort.postMessage({ op: Constants.workerOPCodes.CLOSE });
 			parentPort.close();
-			parentPort.removeAllListeners();
 		}
 	}
 
@@ -308,10 +309,14 @@ class Queue {
 	}
 }
 
+function replyTo(threadID: number, data: any) {
+	return parentPort.postMessage({ op: Constants.workerOPCodes.REPLY, data, threadID });
+}
+
 parentPort.on(Constants.STRINGS.MESSAGE, async (packet: { data?: import("./types.js").InboundPayload; op: typeof Constants.workerOPCodes[keyof typeof Constants.workerOPCodes], threadID: number; broadcasted?: boolean }) => {
 	if (packet.op === Constants.workerOPCodes.STATS) {
 		const qs = [...queues.values()];
-		return parentPort.postMessage({ op: Constants.workerOPCodes.REPLY, data: { playingPlayers: qs.filter(q => !q.actions.paused).length, players: queues.size, pings: qs.reduce((acc, cur) => acc[cur.guildID] = cur.state.ping, {}) }, threadID: packet.threadID });
+		return replyTo(packet.threadID, { playingPlayers: qs.filter(q => !q.actions.paused).length, players: queues.size, pings: qs.reduce((acc, cur) => acc[cur.guildID] = cur.state.ping, {}) });
 	} else if (packet.op === Constants.workerOPCodes.MESSAGE) {
 		const guildID = (packet.data! as { guildId: string }).guildId;
 		const userID = packet.data!.clientID!;
@@ -324,7 +329,7 @@ parentPort.on(Constants.STRINGS.MESSAGE, async (packet: { data?: import("./types
 		case Constants.OPCodes.PLAY: {
 			let q: Queue;
 			if (!queues.has(key)) {
-				if (packet.broadcasted) return parentPort.postMessage({ op: Constants.workerOPCodes.REPLY, data: false, threadID: packet.threadID });
+				if (packet.broadcasted) return replyTo(packet.threadID, false);
 				lavalinkLog(typed);
 
 				// Channel IDs are never forwarded to LavaLink and are not really necessary in code except for in the instance of sending packets which isn't applicable.
@@ -335,7 +340,7 @@ parentPort.on(Constants.STRINGS.MESSAGE, async (packet: { data?: import("./types
 				q.queue({ track: typed.track, start: Number(typed.startTime || Constants.STRINGS.ZERO), end: Number(typed.endTime || Constants.STRINGS.ZERO), volume: Number(typed.volume || Constants.STRINGS.ONE_HUNDRED), pause: typed.pause || false });
 			} else {
 				lavalinkLog(typed);
-				if (packet.broadcasted) parentPort.postMessage({ op: Constants.workerOPCodes.REPLY, data: true, threadID: packet.threadID });
+				if (packet.broadcasted) replyTo(packet.threadID, true);
 				q = queues.get(key)!;
 				if (typed.noReplace === true && q.player.state.status === Discord.AudioPlayerStatus.Playing) return lavalinkLog(Constants.STRINGS.NO_REPLACE_SKIP);
 				q.queue({ track: typed.track, start: Number(typed.startTime || Constants.STRINGS.ZERO), end: Number(typed.endTime || Constants.STRINGS.ZERO), volume: Number(typed.volume || Constants.STRINGS.ONE_HUNDRED), pause: typed.pause || false });
@@ -344,6 +349,7 @@ parentPort.on(Constants.STRINGS.MESSAGE, async (packet: { data?: import("./types
 		}
 		case Constants.OPCodes.DESTROY: {
 			const q = queues.get(key);
+			replyTo(packet.threadID, !!q);
 			if (q) {
 				lavalinkLog(typed);
 				q.destroy();
@@ -352,6 +358,7 @@ parentPort.on(Constants.STRINGS.MESSAGE, async (packet: { data?: import("./types
 		}
 		case Constants.OPCodes.PAUSE: {
 			const q = queues.get(key);
+			replyTo(packet.threadID, !!q);
 			if (q) {
 				lavalinkLog(typed);
 				if (typed.pause) q.pause();
@@ -361,6 +368,7 @@ parentPort.on(Constants.STRINGS.MESSAGE, async (packet: { data?: import("./types
 		}
 		case Constants.OPCodes.STOP: {
 			const q = queues.get(key);
+			replyTo(packet.threadID, !!q);
 			if (q) {
 				lavalinkLog(typed);
 				q.stop();
@@ -369,6 +377,7 @@ parentPort.on(Constants.STRINGS.MESSAGE, async (packet: { data?: import("./types
 		}
 		case Constants.OPCodes.FILTERS: {
 			const q = queues.get(key);
+			replyTo(packet.threadID, !!q);
 			if (q) {
 				lavalinkLog(typed);
 				q.filters(typed);
@@ -377,6 +386,7 @@ parentPort.on(Constants.STRINGS.MESSAGE, async (packet: { data?: import("./types
 		}
 		case Constants.OPCodes.SEEK: {
 			const q = queues.get(key);
+			replyTo(packet.threadID, !!q);
 			if (q) {
 				lavalinkLog(typed);
 				q.seek(typed.position);
@@ -385,6 +395,7 @@ parentPort.on(Constants.STRINGS.MESSAGE, async (packet: { data?: import("./types
 		}
 		case Constants.OPCodes.FFMPEG: {
 			const q = queues.get(key);
+			replyTo(packet.threadID, !!q);
 			if (q) {
 				lavalinkLog(typed);
 				q.ffmpeg(typed.args);
@@ -393,6 +404,7 @@ parentPort.on(Constants.STRINGS.MESSAGE, async (packet: { data?: import("./types
 		}
 		case Constants.OPCodes.VOLUME: {
 			const q = queues.get(key);
+			replyTo(packet.threadID, !!q);
 			if (q) {
 				lavalinkLog(typed);
 				q.volume(typed.volume / 100);
@@ -402,10 +414,11 @@ parentPort.on(Constants.STRINGS.MESSAGE, async (packet: { data?: import("./types
 		}
 	} else if (packet.op === Constants.workerOPCodes.VOICE_SERVER) {
 		const typed = packet.data!;
-		if (typed.op !== "voiceUpdate") return;
+		if (typed.op !== "voiceUpdate") return; // should never happen
 		const guildID = (packet.data! as { guildId: string }).guildId;
 		const userID = typed.clientID;
 		const methods = methodMap.get(`${typed.clientID}.${guildID}`);
+		replyTo(packet.threadID, !!methods);
 		if (!methods) return;
 		// @ts-expect-error
 		delete typed.clientID;
@@ -413,8 +426,9 @@ parentPort.on(Constants.STRINGS.MESSAGE, async (packet: { data?: import("./types
 		methods.onVoiceStateUpdate({ channel_id: Constants.STRINGS.EMPTY_STRING, guild_id: guildID, user_id: userID, session_id: typed.sessionId, deaf: false, self_deaf: false, mute: false, self_mute: false, self_video: false, suppress: false, request_to_speak_timestamp: null });
 		methods.onVoiceServerUpdate({ guild_id: guildID, token: typed.event.token, endpoint: typed.event.endpoint });
 	} else if (packet.op === Constants.workerOPCodes.DELETE_ALL) {
+		lavalinkLog("Delete all called");
 		const forUser = [...queues.values()].filter(q => q.clientID === packet.data!.clientID);
-		parentPort.postMessage({ op: Constants.workerOPCodes.REPLY, data: forUser.length, threadID: packet.threadID });
+		replyTo(packet.threadID, forUser.length);
 		for (const q of forUser) {
 			q.destroy();
 		}

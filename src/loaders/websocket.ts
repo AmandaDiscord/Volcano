@@ -153,11 +153,15 @@ async function onClientMessage(socket: import("ws").WebSocket, data: import("ws"
 	case Constants.OPCodes.VOLUME:
 	case Constants.OPCodes.FILTERS: {
 		if (!msg.guildId) return;
+		if (!playerMap.get(`${msg.clientID}.${msg.guildId}`)) return;
+		if (msg.op === "destroy") playerMap.delete(`${msg.clientID}.${msg.guildId}`);
 
 		void lavalinkThreadPool.broadcast(pl);
 		break;
 	}
 	case Constants.OPCodes.CONFIGURE_RESUMING: {
+		// @ts-expect-error
+		delete msg.clientID;
 		lavalinkLog(msg);
 		if (!msg.key) return;
 
