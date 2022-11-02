@@ -331,7 +331,14 @@ function replyTo(threadID: number, data: any) {
 parentPort.on("message", async (packet: { data?: import("./types.js").InboundPayload; op: typeof Constants.workerOPCodes[keyof typeof Constants.workerOPCodes], threadID: number; broadcasted?: boolean }) => {
 	if (packet.op === Constants.workerOPCodes.STATS) {
 		const qs = [...queues.values()];
-		return replyTo(packet.threadID, { playingPlayers: qs.filter(q => !q.actions.paused).length, players: queues.size, pings: qs.reduce((acc, cur) => acc[cur.guildID] = cur.state.ping, {}) });
+		return replyTo(packet.threadID, {
+			playingPlayers: qs.filter(q => !q.actions.paused).length,
+			players: queues.size,
+			pings: qs.reduce((acc, cur) => {
+				acc[cur.guildID] = cur.state.ping;
+				return acc;
+			}, {})
+		});
 	} else if (packet.op === Constants.workerOPCodes.MESSAGE) {
 		const guildID = (packet.data! as { guildId: string }).guildId;
 		const userID = packet.data!.clientID!;
