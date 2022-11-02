@@ -28,23 +28,23 @@ export function processLoad(): Promise<number> {
 
 const errorRegex = /(Error|ERROR):? ?/;
 
-export function standardErrorHandler(e: Error | string, response: import("http").ServerResponse, payload: import("lavalink-types").TrackLoadingResult, severity = Constants.STRINGS.COMMON): void {
+export function standardErrorHandler(e: Error | string, response: import("http").ServerResponse, payload: import("lavalink-types").TrackLoadingResult, severity: import("lavalink-types").Severity = "COMMON"): void {
 	lavalinkLog(`Load failed\n${util.inspect(e, false, Infinity, true)}`);
-	payload.loadType = Constants.STRINGS.LOAD_FAILED;
+	payload.loadType = "LOAD_FAILED";
 	payload.exception = {
-		message: (typeof e === Constants.STRINGS.STRING ? e as string : (e as Error).message || Constants.STRINGS.EMPTY_STRING).split(Constants.STRINGS.NEW_LINE).slice(-1)[0].replace(errorRegex, Constants.STRINGS.EMPTY_STRING),
+		message: (typeof e === "string" ? e as string : (e as Error).message || "").split("\n").slice(-1)[0].replace(errorRegex, ""),
 		severity: severity,
-		cause: (typeof e === Constants.STRINGS.STRING ? new Error().stack || Constants.STRINGS.UNKNOWN : (e as Error).name)
+		cause: (typeof e === "string" ? new Error().stack || "unknown" : (e as Error).name)
 	};
-	response.writeHead(200, Constants.STRINGS.OK, Constants.baseHTTPResponseHeaders).end(JSON.stringify(payload));
+	response.writeHead(200, "OK", Constants.baseHTTPResponseHeaders).end(JSON.stringify(payload));
 }
 
 export function isObject<T>(val: T): val is Record<any, any> {
-	return typeof val === Constants.STRINGS.FUNCTION || (typeof val === Constants.STRINGS.OBJECT && val !== null && !Array.isArray(val));
+	return typeof val === "function" || (typeof val === "object" && val !== null && !Array.isArray(val));
 }
 
 export function isValidKey(key: string) {
-	return key !== Constants.STRINGS.PROTO && key !== Constants.STRINGS.CONSTRUCTOR && key !== Constants.STRINGS.PROTOTYPE;
+	return key !== "__proto__" && key !== "constructor" && key !== "prototype";
 }
 
 export function mixin<T extends Record<string, any>, S extends Array<Record<string, any>>>(target: T, ...sources: S): import("volcano-sdk/types.js").Mixin<T, S> {
@@ -67,7 +67,7 @@ function mixinStep(target: Record<string, any>, val: Record<string, any>, key: s
 export async function createTimeoutForPromise<T>(promise: PromiseLike<T>, timeout: number): Promise<T> {
 	let timer: NodeJS.Timeout | undefined = undefined;
 	const timerPromise = new Promise<T>((_, reject) => {
-		timer = setTimeout(() => reject(new Error(Constants.STRINGS.TIMEOUT_REACHED)), timeout);
+		timer = setTimeout(() => reject(new Error("Timeout reached")), timeout);
 	});
 	const value = await Promise.race([promise, timerPromise]);
 	if (timer) clearTimeout(timer);
@@ -98,7 +98,7 @@ function getServerName(host?: string) {
 export async function connect(url: string, opts?: { method?: string; keepAlive?: boolean; headers?: { [header: string]: any } }): Promise<import("net").Socket> {
 	const decoded = new URL(url);
 	const options = {
-		method: Constants.STRINGS.GET,
+		method: "GET",
 		headers: {
 			Host: decoded.host,
 			"User-Agent": Constants.fakeAgent,
@@ -161,7 +161,7 @@ export class ConnectionResponse extends Transform {
 		}
 
 		this.headersReceived = true;
-		const string = chunk.toString(Constants.STRINGS.UTF8);
+		const string = chunk.toString("utf-8");
 		const lines = string.split("\n");
 		const match = (lines[0] || "").match(responseRegex);
 		if (!match) {
@@ -254,12 +254,12 @@ export function waitForResourceToEnterState(resource: import("@discordjs/voice")
 		function onStateChange(_oldState: import("@discordjs/voice").VoiceConnectionState | import("@discordjs/voice").AudioPlayerState, newState: import("@discordjs/voice").VoiceConnectionState | import("@discordjs/voice").AudioPlayerState) {
 			if (newState.status !== status) return;
 			if (timeout) clearTimeout(timeout);
-			(resource as import("@discordjs/voice").AudioPlayer).removeListener(Constants.STRINGS.STATE_CHANGE, onStateChange);
+			(resource as import("@discordjs/voice").AudioPlayer).removeListener("stateChange", onStateChange);
 			return res(void 0);
 		}
-		(resource as import("@discordjs/voice").AudioPlayer).on(Constants.STRINGS.STATE_CHANGE, onStateChange);
+		(resource as import("@discordjs/voice").AudioPlayer).on("stateChange", onStateChange);
 		timeout = setTimeout(() => {
-			(resource as import("@discordjs/voice").AudioPlayer).removeListener(Constants.STRINGS.STATE_CHANGE, onStateChange);
+			(resource as import("@discordjs/voice").AudioPlayer).removeListener("stateChange", onStateChange);
 			rej(new Error("Didn't enter state in time"));
 		}, timeoutMS);
 	});
@@ -297,23 +297,23 @@ export async function getStats(): Promise<import("lavalink-types").Stats> {
 const quoteRegex = /"/g;
 
 export function stringify(data: any, ignoreQuotes?: boolean) {
-	if (typeof data === Constants.STRINGS.BIGINT) return `${data.toString()}n`;
-	else if (typeof data === Constants.STRINGS.OBJECT && data !== null && !Array.isArray(data)) {
+	if (typeof data === "bigint") return `${data.toString()}n`;
+	else if (typeof data === "object" && data !== null && !Array.isArray(data)) {
 		const references = new Set<any>();
-		return `{${Object.entries(stringifyStep(data, references)).map(e => `${stringify(e[0])}:${stringify(e[1])}`).join(Constants.STRINGS.COMMA)}}`;
-	} else if (Array.isArray(data)) return `[${data.map(i => stringify(i)).join(Constants.STRINGS.COMMA)}]`;
-	else if (typeof data === Constants.STRINGS.STRING && !ignoreQuotes) return `"${data.replace(quoteRegex, "\\\"")}"`;
+		return `{${Object.entries(stringifyStep(data, references)).map(e => `${stringify(e[0])}:${stringify(e[1])}`).join(",")}}`;
+	} else if (Array.isArray(data)) return `[${data.map(i => stringify(i)).join(",")}]`;
+	else if (typeof data === "string" && !ignoreQuotes) return `"${data.replace(quoteRegex, "\\\"")}"`;
 	else return String(data);
 }
 
 function stringifyStep(object: any, references: Set<any>): any {
 	const rebuilt = {};
 	for (const key of Object.keys(object)) {
-		if (key[0] === Constants.STRINGS.UNDERSCORE) continue;
+		if (key[0] === "_") continue;
 		if (object[key] === undefined) continue;
-		if (typeof object[key] === Constants.STRINGS.OBJECT && object[key] !== null && !Array.isArray(object[key])) {
+		if (typeof object[key] === "object" && object[key] !== null && !Array.isArray(object[key])) {
 			if (typeof object[key] === "function") continue;
-			if (references.has(object[key])) rebuilt[key] = Constants.STRINGS.CIRCULAR;
+			if (references.has(object[key])) rebuilt[key] = "[Circular]";
 			else {
 				references.add(object[key]);
 				rebuilt[key] = stringifyStep(object[key], references);

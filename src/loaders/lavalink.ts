@@ -24,7 +24,7 @@ global.lavalinkThreadPool = new ThreadPool({ size: os.cpus().length, dir: path.j
 const originalEmit = process.emit;
 process.emit = function(name: any, ...args: Array<any>): any {
 	const data = args[0];
-	if (name === Constants.STRINGS.WARNING && typeof data === Constants.STRINGS.OBJECT && data.name === Constants.STRINGS.EXPERIMENTAL_WARNING) return false;
+	if (name === "warning" && typeof data === "object" && data.name === "ExperimentalWarning") return false;
 	return originalEmit.apply(process, [name, ...args] as [any, any]);
 };
 

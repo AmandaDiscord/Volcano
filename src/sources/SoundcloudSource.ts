@@ -1,14 +1,12 @@
 import * as dl from "play-dl";
 import { Plugin } from "volcano-sdk";
 
-import Constants from "../Constants.js";
-
 const identifierRegex = /^O:/;
 const usableRegex = /^https:\/\/soundcloud.com/;
 
 class SoundcloudSource extends Plugin {
-	public source = Constants.STRINGS.SOUNDCLOUD;
-	public searchShorts = [Constants.STRINGS.SC];
+	public source = "soundcloud";
+	public searchShorts = ["sc"];
 
 	public canBeUsed(resource: string, searchShort?: string) {
 		if (searchShort === this.searchShorts[0]) return true;
@@ -16,9 +14,9 @@ class SoundcloudSource extends Plugin {
 	}
 
 	public async infoHandler(resource: string, searchShort?: string) {
-		const e = new Error(Constants.STRINGS.SOUNDCLOUD_NOT_FETCHABLE_RESOURCE);
+		const e = new Error("SOUNDCLOUD_NOT_FETCHABLE_RESOURCE");
 		if (searchShort === this.searchShorts[0]) {
-			const results = await dl.search(resource, { source: { soundcloud: Constants.STRINGS.TRACKS } });
+			const results = await dl.search(resource, { source: { soundcloud: "tracks" } });
 			return { entries: results.map(SoundcloudSource.songResultToTrack) };
 		}
 
@@ -29,26 +27,26 @@ class SoundcloudSource extends Plugin {
 			throw e;
 		}
 
-		if (result.type === Constants.STRINGS.PLAYLIST) {
+		if (result.type === "playlist") {
 			const playlist = result as import("play-dl").SoundCloudPlaylist;
 			return { entries: (playlist.tracks as Array<import("play-dl").SoundCloudTrack>).map(SoundcloudSource.songResultToTrack) };
 		}
 
-		if (result.type === Constants.STRINGS.TRACK) return { entries: [SoundcloudSource.songResultToTrack(result as import("play-dl").SoundCloudTrack)] };
+		if (result.type === "track") return { entries: [SoundcloudSource.songResultToTrack(result as import("play-dl").SoundCloudTrack)] };
 
 		throw e;
 	}
 
 	public async streamHandler(info: import("@lavalink/encoding").TrackInfo) {
-		const url = info.identifier.replace(identifierRegex, Constants.STRINGS.EMPTY_STRING);
-		const stream = await dl.stream_from_info(new dl.SoundCloudTrack({ user: {}, media: { transcodings: [{ format: { protocol: Constants.STRINGS.HLS, mime_type: Constants.STRINGS.UNKNOWN }, url: url }] } }));
+		const url = info.identifier.replace(identifierRegex, "");
+		const stream = await dl.stream_from_info(new dl.SoundCloudTrack({ user: {}, media: { transcodings: [{ format: { protocol: "hls", mime_type: "unknown" }, url: url }] } }));
 		return { stream: stream.stream, type: stream.type };
 	}
 
 	private static songResultToTrack(i: import("play-dl").SoundCloudTrack) {
-		if (!i.formats[0]) throw new Error(Constants.STRINGS.NO_SOUNDCLOUD_SONG_STREAM_URL);
+		if (!i.formats[0]) throw new Error("NO_SOUNDCLOUD_SONG_STREAM_URL");
 		return {
-			identifier: `${i.formats[0].format.protocol === Constants.STRINGS.HLS ? Constants.STRINGS.O_COLON : Constants.STRINGS.EMPTY_STRING}${i.formats[0].url}`,
+			identifier: `${i.formats[0].format.protocol === "hls" ? "O:" : ""}${i.formats[0].url}`,
 			author: i.user.name,
 			length: i.durationInMs,
 			isStream: false,

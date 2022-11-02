@@ -4,14 +4,13 @@ import util from "util";
 import { isMainThread } from "worker_threads";
 
 import logger from "../util/Logger.js";
-import Constants from "../Constants.js";
 import Util from "../util/Util.js";
 
 let pushToEnd: import("volcano-sdk").Plugin | undefined = undefined;
 
 const sourcesDir = path.join(lavalinkDirname, "./sources");
 for (const file of await fs.promises.readdir(sourcesDir)) {
-	if (!file.endsWith(Constants.STRINGS.DOT_JS)) continue;
+	if (!file.endsWith(".js")) continue;
 	let constructed: import("volcano-sdk").Plugin;
 	try {
 		const module = await import(`file://${path.join(sourcesDir, file)}`) as { default: typeof import("volcano-sdk").Plugin };
@@ -25,7 +24,7 @@ for (const file of await fs.promises.readdir(sourcesDir)) {
 		}
 		continue;
 	}
-	if (constructed.source === Constants.STRINGS.HTTP && isMainThread) pushToEnd = constructed;
+	if (constructed.source === "http" && isMainThread) pushToEnd = constructed;
 	else lavalinkPlugins.push(constructed);
 }
 
@@ -33,7 +32,7 @@ const pluginsDir = path.join(lavalinkDirname, "../plugins");
 const isDir = await fs.promises.stat(pluginsDir).then(s => s.isDirectory()).catch(() => false);
 if (isDir) {
 	for (const file of await fs.promises.readdir(pluginsDir)) {
-		if (!file.endsWith(Constants.STRINGS.DOT_JS)) continue;
+		if (!file.endsWith(".js")) continue;
 		let constructed: import("volcano-sdk").Plugin;
 		try {
 			const module = await import(`file://${path.join(pluginsDir, file)}`) as { default: typeof import("volcano-sdk").Plugin };

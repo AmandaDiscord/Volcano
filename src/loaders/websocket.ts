@@ -12,11 +12,11 @@ const playerMap = new Map<string, import("ws").WebSocket>();
 
 const serverLoopInterval: NodeJS.Timeout = setInterval(async () => {
 	const stats = await Util.getStats();
-	const payload = Object.assign(stats, { op: Constants.STRINGS.STATS });
+	const payload = Object.assign(stats, { op: "stats" });
 	const str: string = JSON.stringify(payload);
 	for (const client of wss.clients) {
-		if (client[Constants.STRINGS.IS_ALIVE] === false) return client.terminate();
-		client[Constants.STRINGS.IS_ALIVE] = false;
+		if (client["isAlive"] === false) return client.terminate();
+		client["isAlive"] = false;
 
 		if (client.readyState === WebSocket.OPEN) {
 			client.ping(Util.noop);
@@ -28,21 +28,21 @@ const serverLoopInterval: NodeJS.Timeout = setInterval(async () => {
 
 wss.on("headers", (headers, request) => {
 	headers.push(
-		`Session-Resumed: ${!!request.headers[Constants.STRINGS.RESUME_KEY] && socketDeleteTimeouts.has(request.headers[Constants.STRINGS.RESUME_KEY] as string)}`,
-		`Lavalink-Major-Version: ${lavalinkMajor}`, Constants.STRINGS.IS_VOLCANO_HEADER
+		`Session-Resumed: ${!!request.headers["resume-key"] && socketDeleteTimeouts.has(request.headers["resume-key"] as string)}`,
+		`Lavalink-Major-Version: ${lavalinkMajor}`, "Is-Volcano: true"
 	);
 });
 
-wss.on(Constants.STRINGS.CONNECTION, async (socket, request) => {
-	const userID = request.headers[Constants.STRINGS.USER_ID] as string;
+wss.on("connection", async (socket, request) => {
+	const userID = request.headers["user-id"] as string;
 	const stats: import("lavalink-types").Stats = await Util.getStats();
-	socket.send(JSON.stringify(Object.assign(stats, { op: Constants.STRINGS.STATS })));
-	socket.on(Constants.STRINGS.MESSAGE, data => onClientMessage(socket, data, userID));
-	socket[Constants.STRINGS.IS_ALIVE] = true;
-	socket.on(Constants.STRINGS.PONG, socketHeartbeat);
+	socket.send(JSON.stringify(Object.assign(stats, { op: "stats" })));
+	socket.on("message", data => onClientMessage(socket, data, userID));
+	socket["isAlive"] = true;
+	socket.on("pong", socketHeartbeat);
 
-	socket.once(Constants.STRINGS.CLOSE, code => onClientClose(socket, userID, code, { ip: request.socket.remoteAddress!, port: request.socket.remotePort! }));
-	socket.once(Constants.STRINGS.ERROR, () => onClientClose(socket, userID, 1000, { ip: request.socket.remoteAddress!, port: request.socket.remotePort! }));
+	socket.once("close", code => onClientClose(socket, userID, code, { ip: request.socket.remoteAddress!, port: request.socket.remotePort! }));
+	socket.once("error", () => onClientClose(socket, userID, 1000, { ip: request.socket.remoteAddress!, port: request.socket.remotePort! }));
 });
 
 wss.once("close", () => {
@@ -55,7 +55,7 @@ wss.once("close", () => {
 	}
 });
 
-lavalinkThreadPool.on(Constants.STRINGS.MESSAGE, (_, msg) => {
+lavalinkThreadPool.on("message", (_, msg) => {
 	const socket = playerMap.get(`${msg.clientID}.${msg.data.guildId}`);
 	const entry = [...connections.values()].find(i => i.some(c => c.socket === socket));
 	const rKey = entry?.find((c) => c.socket);
@@ -64,7 +64,7 @@ lavalinkThreadPool.on(Constants.STRINGS.MESSAGE, (_, msg) => {
 	socket?.send(JSON.stringify(msg.data));
 });
 
-lavalinkThreadPool.on(Constants.STRINGS.DATA_REQ, (op, data) => {
+lavalinkThreadPool.on("datareq", (op, data) => {
 	if (op === Constants.workerOPCodes.VOICE_SERVER) {
 		const v = voiceServerStates.get(`${data.clientID}.${data.guildId}`);
 
@@ -77,15 +77,15 @@ function socketHeartbeat(): void {
 }
 
 export function handleWSUpgrade(request: import("http").IncomingMessage, socket: import("net").Socket, head: Buffer) {
-	const userID: string = request.headers[Constants.STRINGS.USER_ID] as string;
+	const userID: string = request.headers["user-id"] as string;
 	wss.handleUpgrade(request, socket, head, s => {
-		if (request.headers[Constants.STRINGS.RESUME_KEY] && socketDeleteTimeouts.has(request.headers[Constants.STRINGS.RESUME_KEY] as string)) {
-			const resume = socketDeleteTimeouts.get(request.headers[Constants.STRINGS.RESUME_KEY] as string)!;
+		if (request.headers["resume-key"] && socketDeleteTimeouts.has(request.headers["resume-key"] as string)) {
+			const resume = socketDeleteTimeouts.get(request.headers["resume-key"] as string)!;
 			clearTimeout(resume.timeout);
-			socketDeleteTimeouts.delete(request.headers[Constants.STRINGS.RESUME_KEY] as string);
+			socketDeleteTimeouts.delete(request.headers["resume-key"] as string);
 			const exist = connections.get(userID);
 			if (exist) {
-				const pre = exist.find(i => i.resumeKey === request.headers[Constants.STRINGS.RESUME_KEY]);
+				const pre = exist.find(i => i.resumeKey === request.headers["resume-key"]);
 
 				if (pre) pre.socket = s;
 				else exist.push({ socket: s, resumeKey: null, resumeTimeout: 60 });
@@ -95,18 +95,18 @@ export function handleWSUpgrade(request: import("http").IncomingMessage, socket:
 				s.send(JSON.stringify(event));
 			}
 
-			lavalinkLog(`Resumed session with key ${request.headers[Constants.STRINGS.RESUME_KEY]}`);
+			lavalinkLog(`Resumed session with key ${request.headers["resume-key"]}`);
 			lavalinkLog(`Replaying ${resume.events.length.toLocaleString()} events`);
 			resume.events.length = 0;
-			return wss.emit(Constants.STRINGS.CONNECTION, s, request);
+			return wss.emit("connection", s, request);
 		}
 
-		lavalinkLog(Constants.STRINGS.CONNECTION_SUCCESSFULLY_ESTABLISHED);
+		lavalinkLog("Connection successfully established");
 		const existing = connections.get(userID);
 		const pl = { socket: s, resumeKey: null, resumeTimeout: 60 };
 		if (existing) existing.push(pl);
 		else connections.set(userID, [pl]);
-		wss.emit(Constants.STRINGS.CONNECTION, s, request);
+		wss.emit("connection", s, request);
 	});
 }
 
@@ -175,7 +175,7 @@ async function onClientMessage(socket: import("ws").WebSocket, data: import("ws"
 		break;
 	}
 	case Constants.OPCodes.FFMPEG: {
-		if (!msg.guildId || !msg.args || !Array.isArray(msg.args) || !msg.args.every(i => typeof i === Constants.STRINGS.STRING)) return;
+		if (!msg.guildId || !msg.args || !Array.isArray(msg.args) || !msg.args.every(i => typeof i === "string")) return;
 		void lavalinkThreadPool.broadcast(pl);
 		break;
 	}

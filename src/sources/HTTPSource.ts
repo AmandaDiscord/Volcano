@@ -9,12 +9,12 @@ import Util from "../util/Util.js";
 
 const mimeRegex = /^(audio|video|application)\/(.+)$/;
 const httpRegex = /^https?:\/\//;
-const supportedApplicationTypes = [Constants.STRINGS.OGG, Constants.STRINGS.X_MPEG_URL];
+const supportedApplicationTypes = ["ogg", "x-mpegURL"];
 const redirectStatusCodes = [301, 302, 303, 307, 308];
 const pcmTypes = ["pcm", "wav"];
 
 class HTTPSource extends Plugin {
-	public source = Constants.STRINGS.HTTP;
+	public source = "http";
 
 	public canBeUsed(resource: string) {
 		if (resource.match(httpRegex)) return true;
@@ -41,19 +41,19 @@ class HTTPSource extends Plugin {
 
 		const data = await HTTPSource.followURLS(resource);
 
-		const mimeMatch = data.headers[Constants.STRINGS.CONTENT_TYPE]?.match(mimeRegex);
-		if (mimeMatch && mimeMatch[1] === Constants.STRINGS.APPLICATION && !supportedApplicationTypes.includes(mimeMatch[2])) {
+		const mimeMatch = data.headers["content-type"]?.match(mimeRegex);
+		if (mimeMatch && mimeMatch[1] === "application" && !supportedApplicationTypes.includes(mimeMatch[2])) {
 			data.end();
 			data.destroy();
-			throw new Error(`${Constants.STRINGS.UNSUPPORTED_FILE_TYPE} ${data.headers[Constants.STRINGS.CONTENT_TYPE]}`);
+			throw new Error(`${"UNSUPPORTED_FILE_TYPE"} ${data.headers["content-type"]}`);
 		}
 
 		Object.keys(data.headers).forEach(key => {
-			if (key.startsWith(Constants.STRINGS.ICY_HEADER_DASH)) isIcy = isCast = true;
+			if (key.startsWith("icy-")) isIcy = isCast = true;
 		});
 
-		chunked = !!data.headers[Constants.STRINGS.TRANSFER_ENCODING]?.includes(Constants.STRINGS.CHUNKED) || isCast || (data.headers[Constants.STRINGS.CONTENT_TYPE] === Constants.STRINGS.APPLICATION_X_MPEG_URL);
-		probe = mimeMatch ? mimeMatch[2] : Constants.STRINGS.STAR;
+		chunked = !!data.headers["transfer-encoding"]?.includes("chunked") || isCast || (data.headers["content-type"] === "application/x-mpegURL");
+		probe = mimeMatch ? mimeMatch[2] : "*";
 
 		// Is stream chunked? (SKIPS A LOT OF CHECKS AND JUST RUNS WITH IT)
 		// Will be more than just ice-cast in the future
@@ -64,17 +64,17 @@ class HTTPSource extends Plugin {
 
 			// Fill in ice cast data if applicable so track info doesn't always fallback to Unknown.
 			if (isIcy) {
-				if (data.headers[Constants.STRINGS.ICY_DESCRIPTION]) parsed!.common.artist = data.headers[Constants.STRINGS.ICY_DESCRIPTION] as string;
-				if (data.headers[Constants.STRINGS.ICY_NAME]) parsed!.common.title = data.headers[Constants.STRINGS.ICY_NAME] as string;
+				if (data.headers["icy-description"]) parsed!.common.artist = data.headers["icy-description"] as string;
+				if (data.headers["icy-name"]) parsed!.common.title = data.headers["icy-name"] as string;
 			}
-		} else if (data.headers[Constants.STRINGS.CONTENT_TYPE] === Constants.STRINGS.APPLICATION_X_MPEG_URL) {
+		} else if (data.headers["content-type"] === "application/x-mpegURL") {
 			data.end();
 			data.destroy();
 			parsed = { common: {}, format: {} } as IAudioMetadata;
 		} else {
 			const promise = parseStream(data, {
-				mimeType: data.headers[Constants.STRINGS.CONTENT_TYPE] || undefined,
-				size: data.headers[Constants.STRINGS.CONTENT_LENGTH] ? Number(data.headers[Constants.STRINGS.CONTENT_LENGTH]) : undefined,
+				mimeType: data.headers["content-type"] || undefined,
+				size: data.headers["content-length"] ? Number(data.headers["content-length"]) : undefined,
 				url: resource
 			}, {
 				skipCovers: true,
@@ -95,8 +95,8 @@ class HTTPSource extends Plugin {
 		return {
 			entries: [
 				{
-					title: parsed.common.title || Constants.STRINGS.UNKNOWN_TITLE,
-					author: parsed.common.artist || Constants.STRINGS.UNKNOWN_AUTHOR,
+					title: parsed.common.title || "Unknown title",
+					author: parsed.common.artist || "Unknown author",
 					identifier: resource,
 					uri: resource,
 					length: Math.round((parsed.format.duration || 0) * 1000),
@@ -112,11 +112,11 @@ class HTTPSource extends Plugin {
 	}
 
 	public async streamHandler(info: import("@lavalink/encoding").TrackInfo) {
-		if (info.probeInfo!.raw === Constants.STRINGS.X_MPEG_URL || info.uri!.endsWith(Constants.STRINGS.DOT_M3U8)) return { stream: m3u8(info.uri!), type: StreamType.Arbitrary };
+		if (info.probeInfo!.raw === "x-mpegURL" || info.uri!.endsWith(".m3u8")) return { stream: m3u8(info.uri!), type: StreamType.Arbitrary };
 		else {
 			const response = await Util.connect(info.uri!, { headers: Constants.baseHTTPRequestHeaders });
 			let type: StreamType | undefined = undefined;
-			if (info.probeInfo!.raw === Constants.STRINGS.OGG) type = StreamType.OggOpus;
+			if (info.probeInfo!.raw === "ogg") type = StreamType.OggOpus;
 			else if (info.probeInfo!.raw === "opus") type = StreamType.Opus;
 			else if (pcmTypes.includes(info.probeInfo!.raw)) type = StreamType.Raw;
 			return { stream: response, type };

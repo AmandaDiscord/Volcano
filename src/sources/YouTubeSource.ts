@@ -13,8 +13,8 @@ const ytm = new ytmapi.default();
 const usableRegex = /^https?:\/\/(?:\w+)?\.?youtu\.?be(?:.com)?\/(?:watch\?v=)?\w+/;
 
 class YouTubeSource extends Plugin {
-	public source = Constants.STRINGS.YOUTUBE;
-	public searchShorts = [Constants.STRINGS.YT, "ytm"];
+	public source = "youtube";
+	public searchShorts = ["yt", "ytm"];
 
 	public async initialize() {
 		if (isMainThread) await ytm.initialize();
@@ -26,17 +26,17 @@ class YouTubeSource extends Plugin {
 	}
 
 	public async infoHandler(resource: string, searchShort?: string) {
-		if (searchShort === Constants.STRINGS.YT) {
+		if (searchShort === "yt") {
 			const validated = dl.yt_validate(resource);
 			if (validated) {
 				try {
 					const ID = dl.extractID(resource);
-					if (validated === Constants.STRINGS.VIDEO) {
+					if (validated === "video") {
 						const d = await dl.video_basic_info(ID);
 						return { entries: [YouTubeSource.songResultToTrack(d.video_details)] };
 					} else {
 						const d = await dl.playlist_info(resource, { incomplete: true });
-						if (!d) throw new Error(Constants.STRINGS.NO_PLAYLIST);
+						if (!d) throw new Error("NO_PLAYLIST");
 						await d.fetch();
 						const entries = [] as Array<import("play-dl").YouTubeVideo>;
 						for (let i = 1; i < d.total_pages + 1; i++) {
@@ -57,7 +57,7 @@ class YouTubeSource extends Plugin {
 
 			// eslint-disable-next-line no-inner-declarations
 			async function doSearch() {
-				const searchResults = await dl.search(resource, { limit: 10, source: { youtube: Constants.STRINGS.VIDEO } }) as Array<import("play-dl").YouTubeVideo>;
+				const searchResults = await dl.search(resource, { limit: 10, source: { youtube: "video" } }) as Array<import("play-dl").YouTubeVideo>;
 				const found = searchResults.find(v => v.id === resource);
 				if (found) return { entries: [YouTubeSource.songResultToTrack(found)] };
 				return { entries: searchResults.map(YouTubeSource.songResultToTrack) };
@@ -67,7 +67,7 @@ class YouTubeSource extends Plugin {
 			return {
 				entries: tracks.map(t => ({
 					title: t.name,
-					author: t.artists[0]?.name || Constants.STRINGS.UNKNOWN_AUTHOR,
+					author: t.artists[0]?.name || "Unknown author",
 					identifier: t.videoId,
 					uri: `https://youtube.com/watch?v=${t.videoId}`,
 					length: Math.round(t.duration * 1000),
@@ -77,12 +77,12 @@ class YouTubeSource extends Plugin {
 		}
 
 		let url: URL | undefined = undefined;
-		if (resource.startsWith(Constants.STRINGS.HTTP)) url = new URL(resource);
-		if (url && url.searchParams.get(Constants.STRINGS.LIST) && url.searchParams.get(Constants.STRINGS.LIST)!.startsWith(Constants.STRINGS.FL_UNDERSCORE) || resource.startsWith(Constants.STRINGS.FL_UNDERSCORE)) throw new Error(Constants.STRINGS.FL_CANNOT_BE_FETCHED);
+		if (resource.startsWith("http")) url = new URL(resource);
+		if (url && url.searchParams.get("list") && url.searchParams.get("list")!.startsWith("FL_") || resource.startsWith("FL_")) throw new Error("Favorite list playlists cannot be fetched.");
 
-		if (url && url.searchParams.has(Constants.STRINGS.LIST) || resource.startsWith(Constants.STRINGS.PL)) {
+		if (url && url.searchParams.has("list") || resource.startsWith("PL")) {
 			const pl = await dl.playlist_info(resource, { incomplete: true });
-			if (!pl) throw new Error(Constants.STRINGS.NO_PLAYLIST);
+			if (!pl) throw new Error("NO_PLAYLIST");
 			await pl.fetch(100 * lavalinkConfig.lavalink.server.youtubePlaylistLoadLimit);
 			const entries = [] as Array<import("play-dl").YouTubeVideo>;
 			for (let i = 1; i < pl.total_pages + 1; i++) {
@@ -93,7 +93,7 @@ class YouTubeSource extends Plugin {
 				entries: entries.map(YouTubeSource.songResultToTrack),
 				plData: {
 					name: pl.title!,
-					selectedTrack: url?.searchParams.get(Constants.STRINGS.INDEX) ? Number(url.searchParams.get(Constants.STRINGS.INDEX)) : 0
+					selectedTrack: url?.searchParams.get("index") ? Number(url.searchParams.get("index")) : 0
 				}
 			};
 		}
@@ -125,9 +125,9 @@ class YouTubeSource extends Plugin {
 		}
 		return {
 			identifier: i.id,
-			title: i.title || Constants.STRINGS.UNKNOWN_TITLE,
+			title: i.title || "Unknown title",
 			length,
-			author: i.channel?.name || Constants.STRINGS.UNKNOWN_AUTHOR,
+			author: i.channel?.name || "Unknown author",
 			uri: `https://youtube.com/watch?v=${i.id}`,
 			isStream: length === 0
 		};

@@ -101,34 +101,34 @@ class ThreadPool extends ThreadBasedReplier {
 			const worker = new Worker(this.dir);
 			const id = worker.threadId;
 			this.children.set(id, worker);
-			this.emit(Constants.STRINGS.SPAWN, id, worker);
+			this.emit("spawn", id, worker);
 
 			let ready = false;
 
-			worker.on(Constants.STRINGS.MESSAGE, msg => {
+			worker.on("message", msg => {
 				if (msg.op === Constants.workerOPCodes.READY) {
 					ready = true;
-					this.emit(Constants.STRINGS.READY, id, worker);
+					this.emit("ready", id, worker);
 					return res([id, worker]);
 				}
 				if (!ready) {
 					this.children.delete(id);
-					return rej(new Error(Constants.STRINGS.THREAD_DID_NOT_COMMUNICATE_READY));
+					return rej(new Error("THREAD_DID_NOT_COMMUNICATE_READY"));
 				}
 
-				if (msg.op === Constants.workerOPCodes.VOICE_SERVER) return this.emit(Constants.STRINGS.DATA_REQ, msg.op, msg.data);
+				if (msg.op === Constants.workerOPCodes.VOICE_SERVER) return this.emit("datareq", msg.op, msg.data);
 
 				if (msg.threadID && (msg.op === Constants.workerOPCodes.REPLY || msg.op === Constants.workerOPCodes.ACKKNOWLEDGE) && !this.outgoing.has(msg.threadID)) return;
 				if (msg.threadID && msg.op === Constants.workerOPCodes.ACKKNOWLEDGE && this.outgoing.has(msg.threadID)) return this.outgoingPersist.has(msg.threadID) ? this.outgoing.get(msg.threadID)!(void 0) : this.outgoing.use(msg.threadID)!(void 0);
 				if (msg.threadID && msg.op === Constants.workerOPCodes.REPLY && this.outgoing.has(msg.threadID) && !this.outgoingPersist.has(msg.threadID)) return this.outgoing.use(msg.threadID)!(msg.data);
 				else if (msg.threadID && msg.op === Constants.workerOPCodes.REPLY && this.outgoing.has(msg.threadID) && this.outgoingPersist.has(msg.threadID)) return this.outgoing.get(msg.threadID)!(msg.data);
 
-				if (msg.op === Constants.workerOPCodes.MESSAGE) return this.emit(Constants.STRINGS.MESSAGE, id, msg);
+				if (msg.op === Constants.workerOPCodes.MESSAGE) return this.emit("message", id, msg);
 			});
 
-			worker.on(Constants.STRINGS.ERROR, e => logger.error(util.inspect(e, false, Infinity, true)));
+			worker.on("error", e => logger.error(util.inspect(e, false, Infinity, true)));
 
-			worker.once(Constants.STRINGS.EXIT, () => onWorkerExit(id, worker, this));
+			worker.once("exit", () => onWorkerExit(id, worker, this));
 		});
 	}
 
@@ -136,14 +136,14 @@ class ThreadPool extends ThreadBasedReplier {
 		await Promise.all([...this.children.values()].map(async child => {
 			const stream = await child.getHeapSnapshot().catch(e => logger.error(util.inspect(e, false, Infinity, true)));
 			if (stream) {
-				const write = fs.createWriteStream(path.join(Constants.STRINGS.PATH_UP, Constants.STRINGS.PATH_UP, `worker-${child.threadId}-snapshot-${Date.now()}.heapsnapshot`));
+				const write = fs.createWriteStream(path.join("../", "../", `worker-${child.threadId}-snapshot-${Date.now()}.heapsnapshot`));
 				pipeline(stream, write, Util.noop);
 			}
 		}));
 	}
 
 	public send(id: number, message: ThreadMessage) {
-		if (!this.children.get(id)) throw new Error(Constants.STRINGS.THREAD_NOT_IN_POOL);
+		if (!this.children.get(id)) throw new Error("THREAD_NOT_IN_POOL");
 		return this.baseRequest(message.op, message.data, (d) => this.children.get(id)!.postMessage(d));
 	}
 
@@ -181,16 +181,16 @@ async function onWorkerExit(id: number, worker: Worker, pool: ThreadPool) {
 	} catch {
 		const stream = await worker.getHeapSnapshot().catch(e => logger.error(util.inspect(e, false, Infinity, true)));
 		if (stream) {
-			const write = fs.createWriteStream(path.join(Constants.STRINGS.PATH_UP, Constants.STRINGS.PATH_UP, `worker-${id}-snapshot-${Date.now()}.heapsnapshot`));
+			const write = fs.createWriteStream(path.join("../", "../", `worker-${id}-snapshot-${Date.now()}.heapsnapshot`));
 			stream.pipe(write);
 		}
-		return logger.error(Constants.STRINGS.WORKER_NOT_TERMINATED_IN_TIME);
+		return logger.error("Worker did not terminate in time. Heap snapshot written");
 	}
 	if (timer) clearTimeout(timer);
 	pool.taskSizeMap.delete(id);
 	pool.children.delete(id);
 	worker.removeAllListeners();
-	pool.emit(Constants.STRINGS.DEATH, id);
+	pool.emit("death", id);
 }
 
 export default ThreadPool;

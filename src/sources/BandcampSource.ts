@@ -18,14 +18,14 @@ class BandcampSource extends Plugin {
 	}
 
 	public async infoHandler(resource: string) {
-		const html = await fetch(resource, { redirect: Constants.STRINGS.FOLLOW, headers: Constants.baseHTTPRequestHeaders }).then(d => d.text());
+		const html = await fetch(resource, { redirect: "follow", headers: Constants.baseHTTPRequestHeaders }).then(d => d.text());
 		const data = BandcampSource.parse(html);
 		const value: Awaited<ReturnType<NonNullable<Plugin["infoHandler"]>>> = { entries: [] };
 		if (data["@type"].includes("MusicAlbum")) {
 			value.plData = { name: data.name, selectedTrack: 0 };
 			const toFetch: Array<string> = data.albumRelease.filter(r => !!r["@id"].match(trackRegex)).map(i => i["@id"]);
 			await Promise.all(toFetch.map(async url => {
-				const html2 = await fetch(url, { redirect: Constants.STRINGS.FOLLOW, headers: Constants.baseHTTPRequestHeaders }).then(d => d.text());
+				const html2 = await fetch(url, { redirect: "follow", headers: Constants.baseHTTPRequestHeaders }).then(d => d.text());
 				const data2 = BandcampSource.parse(html2);
 				value.entries.push(BandcampSource.trackToResource(data2));
 			}));
@@ -37,7 +37,7 @@ class BandcampSource extends Plugin {
 	}
 
 	public async streamHandler(info: import("@lavalink/encoding").TrackInfo) {
-		const html = await fetch(info.uri!, { redirect: Constants.STRINGS.FOLLOW, headers: Constants.baseHTTPRequestHeaders }).then(d => d.text());
+		const html = await fetch(info.uri!, { redirect: "follow", headers: Constants.baseHTTPRequestHeaders }).then(d => d.text());
 		const parser = htmlParse.default(html);
 		const head = parser.getElementsByTagName("head")[0];
 		const stream = head.toString().match(streamRegex);

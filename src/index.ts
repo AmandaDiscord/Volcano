@@ -19,16 +19,20 @@ let username: string;
 try {
 	username = os.userInfo().username;
 } catch {
-	username = "unknown user";
+	username = "unknown";
 }
 
-const pkg = await fs.promises.readFile(path.join(lavalinkDirname, "../package.json"), Constants.STRINGS.UTF8).then(JSON.parse);
+const pkg = await fs.promises.readFile(path.join(lavalinkDirname, "../package.json"), "utf-8").then(JSON.parse);
 
-const buildInfo = await fs.promises.readFile(path.join(lavalinkDirname, "buildinfo.json"), Constants.STRINGS.UTF8).then(JSON.parse).catch(() => ({
+const buildInfo = await fs.promises.readFile(path.join(lavalinkDirname, "buildinfo.json"), "utf-8").then(JSON.parse).catch(() => ({
 	build_time: null as number | null,
-	branch: Constants.STRINGS.UNKNOWN,
-	commit: Constants.STRINGS.UNKNOWN
-}));
+	branch: "unknown",
+	commit: "unknown"
+})) as {
+	build_time: number | null;
+	branch: string;
+	commit: string;
+};
 
 if (lavalinkConfig.spring.main["banner-mode"] === "log")
 	lavalinkRootLog("\n\n" +
@@ -43,11 +47,11 @@ if (lavalinkConfig.spring.main["banner-mode"] === "log")
 const properties = {
 	Version: pkg.version,
 	"Lavalink version": lavalinkVersion,
-	"Build time": buildInfo.build_time ? new Date(buildInfo.build_time).toUTCString() : Constants.STRINGS.UNKNOWN,
+	"Build time": buildInfo.build_time ? new Date(buildInfo.build_time).toUTCString() : "unknown",
 	Branch: buildInfo.branch,
-	Commit: buildInfo.commit !== Constants.STRINGS.UNKNOWN ? buildInfo.commit.slice(0, 6) : buildInfo.commit,
-	Node: process.version.replace("v", Constants.STRINGS.EMPTY_STRING),
-	Downloader: pkg.dependencies["play-dl"].replace("^", Constants.STRINGS.EMPTY_STRING)
+	Commit: buildInfo.commit !== "unknown" ? buildInfo.commit.slice(0, 6) : buildInfo.commit,
+	Node: process.version.replace("v", ""),
+	Downloader: pkg.dependencies["play-dl"].replace("^", "")
 };
 
 const longestLength = Object.keys(properties).map(k => k.length).sort((a, b) => b - a)[0];
@@ -64,7 +68,7 @@ http.on("upgrade", async (request: HTTP.IncomingMessage, socket: import("net").S
 	lavalinkLog(`Incoming connection from /${request.socket.remoteAddress}:${request.socket.remotePort}`);
 
 	const temp401 = "HTTP/1.1 401 Unauthorized\r\n\r\n";
-	const userID = request.headers[Constants.STRINGS.USER_ID];
+	const userID = request.headers["user-id"];
 
 	const passwordIncorrect: boolean = (!!lavalinkConfig.lavalink.server.password?.length && request.headers.authorization !== String(lavalinkConfig.lavalink.server.password));
 	const invalidUserID: boolean = (!userID || Array.isArray(userID) || !allDigitRegex.test(userID));
@@ -81,14 +85,14 @@ http.on("upgrade", async (request: HTTP.IncomingMessage, socket: import("net").S
 
 async function serverHandler(req: import("http").IncomingMessage, res: import("http").ServerResponse): Promise<unknown> {
 	try {
-		const url = new URL(req.url || Constants.STRINGS.SLASH, `http://${req.headers.host || "localhost"}`);
+		const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
 
 		const isInvalidPassword = !!lavalinkConfig.lavalink.server.password.length && (!req.headers.authorization || req.headers.authorization !== String(lavalinkConfig.lavalink.server.password));
 
 		// This is just for rest. Upgrade requests for the websocket are handled in the http upgrade event.
-		if (url.pathname !== Constants.STRINGS.SLASH && isInvalidPassword) {
+		if (url.pathname !== "/" && isInvalidPassword) {
 			logger.warn(`Authorization missing for ${req.socket.remoteAddress} on ${req.method!.toUpperCase()} ${url.pathname}`);
-			return res.writeHead(401, Constants.STRINGS.UNAUTHORIZED, Object.assign({}, Constants.baseHTTPResponseHeaders, { [Constants.STRINGS.CONTENT_TYPE_CAPPED]: Constants.STRINGS.TEXT_PLAIN })).end(Constants.STRINGS.UNAUTHORIZED);
+			return res.writeHead(401, "Unauthorized", Object.assign({}, Constants.baseHTTPResponseHeaders, { ["Content-Type"]: "text/plain" })).end("Unauthorized");
 		}
 
 		const path = paths[url.pathname];
@@ -105,9 +109,9 @@ async function serverHandler(req: import("http").IncomingMessage, res: import("h
 			}
 		}
 
-		if (!res.headersSent && res.writable) return res.writeHead(404, Constants.STRINGS.NOT_FOUND, Constants.baseHTTPResponseHeaders).end(Constants.STRINGS.NOT_FOUND);
+		if (!res.headersSent && res.writable) return res.writeHead(404, "Not Found", Constants.baseHTTPResponseHeaders).end("Not Found");
 	} catch (e) {
-		if (!res.headersSent) res.writeHead(500, "Internal server error", Object.assign({}, Constants.baseHTTPResponseHeaders, { [Constants.STRINGS.CONTENT_TYPE_CAPPED]: Constants.STRINGS.TEXT_PLAIN }));
+		if (!res.headersSent) res.writeHead(500, "Internal server error", Object.assign({}, Constants.baseHTTPResponseHeaders, { ["Content-Type"]: "text/plain" }));
 		if (res.writable) res.end(util.inspect(e, false, Infinity, false));
 	}
 }

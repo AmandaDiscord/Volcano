@@ -54,7 +54,7 @@
     "@typescript-eslint/eslint-plugin": "^5.41.0",
     "@typescript-eslint/parser": "^5.41.0",
     "eslint": "^8.26.0",
-    "lavalink-types": "github:AmandaDiscord/LavalinkTypes#e2844e22d3f881220be9dd08a1982ac5fffa691b",
+    "lavalink-types": "github:AmandaDiscord/LavalinkTypes#1cadb97f9b52ec93f4023cd1275000c31db81901",
     "typescript": "^4.8.4"
   },
   "files": [

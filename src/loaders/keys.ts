@@ -12,14 +12,14 @@ const keyDir = path.join(lavalink.lavalinkDirname, "../soundcloud.txt");
 async function keygen() {
 	const clientID = await dl.getFreeClientID();
 	if (!clientID) throw new Error("SOUNDCLOUD_KEY_NO_CREATE");
-	fs.writeFileSync(keyDir, clientID, { encoding: Constants.STRINGS.UTF8 });
+	fs.writeFileSync(keyDir, clientID, { encoding: "utf-8" });
 	await dl.setToken({ soundcloud : { client_id : clientID } });
 }
 
 if (fs.existsSync(keyDir)) {
 	if (Date.now() - (await fs.promises.stat(keyDir)).mtime.getTime() >= (1000 * 60 * 60 * 24 * 7)) await keygen();
 	else {
-		const APIKey = await fs.promises.readFile(keyDir, { encoding: Constants.STRINGS.UTF8 });
+		const APIKey = await fs.promises.readFile(keyDir, { encoding: "utf-8" });
 		await dl.setToken({ soundcloud: { client_id: APIKey } });
 	}
 } else await keygen();

@@ -21,7 +21,7 @@ const reportInterval = setInterval(() => {
 	if (!queues.size) return;
 	for (const queue of queues.values()) {
 		const state = queue.state;
-		if (!queue.actions.paused) parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: Constants.OPCodes.PLAYER_UPDATE, guildId: queue.guildID, state: state } as import("lavalink-types").PlayerUpdate, clientID: queue.clientID });
+		if (!queue.actions.paused) sendToParent({ op: Constants.OPCodes.PLAYER_UPDATE, guildId: queue.guildID, state }, queue.clientID);
 	}
 }, lavalinkConfig.lavalink.server.playerUpdateInterval * 1000);
 
@@ -46,7 +46,7 @@ class Queue {
 		this.clientID = clientID;
 		this.guildID = guildID;
 
-		this.connection.on(Constants.STRINGS.STATE_CHANGE, async (_oldState, newState) => {
+		this.connection.on("stateChange", async (_oldState, newState) => {
 			if (newState.status === Discord.VoiceConnectionStatus.Disconnected) {
 				try {
 					await Promise.race([
@@ -54,42 +54,43 @@ class Queue {
 						Util.waitForResourceToEnterState(this.connection, Discord.VoiceConnectionStatus.Connecting, 5000)
 					]);
 				} catch {
-					if (newState.reason === Discord.VoiceConnectionDisconnectReason.WebSocketClose) parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: Constants.STRINGS.EVENT, type: Constants.STRINGS.WEBSOCKET_CLOSE_EVENT, guildId: this.guildID, code: newState.closeCode, reason: Constants.VoiceWSCloseCodes[newState.closeCode], byRemote: true } as import("lavalink-types").WebsocketClosedEvent, clientID: this.clientID });
+					if (newState.reason === Discord.VoiceConnectionDisconnectReason.WebSocketClose) sendToParent({ op: "event", type: "WebSocketClosedEvent", guildId: this.guildID, code: newState.closeCode as keyof typeof Constants.VoiceWSCloseCodes, reason: Constants.VoiceWSCloseCodes[newState.closeCode], byRemote: true }, this.clientID);
 				}
-			} else if (newState.status === Discord.VoiceConnectionStatus.Destroyed && !this.actions.destroyed) parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: Constants.STRINGS.EVENT, type: Constants.STRINGS.WEBSOCKET_CLOSE_EVENT, guildId: this.guildID, code: 4000, reason: "IDK what happened. All I know is that the connection was destroyed prematurely", byRemote: true } as unknown as import("lavalink-types").WebsocketClosedEvent, clientID: this.clientID });
+			} else if (newState.status === Discord.VoiceConnectionStatus.Destroyed && !this.actions.destroyed) sendToParent({ op: "event", type: "WebSocketClosedEvent", guildId: this.guildID, code: 4000 as 4001, reason: "IDK what happened. All I know is that the connection was destroyed prematurely", byRemote: false }, this.clientID);
 			else if (newState.status === Discord.VoiceConnectionStatus.Connecting || newState.status === Discord.VoiceConnectionStatus.Signalling) {
 				try {
 					await Util.waitForResourceToEnterState(this.connection, Discord.VoiceConnectionStatus.Ready, Constants.VoiceConnectionConnectThresholdMS);
 				} catch {
-					parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: Constants.STRINGS.EVENT, type: Constants.STRINGS.WEBSOCKET_CLOSE_EVENT, guildId: this.guildID, code: 4000, reason: `Couldn't connect in time (${Constants.VoiceConnectionConnectThresholdMS}ms)`, byRemote: false } as unknown as import("lavalink-types").WebsocketClosedEvent, clientID: this.clientID });
+					sendToParent({ op: "event", type: "WebSocketClosedEvent", guildId: this.guildID, code: 4000 as 4001, reason: `Couldn't connect in time (${Constants.VoiceConnectionConnectThresholdMS}ms)`, byRemote: false }, this.clientID);
 				}
 			}
 		});
 
-		this.player.on(Constants.STRINGS.STATE_CHANGE, async (oldState, newState) => {
+		this.player.on("stateChange", async (oldState, newState) => {
 			if (newState.status === Discord.AudioPlayerStatus.Idle && oldState.status !== Discord.AudioPlayerStatus.Idle) {
+				const track = this.track?.track || "unknown";
 				this.resource = null;
 				this.track = undefined;
 				// Do not log if stopping. Queue.stop will send its own STOPPED reason instead of FINISHED. Do not log if shouldntCallFinish obviously.
-				if (!this.actions.stopping && !this.actions.shouldntCallFinish) parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: Constants.STRINGS.EVENT, type: Constants.STRINGS.TRACK_END_EVENT, guildId: this.guildID, reason: Constants.STRINGS.FINISHED } as import("lavalink-types").TrackEndEvent, clientID: this.clientID });
+				if (!this.actions.stopping && !this.actions.shouldntCallFinish) sendToParent({ op: "event", type: "TrackEndEvent", guildId: this.guildID, reason: "FINISH", track }, this.clientID);
 				this.actions.stopping = false;
 				this.actions.shouldntCallFinish = false;
 			} else if (newState.status === Discord.AudioPlayerStatus.Playing && oldState.status !== Discord.AudioPlayerStatus.Paused && oldState.status !== Discord.AudioPlayerStatus.AutoPaused) {
 				if (this.actions.trackPausing) this.pause();
 				this.actions.trackPausing = false;
-				if ((!this.actions.shouldntCallFinish || this.actions.initial) && this.track) parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: Constants.STRINGS.EVENT, type: Constants.STRINGS.TRACK_START_EVENT, guildId: this.guildID, track: this.track.track } as import("lavalink-types").TrackStartEvent, clientID: this.clientID });
+				if ((!this.actions.shouldntCallFinish || this.actions.initial) && this.track) sendToParent({ op: "event", type: "TrackStartEvent", guildId: this.guildID, track: this.track.track }, this.clientID);
 				this.actions.initial = false;
 			}
 		});
 
 		this.player.on("error", (error) => {
-			parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: Constants.STRINGS.EVENT, type: Constants.STRINGS.TRACK_EXCEPTION_EVENT, guildId: this.guildID, track: this.track?.track || Constants.STRINGS.UNKNOWN, exception: { message: error.message, severity: Constants.STRINGS.COMMON, cause: error.stack || new Error().stack || Constants.STRINGS.UNKNOWN } } as import("lavalink-types").TrackExceptionEvent, clientID: this.clientID });
+			sendToParent({ op: "event", type: "TrackExceptionEvent", guildId: this.guildID, track: this.track?.track || "unknown", exception: { message: error.message, severity: "COMMON", cause: error.stack || new Error().stack || "unknown" } }, this.clientID);
 		});
 	}
 
 	public get state() {
 		const position = Math.floor(((this.resource?.playbackDuration || 0) + this.actions.seekTime) * this.actions.rate);
-		if (this.track && this.track.end && position >= this.track.end) this.stop(true);
+		if (this.track && this.track.end && position >= this.track.end) this.stop(this.track.track, true);
 		return {
 			time: String(Date.now()),
 			position: position,
@@ -107,7 +108,7 @@ class Queue {
 	}
 
 	public async getResource(decoded: import("@lavalink/encoding").TrackInfo, meta: NonNullable<typeof this.track>): Promise<import("@discordjs/voice").AudioResource<import("@lavalink/encoding").TrackInfo>> {
-		if (lavalinkConfig.lavalink.server.sources[decoded.source] !== undefined && !lavalinkConfig.lavalink.server.sources[decoded.source]) throw new Error(`${decoded.source.toUpperCase()}_NOT_ENABLED`);
+		if (lavalinkConfig.lavalink.server.sources[decoded.source] === false) throw new Error(`${decoded.source.toUpperCase()}_NOT_ENABLED`);
 
 		let output: import("stream").Readable | null = null;
 		let streamType: import("@discordjs/voice").StreamType | undefined = undefined;
@@ -139,22 +140,22 @@ class Queue {
 
 		if (useFFMPEG) {
 			this.actions.shouldntCallFinish = true;
-			const toApply = ["-analyzeduration", Constants.STRINGS.ZERO, "-loglevel", Constants.STRINGS.ZERO, "-f", Constants.STRINGS.S16LE, "-ar", "48000", "-ac", "2"];
-			if (this.state.position && !this._filters.includes(Constants.STRINGS.SEARCH_STRING)) {
-				toApply.unshift(Constants.STRINGS.SEARCH_STRING, `${this.state.position + 2000}ms`);
+			const toApply = ["-analyzeduration", "0", "-loglevel", "0", "-f", "s16le", "-ar", "48000", "-ac", "2"];
+			if (this.state.position && !this._filters.includes("-ss")) {
+				toApply.unshift("-ss", `${this.state.position + 2000}ms`);
 				this.actions.seekTime = this.state.position + 2000;
-			} else if (this._filters.includes(Constants.STRINGS.SEARCH_STRING)) { // came from Queue.seek option. this.seekTime should be set already.
-				const index = this._filters.indexOf(Constants.STRINGS.SEARCH_STRING);
+			} else if (this._filters.includes("-ss")) { // came from Queue.seek option. this.seekTime should be set already.
+				const index = this._filters.indexOf("-ss");
 				const ss = this._filters.splice(index, 2);
 				toApply.unshift(...ss);
 			} else if (meta.start) { // obv prefer user's pref then fallback to if the track specified a startTime
 				this.actions.seekTime = meta.start;
-				toApply.unshift(Constants.STRINGS.SEARCH_STRING, `${meta.start}ms`);
+				toApply.unshift("-ss", `${meta.start}ms`);
 			}
 			// _filters should no longer have -ss if there are other filters, then push the audio filters flag
-			if (this._filters.length) toApply.push(Constants.STRINGS.AUDIO_FILTERS, ...this._filters);
+			if (this._filters.length) toApply.push("-af", ...this._filters);
 			this.actions.applyingFilters = false;
-			const pipes: Array<import("stream").Readable> = [output, new prism.FFmpeg({ args: toApply }), new prism.VolumeTransformer({ type: Constants.STRINGS.S16LE }), new prism.opus.Encoder({ rate: 48000, channels: 2, frameSize: 960 })];
+			const pipes: Array<import("stream").Readable> = [output, new prism.FFmpeg({ args: toApply }), new prism.VolumeTransformer({ type: "s16le" }), new prism.opus.Encoder({ rate: 48000, channels: 2, frameSize: 960 })];
 			return new Discord.AudioResource([], pipes, decoded, 5);
 		}
 
@@ -178,7 +179,7 @@ class Queue {
 			resource = await this.getResource(decoded, meta);
 		} catch (e) {
 			logger.error(util.inspect(e, false, Infinity, true));
-			parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: Constants.STRINGS.EVENT, type: Constants.STRINGS.TRACK_EXCEPTION_EVENT, guildId: this.guildID, track: this.track?.track || Constants.STRINGS.UNKNOWN, exception: { message: e.message, severity: Constants.STRINGS.COMMON, cause: e.stack || new Error().stack || Constants.STRINGS.UNKNOWN } } as import("lavalink-types").TrackExceptionEvent, clientID: this.clientID });
+			sendToParent({ op: "event", type: "TrackEndEvent", guildId: this.guildID, track: meta.track, reason: "LOAD_FAILED" }, this.clientID);
 		}
 		if (!resource) return;
 		if (this.actions.applyingFilters) {
@@ -190,22 +191,21 @@ class Queue {
 		this.player.play(resource);
 		if (meta.volume && meta.volume !== 100) this.volume(meta.volume / 100);
 		else if (this.actions.volume !== 1.0) this.volume(this.actions.volume);
-		const track = this.track;
 		try {
 			await Util.waitForResourceToEnterState(this.player, Discord.AudioPlayerStatus.Playing, lavalinkConfig.lavalink.server.trackStuckThresholdMs);
 			this.actions.shouldntCallFinish = false;
 			this.actions.stopping = false;
 		} catch {
 			// If the track isn't the same track as before it started waiting (i.e. skipped) then you shouldn't say that it got stuck lol.
-			if (this.track !== track) return;
+			if (this.track !== meta) return;
 			// This could be a bad thing to do considering maybe the user's McWifi was just bad, but we already send track stuck and it wouldn't make sense for it to suddenly start
 			// if it possibly could as in not actually stuck, just bad internet connection.
-			this.stop(true);
+			this.stop(meta.track, true);
 			// I assign the values of current, track, and stopping here because these are usually reset at player transition from not Idle => Idle
 			// However, we're waiting for resource to transition from Idle => Playing, so it won't fire Idle again until another track is played.
 			this.resource = null;
-			parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: Constants.STRINGS.EVENT, type: Constants.STRINGS.TRACK_STUCK_EVENT, guildId: this.guildID, track: track.track || Constants.STRINGS.UNKNOWN, thresholdMs: lavalinkConfig.lavalink.server.trackStuckThresholdMs } as import("lavalink-types").TrackStuckEvent, clientID: this.clientID });
-			logger.warn(`${track.track ? encoding.decode(track.track).title : Constants.STRINGS.UNKNOWN} got stuck! Threshold surpassed: ${lavalinkConfig.lavalink.server.trackStuckThresholdMs}`);
+			sendToParent({ op: "event", type: "TrackStuckEvent", guildId: this.guildID, track: meta.track, thresholdMs: lavalinkConfig.lavalink.server.trackStuckThresholdMs }, this.clientID);
+			logger.warn(`${encoding.decode(meta.track).title} got stuck! Threshold surpassed: ${lavalinkConfig.lavalink.server.trackStuckThresholdMs}`);
 			this.track = undefined;
 			this.actions.shouldntCallFinish = false;
 			this.actions.stopping = false;
@@ -213,14 +213,14 @@ class Queue {
 	}
 
 	public queue(track: { track: string; start: number; end: number; volume: number; pause: boolean; }) {
+		this.replace(this.track?.track);
 		this.track = track;
-		this.replace();
 	}
 
-	public replace() {
-		if (this.player.state.status === Discord.AudioPlayerStatus.Playing) {
-			this.stop(true);
-			parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: Constants.STRINGS.EVENT, type: Constants.STRINGS.TRACK_END_EVENT, guildId: this.guildID, reason: Constants.STRINGS.REPLACED } as import("lavalink-types").TrackEndEvent, clientID: this.clientID });
+	public replace(oldTrack: string | undefined) {
+		if (this.player.state.status === Discord.AudioPlayerStatus.Playing && oldTrack) {
+			this.stop(oldTrack, true);
+			sendToParent({ op: "event", type: "TrackEndEvent", guildId: this.guildID, reason: "REPLACED", track: oldTrack }, this.clientID);
 		}
 		this.nextSong();
 	}
@@ -233,17 +233,17 @@ class Queue {
 		this.actions.paused = !this.player.unpause();
 	}
 
-	public stop(shouldntPost?: boolean) {
+	public stop(trackStopping: string, shouldntPost?: boolean) {
 		this.actions.stopping = true;
 		this.player.stop(true);
-		if (!shouldntPost) parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data: { op: Constants.STRINGS.EVENT, type: Constants.STRINGS.TRACK_END_EVENT, guildId: this.guildID, reason: Constants.STRINGS.STOPPED } as import("lavalink-types").TrackEndEvent, clientID: this.clientID });
+		if (!shouldntPost) sendToParent({ op: "event", type: "TrackEndEvent", guildId: this.guildID, reason: "STOPPED", track: trackStopping }, this.clientID);
 	}
 
 	public destroy() {
 		if (this.actions.destroyed) return;
 		this.actions.destroyed = true;
+		this.stop(this.track?.track || "unknown", true);
 		this.track = undefined;
-		this.stop(true);
 		this.connection.destroy(true);
 		queues.delete(`${this.clientID}.${this.guildID}`);
 		if (queues.size === 0) {
@@ -258,9 +258,9 @@ class Queue {
 	}
 
 	public seek(amount: number) {
-		const previousIndex = this._filters.indexOf(Constants.STRINGS.SEARCH_STRING);
+		const previousIndex = this._filters.indexOf("-ss");
 		if (previousIndex !== -1) this._filters.splice(previousIndex, 2);
-		this._filters.push(Constants.STRINGS.SEARCH_STRING, `${amount || 0}ms`);
+		this._filters.push("-ss", `${amount || 0}ms`);
 		if (!this.actions.applyingFilters) this.play().catch(e => logger.error(util.inspect(e, false, Infinity, true)));
 		this.actions.applyingFilters = true;
 		this.actions.seekTime = amount;
@@ -268,7 +268,7 @@ class Queue {
 
 	public async filters(filters: import("lavalink-types").Filters) {
 		const toApply: Array<string> = [];
-		if (this._filters.includes(Constants.STRINGS.SEARCH_STRING)) toApply.push(...this._filters.splice(this._filters.indexOf(Constants.STRINGS.SEARCH_STRING), 2));
+		if (this._filters.includes("-ss")) toApply.push(...this._filters.splice(this._filters.indexOf("-ss"), 2));
 		this._filters.length = 0;
 		if (filters.volume) toApply.push(`volume=${filters.volume}`);
 		if (filters.equalizer && Array.isArray(filters.equalizer) && filters.equalizer.length) {
@@ -309,11 +309,26 @@ class Queue {
 	}
 }
 
+import type { TrackStartEvent, TrackEndEvent, TrackExceptionEvent, TrackStuckEvent, WebSocketClosedEvent, PlayerUpdate } from "lavalink-types";
+
+type PacketMap = {
+	playerUpdate: PlayerUpdate & { op: "playerUpdate"; };
+	TrackStartEvent: TrackStartEvent;
+	TrackEndEvent: TrackEndEvent;
+	TrackExceptionEvent: TrackExceptionEvent;
+	TrackStuckEvent: TrackStuckEvent;
+	WebSocketClosedEvent: WebSocketClosedEvent;
+}
+
+function sendToParent(data: import("./types.js").UnpackRecord<PacketMap>, clientID: string) {
+	return parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data, clientID });
+}
+
 function replyTo(threadID: number, data: any) {
 	return parentPort.postMessage({ op: Constants.workerOPCodes.REPLY, data, threadID });
 }
 
-parentPort.on(Constants.STRINGS.MESSAGE, async (packet: { data?: import("./types.js").InboundPayload; op: typeof Constants.workerOPCodes[keyof typeof Constants.workerOPCodes], threadID: number; broadcasted?: boolean }) => {
+parentPort.on("message", async (packet: { data?: import("./types.js").InboundPayload; op: typeof Constants.workerOPCodes[keyof typeof Constants.workerOPCodes], threadID: number; broadcasted?: boolean }) => {
 	if (packet.op === Constants.workerOPCodes.STATS) {
 		const qs = [...queues.values()];
 		return replyTo(packet.threadID, { playingPlayers: qs.filter(q => !q.actions.paused).length, players: queues.size, pings: qs.reduce((acc, cur) => acc[cur.guildID] = cur.state.ping, {}) });
@@ -333,17 +348,17 @@ parentPort.on(Constants.STRINGS.MESSAGE, async (packet: { data?: import("./types
 				lavalinkLog(typed);
 
 				// Channel IDs are never forwarded to LavaLink and are not really necessary in code except for in the instance of sending packets which isn't applicable.
-				Discord.joinVoiceChannel({ channelId: Constants.STRINGS.EMPTY_STRING, guildId: guildID, group: userID, adapterCreator: voiceAdapterCreator(userID, guildID) });
+				Discord.joinVoiceChannel({ channelId: "", guildId: guildID, group: userID, adapterCreator: voiceAdapterCreator(userID, guildID) });
 				q = new Queue(userID, guildID);
 				queues.set(key, q);
 				parentPort.postMessage({ op: Constants.workerOPCodes.VOICE_SERVER, data: { clientID: userID, guildId: guildID } });
-				q.queue({ track: typed.track, start: Number(typed.startTime || Constants.STRINGS.ZERO), end: Number(typed.endTime || Constants.STRINGS.ZERO), volume: Number(typed.volume || Constants.STRINGS.ONE_HUNDRED), pause: typed.pause || false });
+				q.queue({ track: typed.track, start: Number(typed.startTime || "0"), end: Number(typed.endTime || "0"), volume: Number(typed.volume || "100"), pause: typed.pause || false });
 			} else {
 				lavalinkLog(typed);
 				if (packet.broadcasted) replyTo(packet.threadID, true);
 				q = queues.get(key)!;
-				if (typed.noReplace === true && q.player.state.status === Discord.AudioPlayerStatus.Playing) return lavalinkLog(Constants.STRINGS.NO_REPLACE_SKIP);
-				q.queue({ track: typed.track, start: Number(typed.startTime || Constants.STRINGS.ZERO), end: Number(typed.endTime || Constants.STRINGS.ZERO), volume: Number(typed.volume || Constants.STRINGS.ONE_HUNDRED), pause: typed.pause || false });
+				if (typed.noReplace === true && q.player.state.status === Discord.AudioPlayerStatus.Playing) return lavalinkLog("Skipping play request because of noReplace");
+				q.queue({ track: typed.track, start: Number(typed.startTime || "0"), end: Number(typed.endTime || "0"), volume: Number(typed.volume || "100"), pause: typed.pause || false });
 			}
 			break;
 		}
@@ -371,7 +386,7 @@ parentPort.on(Constants.STRINGS.MESSAGE, async (packet: { data?: import("./types
 			replyTo(packet.threadID, !!q);
 			if (q) {
 				lavalinkLog(typed);
-				q.stop();
+				q.stop(q.track?.track || "unknown");
 			}
 			break;
 		}
@@ -423,7 +438,7 @@ parentPort.on(Constants.STRINGS.MESSAGE, async (packet: { data?: import("./types
 		// @ts-expect-error
 		delete typed.clientID;
 		lavalinkLog(typed);
-		methods.onVoiceStateUpdate({ channel_id: Constants.STRINGS.EMPTY_STRING, guild_id: guildID, user_id: userID, session_id: typed.sessionId, deaf: false, self_deaf: false, mute: false, self_mute: false, self_video: false, suppress: false, request_to_speak_timestamp: null });
+		methods.onVoiceStateUpdate({ channel_id: "", guild_id: guildID, user_id: userID, session_id: typed.sessionId, deaf: false, self_deaf: false, mute: false, self_mute: false, self_video: false, suppress: false, request_to_speak_timestamp: null });
 		methods.onVoiceServerUpdate({ guild_id: guildID, token: typed.event.token, endpoint: typed.event.endpoint });
 	} else if (packet.op === Constants.workerOPCodes.DELETE_ALL) {
 		const forUser = [...queues.values()].filter(q => q.clientID === packet.data!.clientID);
