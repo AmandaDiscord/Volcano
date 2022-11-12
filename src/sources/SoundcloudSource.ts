@@ -1,8 +1,11 @@
 import * as dl from "play-dl";
 import { Plugin } from "volcano-sdk";
 
+import Util from "../util/Util.js";
+
 const identifierRegex = /^O:/;
-const usableRegex = /^https:\/\/soundcloud.com/;
+const usableRegex = /^https:\/\/(?:on\.)?soundcloud.com/;
+const onSoundCloudStart = "https://on.soundcloud.com/";
 
 class SoundcloudSource extends Plugin {
 	public source = "soundcloud";
@@ -18,6 +21,13 @@ class SoundcloudSource extends Plugin {
 		if (searchShort === this.searchShorts[0]) {
 			const results = await dl.search(resource, { source: { soundcloud: "tracks" } });
 			return { entries: results.map(SoundcloudSource.songResultToTrack) };
+		}
+
+		if (resource.slice(0, onSoundCloudStart.length) === onSoundCloudStart) {
+			const socket = await Util.connect(resource);
+			const request = await Util.socketToRequest(socket);
+			if (!request.headers.location) throw e;
+			resource = request.headers.location;
 		}
 
 		let result: import("play-dl").SoundCloud;

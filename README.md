@@ -13,7 +13,6 @@ Do not be rude about LavaLink's performance or flaunt to LavaLink that this proj
 
 # Compatibility
 What Volcano offers that LavaLink doesn't:
-- op ffmpeg
 - Is-Volcano handshake header
 
 What LavaLink offers that Volcano doesn't:
@@ -23,17 +22,6 @@ What LavaLink offers that Volcano doesn't:
 - Better support for SHOUTCast/ICECast
 - IPV6 requesting and rotation (There have been reports that YouTube doesn't ban IPs anymore, but should be taken with a grain of salt)
 - http proxying
-
-Volcano offers an op ffmpeg. **OP FFMPEG DOES NOT EXIST IN LAVALINK AS LAVALINK DOES NOT USE FFMPEG. DO NOT TRY TO GET SUPPORT FOR OP FFMPEG IN LAVALINK'S SERVER**. Op ffmpeg accepts an Array of raw ffmpeg args. op ffmpeg overrides op filters and op seek. Op filters adds some extra logic to make sure that playerUpdate packets properly display the position. If you set the speed of the stream to be anything other than the default speed, then you *need* to account for this yourself. I can't do anything on my end.
-
-Example for op ffmpeg:
-```js
-{
-	"op": "ffmpeg",
-	"guildId": "497159726455455754",
-	"args": ["aresample=48000,asetrate=48000*0.7,atempo=1.3,aresample=48000"]
-}
-```
 
 # Plugins
 Volcano supports its own plugin system like LavaLink has its own and comes with a Spotify plugin by default as support for Spotify to some degree and also for developers to look at and copy. This plugin may or may not be compatible with the Spotify plugin offered by LavaLink. Something to keep in mind is that due to how fundamentally different Volcano is from LavaLink, including being a totally different language, Volcano cannot load plugins intended to be used by LavaLink and vice versa. The scope of what Plugins can do in Volcano is also limited at the time of writing. The feature set may be expanded in the future, but this is what I was able to come up with in the limited time that I have. Plugins may have their own dependencies which you will have to install manually into your Volcano instance and re-do this for each Volcano update as the package.json may differ from update to update.

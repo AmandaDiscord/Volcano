@@ -299,14 +299,6 @@ class Queue {
 		this.actions.applyingFilters = true;
 		if (!previouslyApplying) this.play().catch(e => logger.error(util.inspect(e, false, Infinity, true)));
 	}
-
-	public ffmpeg(args: Array<string>) {
-		this._filters.length = 0;
-		this._filters.push(...args);
-		const previouslyApplying = this.actions.applyingFilters;
-		this.actions.applyingFilters = true;
-		if (!previouslyApplying) this.play().catch(e => logger.error(util.inspect(e, false, Infinity, true)));
-	}
 }
 
 import type { TrackStartEvent, TrackEndEvent, TrackExceptionEvent, TrackStuckEvent, WebSocketClosedEvent, PlayerUpdate } from "lavalink-types";
@@ -414,15 +406,6 @@ parentPort.on("message", async (packet: { data?: import("./types.js").InboundPay
 			if (q) {
 				lavalinkLog(typed);
 				q.seek(typed.position);
-			}
-			break;
-		}
-		case Constants.OPCodes.FFMPEG: {
-			const q = queues.get(key);
-			replyTo(packet.threadID, !!q);
-			if (q) {
-				lavalinkLog(typed);
-				q.ffmpeg(typed.args);
 			}
 			break;
 		}

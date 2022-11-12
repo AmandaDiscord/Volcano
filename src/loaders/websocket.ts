@@ -174,11 +174,6 @@ async function onClientMessage(socket: import("ws").WebSocket, data: import("ws"
 		}
 		break;
 	}
-	case Constants.OPCodes.FFMPEG: {
-		if (!msg.guildId || !msg.args || !Array.isArray(msg.args) || !msg.args.every(i => typeof i === "string")) return;
-		void lavalinkThreadPool.broadcast(pl);
-		break;
-	}
 	default:
 		lavalinkLog(msg);
 		lavalinkPlugins.forEach(p => p.onWSMessage?.(msg, socket as any));
