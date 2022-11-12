@@ -3,7 +3,6 @@ import os from "os";
 import { fileURLToPath } from "url";
 
 import logger from "../util/Logger.js";
-import Constants from "../Constants.js";
 import ThreadPool from "../util/ThreadPool.js";
 
 import config from "./config.js";

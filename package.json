@@ -9,7 +9,8 @@
     "start": "node --enable-source-maps --optimize_for_size .",
     "create-release": "node ./scripts/release.js",
     "auth-gen": "node ./scripts/auth-gen.js",
-    "dep-report": "node ./scripts/generateDependencyReport.js"
+    "dep-report": "node ./scripts/generateDependencyReport.js",
+    "lint": "eslint . --ext .ts"
   },
   "engines": {
     "node": ">=18.0.0",

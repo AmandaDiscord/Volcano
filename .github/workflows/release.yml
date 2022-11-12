@@ -13,9 +13,10 @@ jobs:
         with:
           node-version: '18.x'
 
-      - name: Install, Compile, and create build info
+      - name: Install, Lint, Compile, and create build info
         run: |
           npm install
+          npm run lint
           npm run compile
           npm run create-release
 

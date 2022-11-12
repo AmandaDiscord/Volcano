@@ -330,14 +330,16 @@ function replyTo(threadID: number, data: any) {
 
 parentPort.on("message", async (packet: { data?: import("./types.js").InboundPayload; op: typeof Constants.workerOPCodes[keyof typeof Constants.workerOPCodes], threadID: number; broadcasted?: boolean }) => {
 	if (packet.op === Constants.workerOPCodes.STATS) {
-		const qs = [...queues.values()];
+		let playing = 0;
+		const accumulator = {};
+		for (const q of queues.values()) {
+			if (!q.actions.paused) playing++;
+			accumulator[q.guildID] = q.state.ping;
+		}
 		return replyTo(packet.threadID, {
-			playingPlayers: qs.filter(q => !q.actions.paused).length,
+			playingPlayers: playing,
 			players: queues.size,
-			pings: qs.reduce((acc, cur) => {
-				acc[cur.guildID] = cur.state.ping;
-				return acc;
-			}, {})
+			pings: accumulator
 		});
 	} else if (packet.op === Constants.workerOPCodes.MESSAGE) {
 		const guildID = (packet.data! as { guildId: string }).guildId;

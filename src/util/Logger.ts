@@ -2,8 +2,6 @@ import { isMainThread, threadId } from "worker_threads";
 
 import { BackTracker } from "backtracker";
 
-import Constants from "../Constants.js";
-
 const workerNameMaxLogLength = 15;
 const scopeNameMaxLogLength = 20;
 
