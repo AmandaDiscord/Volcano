@@ -222,7 +222,7 @@ class Queue {
 			this.stop(oldTrack, true);
 			sendToParent({ op: "event", type: "TrackEndEvent", guildId: this.guildID, reason: "REPLACED", track: oldTrack }, this.clientID);
 		}
-		this.nextSong();
+		setImmediate(() => this.nextSong());
 	}
 
 	public pause() {
