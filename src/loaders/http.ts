@@ -36,7 +36,7 @@ const paths: {
 
 			const identifier = entities.decode(id);
 
-			lavalinkLog(`Got request to load for identifier "${identifier}"`);
+			console.log(`Got request to load for identifier "${identifier}"`);
 
 			const match = identifier.match(IDRegex);
 			if (!match) return Util.standardErrorHandler("Identifier did not match regex", res, payload); // Should theoretically never happen, but TypeScript doesn't know this
@@ -62,7 +62,7 @@ const paths: {
 					delete payload.playlistInfo;
 					return res.writeHead(200, "OK", Constants.baseHTTPResponseHeaders).end(JSON.stringify(payload));
 				}
-				else if (payload.tracks.length === 1) lavalinkLog(`Loaded track ${payload.tracks[0].info.title}`);
+				else if (payload.tracks.length === 1) console.log(`Loaded track ${payload.tracks[0].info.title}`);
 				payload.loadType = (payload.tracks.length > 0 && isSearch)
 					? "SEARCH_RESULT"
 					: (payload.playlistInfo ? "PLAYLIST_LOADED" : "TRACK_LOADED");
@@ -77,7 +77,7 @@ const paths: {
 		methods: ["GET"],
 		handle(req, res, url) {
 			let track = url.searchParams.get("track");
-			lavalinkLog(`Got request to decode for track "${track}"`);
+			console.log(`Got request to decode for track "${track}"`);
 			if (track) track = entities.decode(track);
 			if (!track || typeof track !== "string") return res.writeHead(400, "Bad request", Constants.baseHTTPResponseHeaders).end(JSON.stringify({ message: "invalid track" }));
 			const data = convertDecodedTrackToResponse(encoding.decode(track));

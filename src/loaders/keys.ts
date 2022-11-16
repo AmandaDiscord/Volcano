@@ -5,6 +5,7 @@ import * as dl from "play-dl";
 
 import Constants from "../Constants.js";
 
+import "./config.js";
 import lavalink from "./lavalink.js";
 
 const keyDir = path.join(lavalink.lavalinkDirname, "../soundcloud.txt");

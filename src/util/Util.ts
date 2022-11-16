@@ -5,7 +5,6 @@ import os from "os";
 import { pipeline, Transform } from "stream";
 
 import Constants from "../Constants.js";
-import Logger from "./Logger.js";
 
 const cpuCount = os.cpus().length;
 
@@ -29,7 +28,7 @@ export function processLoad(): Promise<number> {
 const errorRegex = /(Error|ERROR):? ?/;
 
 export function standardErrorHandler(e: Error | string, response: import("http").ServerResponse, payload: import("lavalink-types").TrackLoadingResult, severity: import("lavalink-types").Severity = "COMMON"): void {
-	lavalinkLog(`Load failed\n${util.inspect(e, false, Infinity, true)}`);
+	console.log(`Load failed\n${util.inspect(e, false, Infinity, true)}`);
 	payload.loadType = "LOAD_FAILED";
 	payload.exception = {
 		message: (typeof e === "string" ? e as string : (e as Error).message || "").split("\n").slice(-1)[0].replace(errorRegex, ""),
@@ -165,7 +164,7 @@ export class ConnectionResponse extends Transform {
 		const lines = string.split("\n");
 		const match = (lines[0] || "").match(responseRegex);
 		if (!match) {
-			Logger.warn(`First line in Buffer isn't an HTTP or ICY status: ${lines[0]}`);
+			console.warn(`First line in Buffer isn't an HTTP or ICY status: ${lines[0]}`);
 			this.protocol = "UNKNOWN";
 			this.status = 0;
 			this.message = "";
@@ -270,10 +269,11 @@ export async function getStats(): Promise<import("lavalink-types").Stats> {
 	const free: number = memory.heapTotal - memory.heapUsed;
 	const pload: number = await processLoad();
 	const osload: Array<number> = os.loadavg();
-	const threadStats: Array<{ players: number; playingPlayers: number; }> = await lavalinkThreadPool.broadcast({ op: Constants.workerOPCodes.STATS });
+	const worker = await import("../worker.js");
+	const threadStats = worker.handleMessage({ op: Constants.workerOPCodes.STATS });
 	return {
-		players: threadStats.reduce((acc, cur) => acc + cur.players, 0),
-		playingPlayers: threadStats.reduce((acc, cur) => acc + cur.playingPlayers, 0),
+		players: threadStats.players,
+		playingPlayers: threadStats.playingPlayers,
 		uptime: process.uptime() * 1000,
 		memory: {
 			reservable: memory.heapTotal - free,

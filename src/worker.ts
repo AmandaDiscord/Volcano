@@ -1,34 +1,27 @@
-import { parentPort as parentport } from "worker_threads";
 import util from "util";
-
-import "./loaders/keys.js";
 
 import * as Discord from "@discordjs/voice";
 import * as encoding from "@lavalink/encoding";
 import prism from "prism-media";
 
-if (!parentport) throw new Error("THREAD_IS_PARENT");
-const parentPort = parentport;
-
 import Constants from "./Constants.js";
-import logger from "./util/Logger.js";
 import Util from "./util/Util.js";
+import websocket from "./loaders/websocket.js";
 
-const queues = new Map<string, Queue>();
+export const queues = new Map<string, Queue>();
 const methodMap = new Map<string, import("@discordjs/voice").DiscordGatewayAdapterLibraryMethods>();
 
-const reportInterval = setInterval(() => {
+const sendToParent = (data: Parameters<typeof import("./loaders/websocket.js").sendMessage>["0"]["data"], clientID: string) => {
+	websocket.sendMessage({ clientID, data });
+};
+
+setInterval(() => {
 	if (!queues.size) return;
 	for (const queue of queues.values()) {
 		const state = queue.state;
 		if (!queue.actions.paused) sendToParent({ op: Constants.OPCodes.PLAYER_UPDATE, guildId: queue.guildID, state }, queue.clientID);
 	}
 }, lavalinkConfig.lavalink.server.playerUpdateInterval * 1000);
-
-parentPort.once("close", () => {
-	clearInterval(reportInterval);
-	setTimeout(() => process.exit(), 1000);
-});
 
 class Queue {
 	public connection: import("@discordjs/voice").VoiceConnection;
@@ -104,7 +97,7 @@ class Queue {
 		this.actions.seekTime = 0;
 		this.actions.initial = true;
 		if (!this.track) return;
-		this.play().catch(e => logger.error(util.inspect(e, false, Infinity, true)));
+		this.play().catch(e => console.error(util.inspect(e, false, Infinity, true)));
 	}
 
 	public async getResource(decoded: import("@lavalink/encoding").TrackInfo, meta: NonNullable<typeof this.track>): Promise<import("@discordjs/voice").AudioResource<import("@lavalink/encoding").TrackInfo>> {
@@ -178,7 +171,7 @@ class Queue {
 		try {
 			resource = await this.getResource(decoded, meta);
 		} catch (e) {
-			logger.error(util.inspect(e, false, Infinity, true));
+			console.error(util.inspect(e, false, Infinity, true));
 			sendToParent({ op: "event", type: "TrackEndEvent", guildId: this.guildID, track: meta.track, reason: "LOAD_FAILED" }, this.clientID);
 		}
 		if (!resource) return;
@@ -205,7 +198,7 @@ class Queue {
 			// However, we're waiting for resource to transition from Idle => Playing, so it won't fire Idle again until another track is played.
 			this.resource = null;
 			sendToParent({ op: "event", type: "TrackStuckEvent", guildId: this.guildID, track: meta.track, thresholdMs: lavalinkConfig.lavalink.server.trackStuckThresholdMs }, this.clientID);
-			logger.warn(`${encoding.decode(meta.track).title} got stuck! Threshold surpassed: ${lavalinkConfig.lavalink.server.trackStuckThresholdMs}`);
+			console.warn(`${encoding.decode(meta.track).title} got stuck! Threshold surpassed: ${lavalinkConfig.lavalink.server.trackStuckThresholdMs}`);
 			this.track = undefined;
 			this.actions.shouldntCallFinish = false;
 			this.actions.stopping = false;
@@ -246,10 +239,6 @@ class Queue {
 		this.track = undefined;
 		this.connection.destroy(true);
 		queues.delete(`${this.clientID}.${this.guildID}`);
-		if (queues.size === 0) {
-			clearInterval(reportInterval);
-			parentPort.close();
-		}
 	}
 
 	public volume(amount: number) {
@@ -261,7 +250,7 @@ class Queue {
 		const previousIndex = this._filters.indexOf("-ss");
 		if (previousIndex !== -1) this._filters.splice(previousIndex, 2);
 		this._filters.push("-ss", `${amount || 0}ms`);
-		if (!this.actions.applyingFilters) this.play().catch(e => logger.error(util.inspect(e, false, Infinity, true)));
+		if (!this.actions.applyingFilters) this.play().catch(e => console.error(util.inspect(e, false, Infinity, true)));
 		this.actions.applyingFilters = true;
 		this.actions.seekTime = amount;
 	}
@@ -297,149 +286,126 @@ class Queue {
 		this._filters.push(...toApply);
 		const previouslyApplying = this.actions.applyingFilters;
 		this.actions.applyingFilters = true;
-		if (!previouslyApplying) this.play().catch(e => logger.error(util.inspect(e, false, Infinity, true)));
+		if (!previouslyApplying) this.play().catch(e => console.error(util.inspect(e, false, Infinity, true)));
 	}
 }
 
-import type { TrackStartEvent, TrackEndEvent, TrackExceptionEvent, TrackStuckEvent, WebSocketClosedEvent, PlayerUpdate } from "lavalink-types";
-
 type PacketMap = {
-	playerUpdate: PlayerUpdate & { op: "playerUpdate"; };
-	TrackStartEvent: TrackStartEvent;
-	TrackEndEvent: TrackEndEvent;
-	TrackExceptionEvent: TrackExceptionEvent;
-	TrackStuckEvent: TrackStuckEvent;
-	WebSocketClosedEvent: WebSocketClosedEvent;
-}
+	stats: { op: typeof Constants.workerOPCodes.STATS };
+	message: { op: typeof Constants.workerOPCodes.MESSAGE, data: import("./types.js").InboundPayload };
+	voice_server: { op: typeof Constants.workerOPCodes.VOICE_SERVER, data: { clientID: string; guildId: string; sessionId: string; event: { token: string; endpoint: string; } } };
+	delete_all: { op: typeof Constants.workerOPCodes.DELETE_ALL, data: { clientID: string; } };
+};
 
-function sendToParent(data: import("./types.js").UnpackRecord<PacketMap>, clientID: string) {
-	return parentPort.postMessage({ op: Constants.workerOPCodes.MESSAGE, data, clientID });
-}
 
-function replyTo(threadID: number, data: any) {
-	return parentPort.postMessage({ op: Constants.workerOPCodes.REPLY, data, threadID });
-}
-
-parentPort.on("message", async (packet: { data?: import("./types.js").InboundPayload; op: typeof Constants.workerOPCodes[keyof typeof Constants.workerOPCodes], threadID: number; broadcasted?: boolean }) => {
+export function handleMessage(packet: PacketMap["message"] | PacketMap["voice_server"]): boolean;
+export function handleMessage(packet: PacketMap["delete_all"]): number;
+export function handleMessage(packet: PacketMap["stats"]): { playingPlayers: number; players: number; pings: { [gid: string]: number } };
+export function handleMessage(packet: import("./types.js").UnpackRecord<PacketMap>): boolean | number | { playingPlayers: number; players: number; pings: { [gid: string]: number } } {
 	if (packet.op === Constants.workerOPCodes.STATS) {
 		let playing = 0;
-		const accumulator = {};
+		const accumulator: { [gid: string]: number } = {};
 		for (const q of queues.values()) {
 			if (!q.actions.paused) playing++;
 			accumulator[q.guildID] = q.state.ping;
 		}
-		return replyTo(packet.threadID, {
+		return {
 			playingPlayers: playing,
 			players: queues.size,
 			pings: accumulator
-		});
+		};
+
+
 	} else if (packet.op === Constants.workerOPCodes.MESSAGE) {
-		const guildID = (packet.data! as { guildId: string }).guildId;
-		const userID = packet.data!.clientID!;
+		const guildID = (packet.data as { guildId: string }).guildId;
+		const userID = packet.data.clientID!;
 		const key = `${userID}.${guildID}`;
 		// @ts-expect-error
-		delete packet.data!.clientID;
-		const typed = packet.data!;
-		switch (typed.op) {
+		delete packet.data.clientID;
+		switch (packet.data.op) {
 
 		case Constants.OPCodes.PLAY: {
 			let q: Queue;
 			if (!queues.has(key)) {
-				if (packet.broadcasted) return replyTo(packet.threadID, false);
-				lavalinkLog(typed);
-
 				// Channel IDs are never forwarded to LavaLink and are not really necessary in code except for in the instance of sending packets which isn't applicable.
 				Discord.joinVoiceChannel({ channelId: "", guildId: guildID, group: userID, adapterCreator: voiceAdapterCreator(userID, guildID) });
 				q = new Queue(userID, guildID);
 				queues.set(key, q);
-				parentPort.postMessage({ op: Constants.workerOPCodes.VOICE_SERVER, data: { clientID: userID, guildId: guildID } });
-				q.queue({ track: typed.track, start: Number(typed.startTime || "0"), end: Number(typed.endTime || "0"), volume: Number(typed.volume || "100"), pause: typed.pause || false });
+				const voiceState = websocket.dataRequest(Constants.workerOPCodes.VOICE_SERVER, { clientID: userID, guildId: guildID });
+				q.queue({ track: packet.data.track, start: Number(packet.data.startTime || "0"), end: Number(packet.data.endTime || "0"), volume: Number(packet.data.volume || "100"), pause: packet.data.pause || false });
+				if (voiceState) handleMessage({ op: Constants.workerOPCodes.VOICE_SERVER, data: voiceState });
 			} else {
-				lavalinkLog(typed);
-				if (packet.broadcasted) replyTo(packet.threadID, true);
 				q = queues.get(key)!;
-				if (typed.noReplace === true && q.player.state.status === Discord.AudioPlayerStatus.Playing) return lavalinkLog("Skipping play request because of noReplace");
-				q.queue({ track: typed.track, start: Number(typed.startTime || "0"), end: Number(typed.endTime || "0"), volume: Number(typed.volume || "100"), pause: typed.pause || false });
+				if (packet.data.noReplace === true && q.player.state.status === Discord.AudioPlayerStatus.Playing) {
+					console.log("Skipping play request because of noReplace");
+					return false;
+				}
+				q.queue({ track: packet.data.track, start: Number(packet.data.startTime || "0"), end: Number(packet.data.endTime || "0"), volume: Number(packet.data.volume || "100"), pause: packet.data.pause || false });
 			}
-			break;
+			return true;
 		}
+
 		case Constants.OPCodes.DESTROY: {
 			const q = queues.get(key);
-			replyTo(packet.threadID, !!q);
-			if (q) {
-				lavalinkLog(typed);
-				q.destroy();
-			}
-			break;
+			q?.destroy();
+			return !!q;
 		}
+
 		case Constants.OPCodes.PAUSE: {
 			const q = queues.get(key);
-			replyTo(packet.threadID, !!q);
-			if (q) {
-				lavalinkLog(typed);
-				if (typed.pause) q.pause();
-				else q.resume();
-			}
-			break;
+			if (packet.data.pause) q?.pause();
+			else q?.resume();
+			return !!q;
 		}
+
 		case Constants.OPCodes.STOP: {
 			const q = queues.get(key);
-			replyTo(packet.threadID, !!q);
-			if (q) {
-				lavalinkLog(typed);
-				q.stop(q.track?.track || "unknown");
-			}
-			break;
+			q?.stop(q.track?.track || "unknown");
+			return !!q;
 		}
+
 		case Constants.OPCodes.FILTERS: {
 			const q = queues.get(key);
-			replyTo(packet.threadID, !!q);
-			if (q) {
-				lavalinkLog(typed);
-				q.filters(typed);
-			}
-			break;
+			q?.filters(packet.data);
+			return !!q;
 		}
+
 		case Constants.OPCodes.SEEK: {
 			const q = queues.get(key);
-			replyTo(packet.threadID, !!q);
-			if (q) {
-				lavalinkLog(typed);
-				q.seek(typed.position);
-			}
-			break;
+			q?.seek(packet.data.position);
+			return !!q;
 		}
+
 		case Constants.OPCodes.VOLUME: {
 			const q = queues.get(key);
-			replyTo(packet.threadID, !!q);
-			if (q) {
-				lavalinkLog(typed);
-				q.volume(typed.volume / 100);
-			}
-			break;
+			q?.volume(packet.data.volume / 100);
+			return !!q;
 		}
+
+		default:
+			return false;
 		}
+
+
 	} else if (packet.op === Constants.workerOPCodes.VOICE_SERVER) {
-		const typed = packet.data!;
-		if (typed.op !== "voiceUpdate") return; // should never happen
-		const guildID = (packet.data! as { guildId: string }).guildId;
-		const userID = typed.clientID;
-		const methods = methodMap.get(`${typed.clientID}.${guildID}`);
-		replyTo(packet.threadID, !!methods);
-		if (!methods) return;
-		// @ts-expect-error
-		delete typed.clientID;
-		lavalinkLog(typed);
-		methods.onVoiceStateUpdate({ channel_id: "", guild_id: guildID, user_id: userID, session_id: typed.sessionId, deaf: false, self_deaf: false, mute: false, self_mute: false, self_video: false, suppress: false, request_to_speak_timestamp: null });
-		methods.onVoiceServerUpdate({ guild_id: guildID, token: typed.event.token, endpoint: typed.event.endpoint });
+		const guildID = packet.data.guildId;
+		const userID = packet.data.clientID;
+		const methods = methodMap.get(`${userID}.${guildID}`);
+		if (!methods) return false;
+		methods.onVoiceStateUpdate({ channel_id: "", guild_id: guildID, user_id: userID, session_id: packet.data.sessionId, deaf: false, self_deaf: false, mute: false, self_mute: false, self_video: false, suppress: false, request_to_speak_timestamp: null });
+		methods.onVoiceServerUpdate({ guild_id: guildID, token: packet.data.event.token, endpoint: packet.data.event.endpoint });
+		return true;
+
+
 	} else if (packet.op === Constants.workerOPCodes.DELETE_ALL) {
-		const forUser = [...queues.values()].filter(q => q.clientID === packet.data!.clientID);
-		replyTo(packet.threadID, forUser.length);
+		const forUser = [...queues.values()].filter(q => q.clientID === packet.data.clientID);
 		for (const q of forUser) {
 			q.destroy();
 		}
-	}
-});
+		return forUser.length;
+	} else return false;
+}
+
 
 function voiceAdapterCreator(userID: string, guildID: string): import("@discordjs/voice").DiscordGatewayAdapterCreator {
 	const key = `${userID}.${guildID}`;
@@ -456,9 +422,4 @@ function voiceAdapterCreator(userID: string, guildID: string): import("@discordj
 	};
 }
 
-process.on("unhandledRejection", e => logger.error(util.inspect(e, false, Infinity, true)));
-process.on("uncaughtException", (e, origin) => logger.error(`${util.inspect(e, false, Infinity, true)}\n${util.inspect(origin)}`));
-
-await import("./loaders/plugins.js");
-
-parentPort.postMessage({ op: Constants.workerOPCodes.READY });
+export default { handleMessage, queues };

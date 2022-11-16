@@ -1,6 +1,5 @@
 import { WebSocketServer, WebSocket } from "ws";
 
-import logger from "../util/Logger.js";
 import Constants from "../Constants.js";
 import Util from "../util/Util.js";
 
@@ -48,28 +47,7 @@ wss.on("connection", async (socket, request) => {
 wss.once("close", () => {
 	clearInterval(serverLoopInterval);
 
-	lavalinkLog("Socket server has closed.");
-
-	for (const child of lavalinkThreadPool.children.values()) {
-		child.terminate();
-	}
-});
-
-lavalinkThreadPool.on("message", (_, msg) => {
-	const socket = playerMap.get(`${msg.clientID}.${msg.data.guildId}`);
-	const entry = [...connections.values()].find(i => i.some(c => c.socket === socket));
-	const rKey = entry?.find((c) => c.socket);
-
-	if (rKey?.resumeKey && socketDeleteTimeouts.has(rKey.resumeKey)) socketDeleteTimeouts.get(rKey.resumeKey)!.events.push(msg.data);
-	socket?.send(JSON.stringify(msg.data));
-});
-
-lavalinkThreadPool.on("datareq", (op, data) => {
-	if (op === Constants.workerOPCodes.VOICE_SERVER) {
-		const v = voiceServerStates.get(`${data.clientID}.${data.guildId}`);
-
-		if (v) lavalinkThreadPool.broadcast({ op: Constants.workerOPCodes.VOICE_SERVER, data: Object.assign(v, { op: "voiceUpdate" }) });
-	}
+	console.log("Socket server has closed.");
 });
 
 function socketHeartbeat(): void {
@@ -95,13 +73,13 @@ export function handleWSUpgrade(request: import("http").IncomingMessage, socket:
 				s.send(JSON.stringify(event));
 			}
 
-			lavalinkLog(`Resumed session with key ${request.headers["resume-key"]}`);
-			lavalinkLog(`Replaying ${resume.events.length.toLocaleString()} events`);
+			console.log(`Resumed session with key ${request.headers["resume-key"]}`);
+			console.log(`Replaying ${resume.events.length.toLocaleString()} events`);
 			resume.events.length = 0;
 			return wss.emit("connection", s, request);
 		}
 
-		lavalinkLog("Connection successfully established");
+		console.log("Connection successfully established");
 		const existing = connections.get(userID);
 		const pl = { socket: s, resumeKey: null, resumeTimeout: 60 };
 		if (existing) existing.push(pl);
@@ -125,15 +103,17 @@ async function onClientMessage(socket: import("ws").WebSocket, data: import("ws"
 		return;
 	}
 
+	console.log(Util.stringify(msg));
+
+	const worker = await import("../worker.js");
+
 	const pl = { op: Constants.workerOPCodes.MESSAGE, data: Object.assign(msg, { clientID: userID }) };
 
 	switch (msg.op) {
 	case Constants.OPCodes.PLAY: {
 		if (!msg.guildId || !msg.track) return;
 
-		const responses: Array<any> = await lavalinkThreadPool.broadcast(pl);
-
-		if (!responses.includes(true)) lavalinkThreadPool.execute(pl);
+		worker.handleMessage(pl);
 
 		void playerMap.set(`${userID}.${msg.guildId}`, socket);
 		break;
@@ -143,7 +123,7 @@ async function onClientMessage(socket: import("ws").WebSocket, data: import("ws"
 
 		setTimeout(() => voiceServerStates.delete(`${userID}.${(msg as { guildId: string }).guildId}`), 20000);
 
-		void lavalinkThreadPool.broadcast({ op: Constants.workerOPCodes.VOICE_SERVER, data: voiceServerStates.get(`${userID}.${msg.guildId}`) });
+		void worker.handleMessage({ op: Constants.workerOPCodes.VOICE_SERVER, data: Object.assign({ op: "voiceUpdate" as const } ,voiceServerStates.get(`${userID}.${msg.guildId}`)) });
 		break;
 	}
 	case Constants.OPCodes.STOP:
@@ -156,13 +136,10 @@ async function onClientMessage(socket: import("ws").WebSocket, data: import("ws"
 		if (!playerMap.get(`${msg.clientID}.${msg.guildId}`)) return;
 		if (msg.op === "destroy") playerMap.delete(`${msg.clientID}.${msg.guildId}`);
 
-		void lavalinkThreadPool.broadcast(pl);
+		void worker.handleMessage(pl);
 		break;
 	}
 	case Constants.OPCodes.CONFIGURE_RESUMING: {
-		// @ts-expect-error
-		delete msg.clientID;
-		lavalinkLog(msg);
 		if (!msg.key) return;
 
 		const entry = connections.get(userID);
@@ -175,7 +152,6 @@ async function onClientMessage(socket: import("ws").WebSocket, data: import("ws"
 		break;
 	}
 	default:
-		lavalinkLog(msg);
 		lavalinkPlugins.forEach(p => p.onWSMessage?.(msg, socket as any));
 		break;
 	}
@@ -189,9 +165,11 @@ async function onClientClose(socket: import("ws").WebSocket, userID: string, clo
 	const entry = connections.get(userID);
 	const found = entry!.find(i => i.socket === socket);
 
+	const worker = await import("../worker.js");
+
 	if (found) {
 		if (found.resumeKey) {
-			lavalinkLog(`Connection closed from /${extra.ip}:${extra.port} with status CloseStatus[code=${closeCode}, reason=destroy] -- Session can be resumed within the next ${found.resumeTimeout} seconds with key ${found.resumeKey}`);
+			console.log(`Connection closed from /${extra.ip}:${extra.port} with status CloseStatus[code=${closeCode}, reason=destroy] -- Session can be resumed within the next ${found.resumeTimeout} seconds with key ${found.resumeKey}`);
 
 			const timeout: NodeJS.Timeout = setTimeout(async () => {
 				const index = entry!.findIndex(e => e.resumeKey === found.resumeKey);
@@ -202,26 +180,23 @@ async function onClientClose(socket: import("ws").WebSocket, userID: string, clo
 
 				if (entry!.length === 0) connections.delete(userID);
 
-				const results: Array<any> = await lavalinkThreadPool.broadcast({ op: Constants.workerOPCodes.DELETE_ALL, data: { clientID: userID } });
-				const count: number = results.reduce((acc, cur) => acc + cur, 0);
-
-				lavalinkLog(`Shutting down ${count} playing players`);
+				const count = worker.handleMessage({ op: Constants.workerOPCodes.DELETE_ALL, data: { clientID: userID } });
+				console.log(`Shutting down ${count} playing players`);
 			}, (found.resumeTimeout || 60) * 1000);
 
 			socketDeleteTimeouts.set(found.resumeKey, { timeout, events: [] });
 		} else {
 			const index = entry!.indexOf(found);
 
-			if (index === -1) return logger.error(`Socket delete could not be removed: ${found.resumeKey}\n${index}`);
+			if (index === -1) return console.error(`Socket delete could not be removed: ${found.resumeKey}\n${index}`);
 
 			entry!.splice(index, 1);
 
 			if (entry!.length === 0) connections.delete(userID);
 
-			const results: Array<any> = await lavalinkThreadPool.broadcast({ op: Constants.workerOPCodes.DELETE_ALL, data: { clientID: userID } });
-			const count: number = results.reduce((acc, cur) => acc + cur, 0);
+			const count = worker.handleMessage({ op: Constants.workerOPCodes.DELETE_ALL, data: { clientID: userID } });
 
-			lavalinkLog(`Shutting down ${count} playing players`);
+			console.log(`Shutting down ${count} playing players`);
 		}
 	}
 
@@ -229,4 +204,30 @@ async function onClientClose(socket: import("ws").WebSocket, userID: string, clo
 		if (key.startsWith(userID)) voiceServerStates.delete(key);
 }
 
-export default { handleWSUpgrade };
+function dataRequest(op: number, data: any) {
+	if (op === Constants.workerOPCodes.VOICE_SERVER) {
+		return voiceServerStates.get(`${data.clientID}.${data.guildId}`);
+	}
+}
+
+import type { TrackStartEvent, TrackEndEvent, TrackExceptionEvent, TrackStuckEvent, WebSocketClosedEvent, PlayerUpdate } from "lavalink-types";
+
+type PacketMap = {
+	playerUpdate: PlayerUpdate & { op: "playerUpdate"; };
+	TrackStartEvent: TrackStartEvent;
+	TrackEndEvent: TrackEndEvent;
+	TrackExceptionEvent: TrackExceptionEvent;
+	TrackStuckEvent: TrackStuckEvent;
+	WebSocketClosedEvent: WebSocketClosedEvent;
+}
+
+export function sendMessage(msg: { clientID: string; data: import("../types.js").UnpackRecord<PacketMap> }) {
+	const socket = playerMap.get(`${msg.clientID}.${msg.data.guildId}`);
+	const entry = [...connections.values()].find(i => i.some(c => c.socket === socket));
+	const rKey = entry?.find((c) => c.socket);
+
+	if (rKey?.resumeKey && socketDeleteTimeouts.has(rKey.resumeKey)) socketDeleteTimeouts.get(rKey.resumeKey)!.events.push(msg.data);
+	socket?.send(JSON.stringify(msg.data));
+}
+
+export default { handleWSUpgrade, dataRequest, sendMessage };

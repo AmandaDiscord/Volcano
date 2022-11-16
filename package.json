@@ -1,11 +1,11 @@
 {
   "name": "volcano",
-  "version": "1.5.5",
+  "version": "2.0.0-test-1",
   "description": "A light-weight LavaLink compatible replacement",
   "main": "dist/index.js",
   "type": "module",
   "scripts": {
-    "compile": "tsc -p .",
+    "compile": "tsup",
     "start": "node --enable-source-maps --optimize_for_size .",
     "create-release": "node ./scripts/release.js",
     "auth-gen": "node ./scripts/auth-gen.js",
@@ -39,7 +39,7 @@
     "html-entities": "^2.3.3",
     "m3u8stream": "^0.8.6",
     "music-metadata": "^8.1.0",
-    "node-html-parser": "^6.1.1",
+    "node-html-parser": "^6.1.4",
     "play-dl": "^1.9.6",
     "prism-media": "^1.3.4",
     "sodium-native": "^3.4.1",
@@ -52,11 +52,12 @@
   "devDependencies": {
     "@types/node": "^18.11.9",
     "@types/ws": "^8.5.3",
-    "@typescript-eslint/eslint-plugin": "^5.42.1",
-    "@typescript-eslint/parser": "^5.42.1",
+    "@typescript-eslint/eslint-plugin": "^5.43.0",
+    "@typescript-eslint/parser": "^5.43.0",
     "eslint": "^8.27.0",
     "lavalink-types": "github:AmandaDiscord/LavalinkTypes#1cadb97f9b52ec93f4023cd1275000c31db81901",
-    "typescript": "^4.8.4"
+    "tsup": "^6.5.0",
+    "typescript": "^4.9.3"
   },
   "files": [
     "./dist",

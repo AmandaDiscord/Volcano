@@ -1,11 +1,9 @@
 import util from "util";
-import { isMainThread } from "worker_threads";
 
 import * as dl from "play-dl";
 import ytmapi from "ytmusic-api";
 import { Plugin } from "volcano-sdk";
 
-import logger from "../util/Logger.js";
 import Util from "../util/Util.js";
 import Constants from "../Constants.js";
 
@@ -17,7 +15,7 @@ class YouTubeSource extends Plugin {
 	public searchShorts = ["yt", "ytm"];
 
 	public async initialize() {
-		if (isMainThread) await ytm.initialize();
+		await ytm.initialize();
 	}
 
 	public canBeUsed(resource: string, searchShort?: string) {
@@ -120,7 +118,7 @@ class YouTubeSource extends Plugin {
 	private static songResultToTrack(i: import("play-dl").YouTubeVideo) {
 		const length = Math.round(i.durationInSec * 1000);
 		if (!i.id) {
-			logger.warn(`Video(?) didn't have ID attached to it:\n${util.inspect(i, false, 3, true)}`);
+			console.warn(`Video(?) didn't have ID attached to it:\n${util.inspect(i, false, 3, true)}`);
 			throw new Error("YOUTUBE_VIDEO_HAS_NO_ID");
 		}
 		return {
