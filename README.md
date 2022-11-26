@@ -17,8 +17,7 @@ What Volcano offers that LavaLink doesn't:
 
 What LavaLink offers that Volcano doesn't:
 - Some REST routes
-- All filter op properties
-- Better filtering
+- Filter operations
 - Better support for SHOUTCast/ICECast
 - IPV6 requesting and rotation (There have been reports that YouTube doesn't ban IPs anymore, but should be taken with a grain of salt)
 - http proxying
@@ -34,8 +33,6 @@ Be careful with what current working directory you end up using because Volcano 
 
 # Requirements
 Node 18 or above (global.fetch).
-FFMPEG will default to using what's installed on the machine and added to path before falling back to avconf and then using the binaries installed by ffmpeg-static.
-FFMPEG in path is preferable as it will almost always provide better performance depending on how you built it.
 
 # Performance
 Test Machine: 4 VCores, 8GB VALLOC memory, 200GB SSD. Running Ubuntu 20.04.2 LTS. Provided by Contabo, located in Saint Louis, Missouri.
