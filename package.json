@@ -1,9 +1,21 @@
 {
     "name": "volcano",
-    "workspaces": [ "packages/*" ],
+    "version": "2.0.0-rc.1",
     "description": "A light-weight LavaLink compatible replacement",
-    "repository": "git@github.com:AmandaDiscord/Volcano.git",
     "author": "PapiOphidian",
-    "license": "MIT",
-    "private": true
+    "workspaces": [
+        "packages/*"
+    ],
+    "scripts": {
+        "lint": "turbo run lint"
+    },
+    "devDependencies": {
+        "@types/node": "^18.11.10",
+        "@typescript-eslint/eslint-plugin": "^5.45.0",
+        "@typescript-eslint/parser": "^5.45.0",
+        "eslint": "^8.28.0",
+        "turbo": "^1.6.3",
+        "typescript": "^4.9.3"
+    },
+    "packageManager": "yarn@3.3.0"
 }
