@@ -1,4 +1,6 @@
-.yarn/cache
-.yarn/unplugged
-
-node_modules/
+/node_modules
+/dist
+application.yml
+soundcloud.txt
+/.data
+/Lavalink.jar
