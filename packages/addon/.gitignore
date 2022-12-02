@@ -1,0 +1,6 @@
+# compilation
+target/
+
+*.node
+index.js
+index.d.ts

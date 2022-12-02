@@ -12,7 +12,6 @@
 		"module": "ESNext",
 		"moduleResolution": "NodeNext",
 		"noUnusedLocals": false,
-		"outDir": "./dist",
 		"pretty": true,
 		"removeComments": true,
 		"resolveJsonModule": true,
@@ -23,6 +22,5 @@
 		"strictNullChecks": true,
 		"target": "ES2022",
 		"types": ["node"]
-	},
-	"include": ["./src"]
+	}
 }
