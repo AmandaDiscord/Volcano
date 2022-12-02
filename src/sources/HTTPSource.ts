@@ -42,7 +42,7 @@ class HTTPSource extends Plugin {
 		const data = await HTTPSource.followURLS(resource);
 
 		const mimeMatch = data.headers["content-type"]?.match(mimeRegex);
-		if (mimeMatch && mimeMatch[1] === "application" && !supportedApplicationTypes.includes(mimeMatch[2])) {
+		if (!mimeMatch || (mimeMatch[1] === "application" && !supportedApplicationTypes.includes(mimeMatch[2]))) {
 			data.end();
 			data.destroy();
 			throw new Error(`${"UNSUPPORTED_FILE_TYPE"} ${data.headers["content-type"]}`);

@@ -4,8 +4,9 @@ import { Plugin } from "volcano-sdk";
 import Util from "../util/Util.js";
 
 const identifierRegex = /^O:/;
-const usableRegex = /^https:\/\/(?:on\.)?soundcloud.com/;
+const usableRegex = /^https:\/\/(?:on\.)?soundcloud\.(?:app\.goo\.)?(?:com|gl)/;
 const onSoundCloudStart = "https://on.soundcloud.com/";
+const soundcloudAppGooglStart = "https://soundcloud.app.goo.gl/";
 
 class SoundcloudSource extends Plugin {
 	public source = "soundcloud";
@@ -23,7 +24,7 @@ class SoundcloudSource extends Plugin {
 			return { entries: results.map(SoundcloudSource.songResultToTrack) };
 		}
 
-		if (resource.slice(0, onSoundCloudStart.length) === onSoundCloudStart) {
+		if ((resource.slice(0, onSoundCloudStart.length) === onSoundCloudStart) || (resource.slice(0, soundcloudAppGooglStart.length) === soundcloudAppGooglStart)) {
 			const socket = await Util.connect(resource);
 			const request = await Util.socketToRequest(socket);
 			if (!request.headers.location) throw e;
