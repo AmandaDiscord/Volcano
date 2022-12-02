@@ -1,0 +1,22 @@
+{
+    "name": "volcano-sdk",
+    "version": "2.0.0-rc.1",
+    "description": "An SDK for creating Plugins for Volcano",
+    "main": "index.js",
+    "types": "index.d.ts",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/AmandaDiscord/Volcano.git"
+    },
+    "keywords": [
+        "volcano",
+        "sdk",
+        "plugins"
+    ],
+    "author": "PapiOphidian",
+    "license": "MIT",
+    "bugs": {
+        "url": "https://github.com/AmandaDiscord/Volcano/issues"
+    },
+    "homepage": "https://github.com/AmandaDiscord/Volcano#readme"
+}

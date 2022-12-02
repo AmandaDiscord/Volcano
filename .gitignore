@@ -1,6 +1,4 @@
-/node_modules
-/dist
-application.yml
-soundcloud.txt
-/.data
-/Lavalink.jar
+.yarn/cache
+.yarn/unplugged
+
+node_modules/
