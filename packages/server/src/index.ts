@@ -55,7 +55,7 @@ const properties = {
 const longestLength = Object.keys(properties).map(k => k.length).sort((a, b) => b - a)[0];
 
 console.log(`\n\n\n${Object.entries(properties).map(props => `	${props[0]}:${" ".repeat(longestLength - props[0].length)}   ${props[1]}`).join("\n")}\n\n`);
-console.log(`Starting Launcher using Node ${process.version.replace("v", "")} on ${os.hostname()} with PId ${process.pid} (${path.join(lavalinkDirname, "index.js")} started by ${username} in ${process.cwd()})`);
+console.log(`Starting Launcher using Node ${process.version.replace("v", "")} on ${os.hostname()} with PID ${process.pid} (${path.join(lavalinkDirname, "index.js")} started by ${username} in ${process.cwd()})`);
 console.log(`OS: ${Constants.platformNames[process.platform] || process.platform} ${os.release()?.split(".")[0] || "Unknown release"} Arch: ${process.arch}`);
 
 const http = HTTP.createServer(serverHandler);
