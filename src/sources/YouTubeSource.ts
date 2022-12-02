@@ -10,7 +10,7 @@ import Util from "../util/Util.js";
 import Constants from "../Constants.js";
 
 const ytm = new ytmapi.default();
-const usableRegex = /^https?:\/\/(?:\w+)?\.?youtu\.?be(?:.com)?\/(?:watch\?v=)?\w+/;
+const usableRegex = /^https?:\/\/(?:\w+)?\.?youtu\.?be(?:.com)?\/(?:watch\?v=)?[\w-]+/;
 
 class YouTubeSource extends Plugin {
 	public source = "youtube";
