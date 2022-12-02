@@ -4,7 +4,3 @@ application.yml
 soundcloud.txt
 /.data
 /Lavalink.jar
-
-.yarn/cache
-.yarn/install-state.gz
-.yarn/unplugged

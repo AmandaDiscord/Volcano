@@ -2,6 +2,8 @@ import twitch from "twitch-m3u8";
 import m3u8 from "m3u8stream";
 
 import { Plugin } from "volcano-sdk";
+import { Input } from "@melike2d/songbird";
+import type { TrackInfo } from "@lavalink/encoding";
 
 const usableRegex = /^https:\/\/www\.twitch.\tv/;
 const vodRegex = /\/videos\/(\d+)$/;
@@ -54,7 +56,12 @@ class TwitchSource extends Plugin {
 		};
 	}
 
-	public async streamHandler(info: import("@lavalink/encoding").TrackInfo) {
+	public songbirdInput(info: TrackInfo): Promise<Input> {
+		// TODO(melike2d) songbird does not support m3u8... find a way then lol
+		return Promise.reject();
+	}
+
+	public async streamHandler(info: TrackInfo) {
 		const vod = info.uri!.match(vodRegex);
 		const user = info.uri!.match(channelRegex);
 		const streams = await twitch[vod ? "getVod" : "getStream"](vod ? vod[1] : user![1]) as Array<import("twitch-m3u8").Stream>;

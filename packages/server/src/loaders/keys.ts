@@ -11,10 +11,10 @@ import lavalink from "./lavalink.js";
 const keyDir = path.join(lavalink.lavalinkDirname, "../soundcloud.txt");
 
 async function keygen() {
-	const clientID = await dl.getFreeClientID();
-	if (!clientID) throw new Error("SOUNDCLOUD_KEY_NO_CREATE");
-	fs.writeFileSync(keyDir, clientID, { encoding: "utf-8" });
-	await dl.setToken({ soundcloud : { client_id : clientID } });
+	const clientId = await dl.getFreeClientID();
+	if (!clientId) throw new Error("SOUNDCLOUD_KEY_NO_CREATE");
+	fs.writeFileSync(keyDir, clientId, { encoding: "utf-8" });
+	await dl.setToken({ soundcloud : { client_id : clientId } });
 }
 
 if (fs.existsSync(keyDir)) {

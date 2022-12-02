@@ -55,7 +55,7 @@ const properties = {
 const longestLength = Object.keys(properties).map(k => k.length).sort((a, b) => b - a)[0];
 
 console.log(`\n\n\n${Object.entries(properties).map(props => `	${props[0]}:${" ".repeat(longestLength - props[0].length)}   ${props[1]}`).join("\n")}\n\n`);
-console.log(`Starting Launcher using Node ${process.version.replace("v", "")} on ${os.hostname()} with PID ${process.pid} (${path.join(lavalinkDirname, "index.js")} started by ${username} in ${process.cwd()})`);
+console.log(`Starting Launcher using Node ${process.version.replace("v", "")} on ${os.hostname()} with PId ${process.pid} (${path.join(lavalinkDirname, "index.js")} started by ${username} in ${process.cwd()})`);
 console.log(`OS: ${Constants.platformNames[process.platform] || process.platform} ${os.release()?.split(".")[0] || "Unknown release"} Arch: ${process.arch}`);
 
 const http = HTTP.createServer(serverHandler);
@@ -65,11 +65,11 @@ http.on("upgrade", async (request: HTTP.IncomingMessage, socket: import("net").S
 	console.log(`Incoming connection from /${request.socket.remoteAddress}:${request.socket.remotePort}`);
 
 	const temp401 = "HTTP/1.1 401 Unauthorized\r\n\r\n";
-	const userID = request.headers["user-id"];
+	const userId = request.headers["user-id"];
 
 	const passwordIncorrect: boolean = (!!lavalinkConfig.lavalink.server.password?.length && request.headers.authorization !== String(lavalinkConfig.lavalink.server.password));
-	const invalidUserID: boolean = (!userID || Array.isArray(userID) || !allDigitRegex.test(userID));
-	if (passwordIncorrect || invalidUserID) {
+	const invalidUserId: boolean = (!userId || Array.isArray(userId) || !allDigitRegex.test(userId));
+	if (passwordIncorrect || invalidUserId) {
 		return socket.write(temp401, () => {
 			socket.end();
 			socket.destroy();
@@ -117,7 +117,10 @@ http.listen(lavalinkConfig.server.port, lavalinkConfig.server.address, () => con
 console.log(`Server started on port(s) ${lavalinkConfig.server.port} (http)`);
 console.log(`Started Launcher in ${(Date.now() - startTime) / 1000} seconds (Node running for ${process.uptime()})`);
 
-process.on("unhandledRejection", e => console.error(util.inspect(e, false, Infinity, true)));
+process.on("unhandledRejection", e => {
+	console.debug(e);
+	console.error(util.inspect(e, false, Infinity, true));
+});
 process.on("uncaughtException", (e, origin) => console.error(`${util.inspect(e, false, Infinity, true)}\n${util.inspect(origin)}`));
 process.title = "Volcano";
 

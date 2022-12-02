@@ -2,8 +2,8 @@ import htmlParse from "node-html-parser";
 import entities from "html-entities";
 import { Plugin } from "volcano-sdk";
 
-import Util from "../util/Util.js";
 import Constants from "../Constants.js";
+import { Input } from "@melike2d/songbird";
 
 const usableRegex = /^https:\/\/[^.]+.bandcamp.com\/(?:album|track)\/[^/]+/;
 const streamRegex = /(https:\/\/t4\.bcbits\.com\/stream\/[^}]+)/;
@@ -36,15 +36,15 @@ class BandcampSource extends Plugin {
 		return value;
 	}
 
-	public async streamHandler(info: import("@lavalink/encoding").TrackInfo) {
+	public async songbirdInput(info: import("@lavalink/encoding").TrackInfo) {
 		const html = await fetch(info.uri!, { redirect: "follow", headers: Constants.baseHTTPRequestHeaders }).then(d => d.text());
 		const parser = htmlParse.default(html);
 		const head = parser.getElementsByTagName("head")[0];
 		const stream = head.toString().match(streamRegex);
 		if (!stream) throw new Error("NO_STREAM_URL");
-		const response = await Util.connect(entities.decode(stream[1].replace("&quot;", "")), { headers: Constants.baseHTTPRequestHeaders });
 
-		return { stream: response };
+		const url = entities.decode(stream[1].replace("&quot;", ""));
+		return Input.http(Constants.defaultReqwestClient, url);
 	}
 
 	private static parse(html: string) {

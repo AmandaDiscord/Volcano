@@ -1,10 +1,11 @@
 import util from "util";
+import { isMainThread } from "worker_threads";
+import { Input } from "@melike2d/songbird";
 
 import * as dl from "play-dl";
 import ytmapi from "ytmusic-api";
 import { Plugin } from "volcano-sdk";
 
-import Util from "../util/Util.js";
 import Constants from "../Constants.js";
 
 const ytm = new ytmapi.default();
@@ -15,7 +16,7 @@ class YouTubeSource extends Plugin {
 	public searchShorts = ["yt", "ytm"];
 
 	public async initialize() {
-		await ytm.initialize();
+		if (isMainThread) await ytm.initialize();
 	}
 
 	public canBeUsed(resource: string, searchShort?: string) {
@@ -28,9 +29,9 @@ class YouTubeSource extends Plugin {
 			const validated = dl.yt_validate(resource);
 			if (validated) {
 				try {
-					const ID = dl.extractID(resource);
+					const Id = dl.extractID(resource);
 					if (validated === "video") {
-						const d = await dl.video_basic_info(ID);
+						const d = await dl.video_basic_info(Id);
 						return { entries: [YouTubeSource.songResultToTrack(d.video_details)] };
 					} else {
 						const d = await dl.playlist_info(resource, { incomplete: true });
@@ -102,24 +103,17 @@ class YouTubeSource extends Plugin {
 		return { entries: [YouTubeSource.songResultToTrack(data.video_details)] };
 	}
 
-	public async streamHandler(info: import("@lavalink/encoding").TrackInfo, usingFFMPEG: boolean) {
-		if (!usingFFMPEG) {
-			const stream = await dl.stream(info.uri!);
-			return { stream: stream.stream, type: stream.type };
-		} else {
-			const i = await dl.video_info(info.uri!);
-			const selected = i.format[i.format.length - 1];
-			const response = await Util.connect(selected.url!, { headers: Constants.baseHTTPRequestHeaders });
-
-			return { stream: response };
-		}
+	public async songbirdInput(info: import("@lavalink/encoding").TrackInfo) {
+		const i = await dl.video_info(info.uri!);
+		const selected = i.format[i.format.length - 1];
+		return Input.http(Constants.defaultReqwestClient, selected.url!);
 	}
 
 	private static songResultToTrack(i: import("play-dl").YouTubeVideo) {
 		const length = Math.round(i.durationInSec * 1000);
 		if (!i.id) {
-			console.warn(`Video(?) didn't have ID attached to it:\n${util.inspect(i, false, 3, true)}`);
-			throw new Error("YOUTUBE_VIDEO_HAS_NO_ID");
+			console.warn(`Video(?) didn't have Id attached to it:\n${util.inspect(i, false, 3, true)}`);
+			throw new Error("YOUTUBE_VIdEO_HAS_NO_Id");
 		}
 		return {
 			identifier: i.id,

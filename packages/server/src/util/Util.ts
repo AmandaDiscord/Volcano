@@ -242,28 +242,6 @@ export function requestBody(req: import("http").IncomingMessage, timeout = 10000
 	});
 }
 
-// This is a proper rewrite of entersState. entersState does some weird stuff with Node internal methods which could lead to
-// events never firing and causing the thread to be locked and cause abort errors somehow.
-export function waitForResourceToEnterState(resource: import("@discordjs/voice").VoiceConnection, status: import("@discordjs/voice").VoiceConnectionStatus, timeoutMS: number): Promise<void>;
-export function waitForResourceToEnterState(resource: import("@discordjs/voice").AudioPlayer, status: import("@discordjs/voice").AudioPlayerStatus, timeoutMS: number): Promise<void>;
-export function waitForResourceToEnterState(resource: import("@discordjs/voice").VoiceConnection | import("@discordjs/voice").AudioPlayer, status: import("@discordjs/voice").VoiceConnectionStatus | import("@discordjs/voice").AudioPlayerStatus, timeoutMS: number): Promise<void> {
-	return new Promise((res, rej) => {
-		if (resource.state.status === status) res(void 0);
-		let timeout: NodeJS.Timeout | undefined = undefined;
-		function onStateChange(_oldState: import("@discordjs/voice").VoiceConnectionState | import("@discordjs/voice").AudioPlayerState, newState: import("@discordjs/voice").VoiceConnectionState | import("@discordjs/voice").AudioPlayerState) {
-			if (newState.status !== status) return;
-			if (timeout) clearTimeout(timeout);
-			(resource as import("@discordjs/voice").AudioPlayer).removeListener("stateChange", onStateChange);
-			return res(void 0);
-		}
-		(resource as import("@discordjs/voice").AudioPlayer).on("stateChange", onStateChange);
-		timeout = setTimeout(() => {
-			(resource as import("@discordjs/voice").AudioPlayer).removeListener("stateChange", onStateChange);
-			rej(new Error("Didn't enter state in time"));
-		}, timeoutMS);
-	});
-}
-
 export async function getStats(): Promise<import("lavalink-types").Stats> {
 	const memory = process.memoryUsage();
 	const free: number = memory.heapTotal - memory.heapUsed;
@@ -325,4 +303,4 @@ function stringifyStep(object: any, references: Set<any>): any {
 	return rebuilt;
 }
 
-export default { processLoad, standardErrorHandler, isObject, isValidKey, mixin, connect, socketToRequest, noop, requestBody, waitForResourceToEnterState, getStats, createTimeoutForPromise, ConnectionResponse, stringify };
+export default { processLoad, standardErrorHandler, isObject, isValidKey, mixin, connect, socketToRequest, noop, requestBody, getStats, createTimeoutForPromise, ConnectionResponse, stringify };

@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 
+import { Input } from "@melike2d/songbird";
 import { parseStream } from "music-metadata";
 import { Plugin } from "volcano-sdk";
 
@@ -39,8 +40,9 @@ class LocalSource extends Plugin {
 		};
 	}
 
-	public streamHandler(info: import("@lavalink/encoding").TrackInfo) {
-		return { stream: fs.createReadStream(info.uri!) };
+	public songbirdInput(info: import("@lavalink/encoding").TrackInfo) {
+		// return { stream: fs.createReadStream(info.uri!) };
+		return Input.file(info.uri!);
 	}
 }
 

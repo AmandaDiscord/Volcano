@@ -15,4 +15,4 @@ type EventMap = {
 	"configureResuming": { op: "configureResuming"; key: string; timeout?: number; }
 }
 
-export type InboundPayload = UnpackRecord<EventMap> & { clientID: string; };
+export type InboundPayload = UnpackRecord<EventMap> & { clientId: string; };

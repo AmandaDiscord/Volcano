@@ -1,6 +1,5 @@
 import { IAudioMetadata, parseStream } from "music-metadata";
-import { StreamType } from "@discordjs/voice";
-import m3u8 from "m3u8stream";
+import { Input } from "@melike2d/songbird";
 
 import { Plugin } from "volcano-sdk";
 
@@ -11,7 +10,6 @@ const mimeRegex = /^(audio|video|application)\/(.+)$/;
 const httpRegex = /^https?:\/\//;
 const supportedApplicationTypes = ["ogg", "x-mpegURL"];
 const redirectStatusCodes = [301, 302, 303, 307, 308];
-const pcmTypes = ["pcm", "wav"];
 
 class HTTPSource extends Plugin {
 	public source = "http";
@@ -111,15 +109,12 @@ class HTTPSource extends Plugin {
 		};
 	}
 
-	public async streamHandler(info: import("@lavalink/encoding").TrackInfo) {
-		if (info.probeInfo!.raw === "x-mpegURL" || info.uri!.endsWith(".m3u8")) return { stream: m3u8(info.uri!), type: StreamType.Arbitrary };
-		else {
-			const response = await Util.connect(info.uri!, { headers: Constants.baseHTTPRequestHeaders });
-			let type: StreamType | undefined = undefined;
-			if (info.probeInfo!.raw === "ogg") type = StreamType.OggOpus;
-			else if (info.probeInfo!.raw === "opus") type = StreamType.Opus;
-			else if (pcmTypes.includes(info.probeInfo!.raw)) type = StreamType.Raw;
-			return { stream: response, type };
+	public async songbirdInput(info: import("@lavalink/encoding").TrackInfo) {
+		if (info.probeInfo!.raw === "x-mpegURL" || info.uri!.endsWith(".m3u8")) {
+			throw new TypeError("m3u8 streams are currently not supported.");
+			// return { stream: m3u8(info.uri!), type: StreamType.Arbitrary }
+		} else {
+			return Input.http(Constants.defaultReqwestClient, info.uri!);
 		}
 	}
 }

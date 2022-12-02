@@ -1,7 +1,9 @@
 import * as dl from "play-dl";
 import { Plugin } from "volcano-sdk";
+import { Input } from "@melike2d/songbird";
 
 import Util from "../util/Util.js";
+import Constants from "../Constants.js";
 
 const identifierRegex = /^O:/;
 const usableRegex = /^https:\/\/(?:on\.)?soundcloud.com/;
@@ -47,10 +49,12 @@ class SoundcloudSource extends Plugin {
 		throw e;
 	}
 
-	public async streamHandler(info: import("@lavalink/encoding").TrackInfo) {
+	public async songbirdInput(info: import("@lavalink/encoding").TrackInfo) {
+		console.log(info.identifier);
 		const url = info.identifier.replace(identifierRegex, "");
-		const stream = await dl.stream_from_info(new dl.SoundCloudTrack({ user: {}, media: { transcodings: [{ format: { protocol: "hls", mime_type: "unknown" }, url: url }] } }));
-		return { stream: stream.stream, type: stream.type };
+		return Input.http(Constants.defaultReqwestClient, url);
+		// const stream = await dl.stream_from_info(new dl.SoundCloudTrack({ user: {}, media: { transcodings: [{ format: { protocol: "hls", mime_type: "unknown" }, url: url }] } }));
+		// return { stream: stream.stream, type: stream.type };
 	}
 
 	private static songResultToTrack(i: import("play-dl").SoundCloudTrack) {

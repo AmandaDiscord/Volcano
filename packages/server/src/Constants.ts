@@ -1,3 +1,9 @@
+import { initLogging, ReqwestClient } from "@melike2d/songbird";
+
+initLogging();
+
+export const defaultReqwestClient = new ReqwestClient();
+
 export const defaultOptions = {
 	spring: {
 		main: {
@@ -177,4 +183,4 @@ export const platformNames = {
 	"netbsd": "NetBSD"
 };
 
-export default { defaultOptions, baseHTTPRequestHeaders, fakeAgent, baseHTTPResponseHeaders, OPCodes, defaultFilterValues, workerOPCodes, VoiceConnectionConnectThresholdMS, VoiceWSCloseCodes, platformNames };
+export default { defaultReqwestClient, defaultOptions, baseHTTPRequestHeaders, fakeAgent, baseHTTPResponseHeaders, OPCodes, defaultFilterValues, workerOPCodes, VoiceConnectionConnectThresholdMS, VoiceWSCloseCodes, platformNames };

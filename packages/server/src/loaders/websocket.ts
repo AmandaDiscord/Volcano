@@ -6,7 +6,7 @@ import Util from "../util/Util.js";
 const wss = new WebSocketServer({ noServer: true });
 const socketDeleteTimeouts = new Map<string, { timeout: NodeJS.Timeout; events: Array<any> }>();
 const connections = new Map<string, Array<{ socket: import("ws").WebSocket; resumeKey: string | null; resumeTimeout: number }>>();
-const voiceServerStates = new Map<string, { clientID: string; guildId: string; sessionId: string; event: { token: string; guild_id: string; endpoint: string } }>();
+const voiceServerStates = new Map<string, { clientId: string; guildId: string; sessionId: string; event: { token: string; guild_id: string; endpoint: string } }>();
 const playerMap = new Map<string, import("ws").WebSocket>();
 
 const serverLoopInterval: NodeJS.Timeout = setInterval(async () => {
@@ -33,15 +33,15 @@ wss.on("headers", (headers, request) => {
 });
 
 wss.on("connection", async (socket, request) => {
-	const userID = request.headers["user-id"] as string;
+	const userId = request.headers["user-id"] as string;
 	const stats: import("lavalink-types").Stats = await Util.getStats();
 	socket.send(JSON.stringify(Object.assign(stats, { op: "stats" })));
-	socket.on("message", data => onClientMessage(socket, data, userID));
+	socket.on("message", data => onClientMessage(socket, data, userId));
 	socket["isAlive"] = true;
 	socket.on("pong", socketHeartbeat);
 
-	socket.once("close", code => onClientClose(socket, userID, code, { ip: request.socket.remoteAddress!, port: request.socket.remotePort! }));
-	socket.once("error", () => onClientClose(socket, userID, 1000, { ip: request.socket.remoteAddress!, port: request.socket.remotePort! }));
+	socket.once("close", code => onClientClose(socket, userId, code, { ip: request.socket.remoteAddress!, port: request.socket.remotePort! }));
+	socket.once("error", () => onClientClose(socket, userId, 1000, { ip: request.socket.remoteAddress!, port: request.socket.remotePort! }));
 });
 
 wss.once("close", () => {
@@ -55,19 +55,19 @@ function socketHeartbeat(): void {
 }
 
 export function handleWSUpgrade(request: import("http").IncomingMessage, socket: import("net").Socket, head: Buffer) {
-	const userID: string = request.headers["user-id"] as string;
+	const userId: string = request.headers["user-id"] as string;
 	wss.handleUpgrade(request, socket, head, s => {
 		if (request.headers["resume-key"] && socketDeleteTimeouts.has(request.headers["resume-key"] as string)) {
 			const resume = socketDeleteTimeouts.get(request.headers["resume-key"] as string)!;
 			clearTimeout(resume.timeout);
 			socketDeleteTimeouts.delete(request.headers["resume-key"] as string);
-			const exist = connections.get(userID);
+			const exist = connections.get(userId);
 			if (exist) {
 				const pre = exist.find(i => i.resumeKey === request.headers["resume-key"]);
 
 				if (pre) pre.socket = s;
 				else exist.push({ socket: s, resumeKey: null, resumeTimeout: 60 });
-			} else connections.set(userID, [{ socket: s, resumeKey: null, resumeTimeout: 60 }]);
+			} else connections.set(userId, [{ socket: s, resumeKey: null, resumeTimeout: 60 }]);
 
 			for (const event of resume.events) {
 				s.send(JSON.stringify(event));
@@ -80,15 +80,15 @@ export function handleWSUpgrade(request: import("http").IncomingMessage, socket:
 		}
 
 		console.log("Connection successfully established");
-		const existing = connections.get(userID);
+		const existing = connections.get(userId);
 		const pl = { socket: s, resumeKey: null, resumeTimeout: 60 };
 		if (existing) existing.push(pl);
-		else connections.set(userID, [pl]);
+		else connections.set(userId, [pl]);
 		wss.emit("connection", s, request);
 	});
 }
 
-async function onClientMessage(socket: import("ws").WebSocket, data: import("ws").RawData, userID: string): Promise<void> {
+async function onClientMessage(socket: import("ws").WebSocket, data: import("ws").RawData, userId: string): Promise<void> {
 	const buf: string | Buffer = Array.isArray(data)
 		? Buffer.concat(data)
 		: (data instanceof ArrayBuffer)
@@ -107,7 +107,7 @@ async function onClientMessage(socket: import("ws").WebSocket, data: import("ws"
 
 	const worker = await import("../worker.js");
 
-	const pl = { op: Constants.workerOPCodes.MESSAGE, data: Object.assign(msg, { clientID: userID }) };
+	const pl = { op: Constants.workerOPCodes.MESSAGE, data: Object.assign(msg, { clientId: userId }) };
 
 	switch (msg.op) {
 	case Constants.OPCodes.PLAY: {
@@ -115,15 +115,15 @@ async function onClientMessage(socket: import("ws").WebSocket, data: import("ws"
 
 		worker.handleMessage(pl);
 
-		void playerMap.set(`${userID}.${msg.guildId}`, socket);
+		void playerMap.set(`${userId}.${msg.guildId}`, socket);
 		break;
 	}
 	case Constants.OPCodes.VOICE_UPDATE: {
-		voiceServerStates.set(`${userID}.${msg.guildId}`, { clientID: userID, guildId: msg.guildId as string, sessionId: msg.sessionId as string, event: msg.event as any });
+		voiceServerStates.set(`${userId}.${msg.guildId}`, { clientId: userId, guildId: msg.guildId as string, sessionId: msg.sessionId as string, event: msg.event as any });
 
-		setTimeout(() => voiceServerStates.delete(`${userID}.${(msg as { guildId: string }).guildId}`), 20000);
+		setTimeout(() => voiceServerStates.delete(`${userId}.${(msg as { guildId: string }).guildId}`), 20000);
 
-		void worker.handleMessage({ op: Constants.workerOPCodes.VOICE_SERVER, data: Object.assign({ op: "voiceUpdate" as const } ,voiceServerStates.get(`${userID}.${msg.guildId}`)) });
+		void worker.handleMessage({ op: Constants.workerOPCodes.VOICE_SERVER, data: Object.assign({ op: "voiceUpdate" as const } ,voiceServerStates.get(`${userId}.${msg.guildId}`)) });
 		break;
 	}
 	case Constants.OPCodes.STOP:
@@ -133,8 +133,8 @@ async function onClientMessage(socket: import("ws").WebSocket, data: import("ws"
 	case Constants.OPCodes.VOLUME:
 	case Constants.OPCodes.FILTERS: {
 		if (!msg.guildId) return;
-		if (!playerMap.get(`${msg.clientID}.${msg.guildId}`)) return;
-		if (msg.op === "destroy") playerMap.delete(`${msg.clientID}.${msg.guildId}`);
+		if (!playerMap.get(`${msg.clientId}.${msg.guildId}`)) return;
+		if (msg.op === "destroy") playerMap.delete(`${msg.clientId}.${msg.guildId}`);
 
 		void worker.handleMessage(pl);
 		break;
@@ -142,7 +142,7 @@ async function onClientMessage(socket: import("ws").WebSocket, data: import("ws"
 	case Constants.OPCodes.CONFIGURE_RESUMING: {
 		if (!msg.key) return;
 
-		const entry = connections.get(userID);
+		const entry = connections.get(userId);
 		const found = entry!.find(i => i.socket === socket);
 
 		if (found) {
@@ -157,12 +157,12 @@ async function onClientMessage(socket: import("ws").WebSocket, data: import("ws"
 	}
 }
 
-async function onClientClose(socket: import("ws").WebSocket, userID: string, closeCode: number, extra: { ip: string; port: number }) {
+async function onClientClose(socket: import("ws").WebSocket, userId: string, closeCode: number, extra: { ip: string; port: number }) {
 	if (socket.readyState !== WebSocket.CLOSING && socket.readyState !== WebSocket.CLOSED) socket.close(closeCode);
 
 	socket.removeAllListeners();
 
-	const entry = connections.get(userID);
+	const entry = connections.get(userId);
 	const found = entry!.find(i => i.socket === socket);
 
 	const worker = await import("../worker.js");
@@ -178,9 +178,9 @@ async function onClientClose(socket: import("ws").WebSocket, userID: string, clo
 
 				socketDeleteTimeouts.delete(found.resumeKey!);
 
-				if (entry!.length === 0) connections.delete(userID);
+				if (entry!.length === 0) connections.delete(userId);
 
-				const count = worker.handleMessage({ op: Constants.workerOPCodes.DELETE_ALL, data: { clientID: userID } });
+				const count = worker.handleMessage({ op: Constants.workerOPCodes.DELETE_ALL, data: { clientId: userId } });
 				console.log(`Shutting down ${count} playing players`);
 			}, (found.resumeTimeout || 60) * 1000);
 
@@ -192,21 +192,21 @@ async function onClientClose(socket: import("ws").WebSocket, userID: string, clo
 
 			entry!.splice(index, 1);
 
-			if (entry!.length === 0) connections.delete(userID);
+			if (entry!.length === 0) connections.delete(userId);
 
-			const count = worker.handleMessage({ op: Constants.workerOPCodes.DELETE_ALL, data: { clientID: userID } });
+			const count = worker.handleMessage({ op: Constants.workerOPCodes.DELETE_ALL, data: { clientId: userId } });
 
 			console.log(`Shutting down ${count} playing players`);
 		}
 	}
 
 	for (const key of voiceServerStates.keys())
-		if (key.startsWith(userID)) voiceServerStates.delete(key);
+		if (key.startsWith(userId)) voiceServerStates.delete(key);
 }
 
 function dataRequest(op: number, data: any) {
 	if (op === Constants.workerOPCodes.VOICE_SERVER) {
-		return voiceServerStates.get(`${data.clientID}.${data.guildId}`);
+		return voiceServerStates.get(`${data.clientId}.${data.guildId}`);
 	}
 }
 
@@ -221,8 +221,8 @@ type PacketMap = {
 	WebSocketClosedEvent: WebSocketClosedEvent;
 }
 
-export function sendMessage(msg: { clientID: string; data: import("../types.js").UnpackRecord<PacketMap> }) {
-	const socket = playerMap.get(`${msg.clientID}.${msg.data.guildId}`);
+export function sendMessage(msg: { clientId: string; data: import("../types.js").UnpackRecord<PacketMap> }) {
+	const socket = playerMap.get(`${msg.clientId}.${msg.data.guildId}`);
 	const entry = [...connections.values()].find(i => i.some(c => c.socket === socket));
 	const rKey = entry?.find((c) => c.socket);
 

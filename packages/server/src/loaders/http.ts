@@ -5,7 +5,7 @@ import * as encoding from "@lavalink/encoding";
 import Constants from "../Constants.js";
 import Util from "../util/Util.js";
 
-const IDRegex = /(?:(\w{1,4})search:)?(.+)/;
+const IdRegex = /(?:(\w{1,4})search:)?(.+)/;
 
 export type Path = {
 	methods: Array<string>;
@@ -38,7 +38,7 @@ const paths: {
 
 			console.log(`Got request to load for identifier "${identifier}"`);
 
-			const match = identifier.match(IDRegex);
+			const match = identifier.match(IdRegex);
 			if (!match) return Util.standardErrorHandler("Identifier did not match regex", res, payload); // Should theoretically never happen, but TypeScript doesn't know this
 
 			const isSearch = !!match[1];
