@@ -47,7 +47,7 @@
     "volcano-sdk": "github:AmandaDiscord/VolcanoSDK#c9195e6891ec641ec9a9da3e7cb87a47fa6f8033",
     "ws": "^8.11.0",
     "yaml": "^2.2.0",
-    "ytmusic-api": "^4.0.0"
+    "ytmusic-api": "^4.0.1"
   },
   "devDependencies": {
     "@types/node": "^18.11.18",
