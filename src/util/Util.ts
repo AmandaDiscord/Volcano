@@ -274,7 +274,7 @@ export async function getStats(): Promise<import("lavalink-types").Stats> {
 	return {
 		players: threadStats.reduce((acc, cur) => acc + cur.players, 0),
 		playingPlayers: threadStats.reduce((acc, cur) => acc + cur.playingPlayers, 0),
-		uptime: process.uptime() * 1000,
+		uptime: Math.floor(process.uptime() * 1000),
 		memory: {
 			reservable: memory.heapTotal - free,
 			used: memory.heapUsed,

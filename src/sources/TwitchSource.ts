@@ -3,7 +3,7 @@ import m3u8 from "m3u8stream";
 
 import { Plugin } from "volcano-sdk";
 
-const usableRegex = /^https:\/\/www\.twitch.\tv/;
+const usableRegex = /^https:\/\/(?:www\.)?twitch\.tv/;
 const vodRegex = /\/videos\/(\d+)$/;
 const channelRegex = /twitch\.tv\/([^/]+)/;
 
