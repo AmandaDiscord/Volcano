@@ -13,6 +13,8 @@ const ytm = new ytmapi.default();
 const usableRegex = /^https?:\/\/(?:\w+)?\.?youtu\.?be(?:.com)?\/(?:watch\?v=)?[\w-]+/;
 const normalizeRegex = /[^A-Za-z0-9:/.=&_-]/g;
 
+const disallowedPLTypes = ["LL", "WL"];
+
 class YouTubeSource extends Plugin {
 	public source = "youtube";
 	public searchShorts = ["yt", "ytm"];
@@ -74,7 +76,7 @@ class YouTubeSource extends Plugin {
 		if (resource.startsWith("http")) url = new URL(resource);
 		if (url && url.searchParams.get("list") && url.searchParams.get("list")!.startsWith("FL_") || resource.startsWith("FL_")) throw new Error("Favorite list playlists cannot be fetched.");
 
-		if ((url && url.searchParams.has("list")) || resource.startsWith("PL")) {
+		if ((url && url.searchParams.has("list") && !disallowedPLTypes.includes(url.searchParams.get("list")!)) || resource.startsWith("PL")) {
 			const pl = await dl.playlist_info(resource, { incomplete: true });
 			if (!pl) throw new Error("NO_PLAYLIST");
 			await pl.fetch(100 * lavalinkConfig.lavalink.server.youtubePlaylistLoadLimit);
@@ -90,6 +92,12 @@ class YouTubeSource extends Plugin {
 					selectedTrack: url?.searchParams.get("index") ? Number(url.searchParams.get("index")) : 0
 				}
 			};
+		}
+
+		if (url) {
+			url.searchParams.delete("list");
+			url.searchParams.delete("index");
+			resource = url.toString();
 		}
 
 		const id = dl.extractID(decodeURIComponent(resource).replace(normalizeRegex, ""));
