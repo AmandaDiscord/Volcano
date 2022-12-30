@@ -11,7 +11,7 @@ import Constants from "../Constants.js";
 
 const ytm = new ytmapi.default();
 const usableRegex = /^https?:\/\/(?:\w+)?\.?youtu\.?be(?:.com)?\/(?:watch\?v=)?[\w-]+/;
-const normalizeRegex = /[^A-Za-z0-9:/.=&_-]/g;
+const normalizeRegex = /[^A-Za-z0-9:/.=&_\-?]/g;
 
 const disallowedPLTypes = ["LL", "WL"];
 
@@ -53,11 +53,11 @@ class YouTubeSource extends Plugin {
 								selectedTrack: 1
 							}
 						};
-					} else return doSearch(resource);
+					} else return YouTubeSource.doSearch(resource);
 				} catch {
-					return doSearch(resource);
+					return YouTubeSource.doSearch(resource);
 				}
-			} else return doSearch(resource);
+			} else return YouTubeSource.doSearch(resource);
 		} else if (searchShort === "ytm") {
 			const tracks = await ytm.searchSongs(resource);
 			return {
@@ -100,7 +100,8 @@ class YouTubeSource extends Plugin {
 			resource = url.toString();
 		}
 
-		const id = dl.extractID(decodeURIComponent(resource).replace(normalizeRegex, ""));
+		const normalized = decodeURIComponent(resource).replace(normalizeRegex, "");
+		const id = dl.extractID(normalized);
 		const data = await dl.video_basic_info(id);
 
 		return { entries: [YouTubeSource.songResultToTrack(data.video_details)] };
@@ -119,7 +120,7 @@ class YouTubeSource extends Plugin {
 		}
 	}
 
-	public static songResultToTrack(i: import("play-dl").YouTubeVideo) {
+	private static songResultToTrack(i: import("play-dl").YouTubeVideo) {
 		const length = Math.round(i.durationInSec * 1000);
 		if (!i.id) {
 			logger.warn(`Video(?) didn't have ID attached to it:\n${util.inspect(i, false, 3, true)}`);
@@ -134,13 +135,13 @@ class YouTubeSource extends Plugin {
 			isStream: length === 0
 		};
 	}
-}
 
-async function doSearch(resource: string) {
-	const searchResults = await dl.search(resource, { limit: 10, source: { youtube: "video" } }) as Array<import("play-dl").YouTubeVideo>;
-	const found = searchResults.find(v => v.id === resource);
-	if (found) return { entries: [YouTubeSource.songResultToTrack(found)] };
-	return { entries: searchResults.map(YouTubeSource.songResultToTrack) };
+	private static async doSearch(resource: string) {
+		const searchResults = await dl.search(resource, { limit: 10, source: { youtube: "video" } }) as Array<import("play-dl").YouTubeVideo>;
+		const found = searchResults.find(v => v.id === resource);
+		if (found) return { entries: [YouTubeSource.songResultToTrack(found)] };
+		return { entries: searchResults.map(YouTubeSource.songResultToTrack) };
+	}
 }
 
 export default YouTubeSource;

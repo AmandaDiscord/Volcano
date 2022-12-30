@@ -1,6 +1,6 @@
 {
   "name": "volcano",
-  "version": "1.5.8",
+  "version": "1.5.9",
   "description": "A light-weight LavaLink compatible replacement",
   "main": "dist/index.js",
   "type": "module",
@@ -46,12 +46,12 @@
     "twitch-m3u8": "github:AmandaDiscord/twitch-m3u8#ba927b26fb3c5cb118d75c20f990c5cce8a1ae7a",
     "volcano-sdk": "github:AmandaDiscord/VolcanoSDK#c9195e6891ec641ec9a9da3e7cb87a47fa6f8033",
     "ws": "^8.11.0",
-    "yaml": "^2.2.0",
-    "ytmusic-api": "^4.0.1"
+    "yaml": "^2.2.1",
+    "ytmusic-api": "^4.1.0"
   },
   "devDependencies": {
     "@types/node": "^18.11.18",
-    "@types/ws": "^8.5.3",
+    "@types/ws": "^8.5.4",
     "@typescript-eslint/eslint-plugin": "^5.47.1",
     "@typescript-eslint/parser": "^5.47.1",
     "eslint": "^8.30.0",
