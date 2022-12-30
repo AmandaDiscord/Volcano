@@ -1,0 +1,12 @@
+{
+  "ExtraWSOPs": {
+    "name": "ExtraWSOPs",
+    "version": "1.0.0",
+    "resolved": "builtin:ExtraWSOPs.js"
+  },
+  "SpotifyPlugin": {
+    "name": "SpotifyPlugin",
+    "version": "1.0.0",
+    "resolved": "builtin:SpotifyPlugin.js"
+  }
+}
