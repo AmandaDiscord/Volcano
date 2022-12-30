@@ -100,7 +100,6 @@ class ThreadPool extends ThreadBasedReplier {
 		return new Promise((res, rej) => {
 			const worker = new Worker(this.dir);
 			const id = worker.threadId;
-			this.children.set(id, worker);
 			this.emit("spawn", id, worker);
 
 			let ready = false;
@@ -108,11 +107,13 @@ class ThreadPool extends ThreadBasedReplier {
 			worker.on("message", msg => {
 				if (msg.op === Constants.workerOPCodes.READY) {
 					ready = true;
+					this.children.set(id, worker);
 					this.emit("ready", id, worker);
 					return res([id, worker]);
 				}
 				if (!ready) {
 					this.children.delete(id);
+					console.error(msg);
 					return rej(new Error("THREAD_DID_NOT_COMMUNICATE_READY"));
 				}
 
