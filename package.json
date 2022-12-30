@@ -1,6 +1,6 @@
 {
   "name": "volcano",
-  "version": "1.5.7",
+  "version": "1.5.8",
   "description": "A light-weight LavaLink compatible replacement",
   "main": "dist/index.js",
   "type": "module",
