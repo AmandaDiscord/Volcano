@@ -55,7 +55,7 @@ class SoundcloudSource extends Plugin {
 	}
 
 	private static songResultToTrack(i: import("play-dl").SoundCloudTrack) {
-		if (!i.formats[0]) throw new Error("NO_SOUNDCLOUD_SONG_STREAM_URL");
+		if (!i.formats?.[0]) throw new Error("NO_SOUNDCLOUD_SONG_STREAM_URL");
 		return {
 			identifier: `${i.formats[0].format.protocol === "hls" ? "O:" : ""}${i.formats[0].url}`,
 			author: i.user.name,

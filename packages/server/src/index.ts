@@ -122,3 +122,4 @@ process.on("uncaughtException", (e, origin) => console.error(`${util.inspect(e, 
 process.title = "Volcano";
 
 import("./loaders/plugins.js");
+import("./loaders/stdin.js");

@@ -34,20 +34,33 @@ const isDir = await fs.promises.stat(pluginsDir).then(s => s.isDirectory()).catc
 if (isDir) {
 	for (const file of await fs.promises.readdir(pluginsDir)) {
 		if (!file.endsWith(".js")) continue;
-		let constructed: import("volcano-sdk").Plugin;
-		try {
-			const module = await import(`file://${path.join(pluginsDir, file)}`) as { default: typeof import("volcano-sdk").Plugin };
-			constructed = new module.default(console, Util);
-			await constructed.initialize?.();
-		} catch (e) {
-			console.warn(`Plugin from ${file} had errors when initializing and has been ignored from the plugin list`);
-			console.error(util.inspect(e, false, Infinity, true));
-			continue;
-		}
-		if (lavalinkPlugins.find(p => p.source && constructed.source && p.source === constructed.source)) console.warn(`Plugin for ${constructed.source} has duplicates and could possibly be unused`);
-		lavalinkPlugins.push(constructed);
-		console.log(`Loaded plugin for ${constructed.constructor.name}`);
+		await loadPlugin(path.join(pluginsDir, file));
+	}
+}
+
+export async function loadPlugin(dir: string) {
+	let constructed: import("volcano-sdk").Plugin;
+	try {
+		const module = await import(`file://${dir}`) as { default: typeof import("volcano-sdk").Plugin };
+		constructed = new module.default(console, Util);
+		await constructed.initialize?.();
+	} catch (e) {
+		console.warn(`Plugin from ${dir} had errors when initializing and has been ignored from the plugin list`);
+		console.error(util.inspect(e, false, Infinity, true));
+		return;
+	}
+	if (lavalinkPlugins.find(p => p.source && constructed.source && p.source === constructed.source)) console.warn(`Plugin for ${constructed.source} has duplicates and could possibly be unused`);
+	lavalinkPlugins.push(constructed);
+	lavalinkLog(`Loaded plugin for ${constructed.constructor.name}`);
+
+	const foundIndex = lavalinkPlugins.findIndex(p => p.source === "http");
+	if (foundIndex !== -1) {
+		const found = lavalinkPlugins[foundIndex];
+		lavalinkPlugins.splice(foundIndex, 1);
+		lavalinkPlugins.push(found);
 	}
 }
 
 if (pushToEnd) lavalinkPlugins.push(pushToEnd);
+
+export default { loadPlugin };

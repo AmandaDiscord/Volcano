@@ -26,6 +26,8 @@ What LavaLink offers that Volcano doesn't:
 # Plugins
 Volcano supports its own plugin system like LavaLink has its own and comes with a Spotify plugin by default as support for Spotify to some degree and also for developers to look at and copy. This plugin may or may not be compatible with the Spotify plugin offered by LavaLink. Something to keep in mind is that due to how fundamentally different Volcano is from LavaLink, including being a totally different language, Volcano cannot load plugins intended to be used by LavaLink and vice versa. The scope of what Plugins can do in Volcano is also limited at the time of writing. The feature set may be expanded in the future, but this is what I was able to come up with in the limited time that I have. Plugins may have their own dependencies which you will have to install manually into your Volcano instance and re-do this for each Volcano update as the package.json may differ from update to update.
 
+Read PLUGINS.md for more info and how to install
+
 # Usage
 Download the latest release from https://github.com/AmandaDiscord/Volcano/releases
 
