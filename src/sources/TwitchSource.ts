@@ -1,9 +1,12 @@
 import twitch from "twitch-m3u8";
 import m3u8 from "m3u8stream";
+import htmlParse from "node-html-parser";
+import entities from "html-entities";
 
 import { Plugin } from "volcano-sdk";
+import Constants from "../Constants.js";
 
-const usableRegex = /^https:\/\/www\.twitch.\tv/;
+const usableRegex = /^https:\/\/(?:www\.)?twitch\.tv/;
 const vodRegex = /\/videos\/(\d+)$/;
 const channelRegex = /twitch\.tv\/([^/]+)/;
 
@@ -22,14 +25,19 @@ class TwitchSource extends Plugin {
 			const audioOnly = data.find(d => d.quality === "Audio only");
 			const chosen = audioOnly ? audioOnly : data[0];
 			const streamerName = chosen.url.split("_").slice(1, audioOnly ? -3 : -2).join("_");
+			const res = await fetch(resource, { redirect: "follow", headers: Constants.baseHTTPRequestHeaders }).then(r => r.text());
+			const parser = htmlParse.default(res);
+			const head = parser.getElementsByTagName("head")[0];
+			const title = entities.decode(head.querySelector("meta[property=\"og:title\"]")?.getAttribute("content")?.split("-").slice(0, -1).join("-").trim() || `Twitch Stream of ${streamerName}`);
+			const duration = +(head.querySelector("meta[property=\"og:video:duration\"]")?.getAttribute("content") || 0) * 1000;
 			return {
 				entries: [
 					{
-						title: "Twitch vod",
+						title: title,
 						author: streamerName,
 						uri: resource,
 						identifier: resource,
-						length: 0,
+						length: duration,
 						isStream: false
 					}
 				]
@@ -40,13 +48,18 @@ class TwitchSource extends Plugin {
 		if (!user) throw new Error("NOT_TWITCH_VOD_OR_CHANNEL_LINK");
 		const data = await twitch.getStream(user[1]);
 		if (!data.length) throw new Error("CANNOT_EXTRACT_TWITCH_INFO_FROM_VOD");
+		const uri = `https://www.twitch.tv/${user[1]}`;
+		const res = await fetch(uri, { redirect: "follow", headers: Constants.baseHTTPRequestHeaders }).then(r => r.text());
+		const parser = htmlParse.default(res);
+		const head = parser.getElementsByTagName("head")[0];
+		const title = entities.decode(head.querySelector("meta[property=\"og:description\"]")?.getAttribute("content") || `Twitch Stream of ${user[1]}`);
 		return {
 			entries: [
 				{
-					title: "Twitch stream",
+					title: title,
 					author: user[1],
-					uri: `https://www.twitch.tv/${user[1]}`,
-					identifier: `https://www.twitch.tv/${user[1]}`,
+					uri: uri,
+					identifier: uri,
 					length: 0,
 					isStream: true
 				}

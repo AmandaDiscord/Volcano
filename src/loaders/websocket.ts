@@ -204,7 +204,7 @@ async function onClientClose(socket: import("ws").WebSocket, userID: string, clo
 		if (key.startsWith(userID)) voiceServerStates.delete(key);
 }
 
-function dataRequest(op: number, data: any) {
+export function dataRequest(op: number, data: any) {
 	if (op === Constants.workerOPCodes.VOICE_SERVER) {
 		return voiceServerStates.get(`${data.clientID}.${data.guildId}`);
 	}

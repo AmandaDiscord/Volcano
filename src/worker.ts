@@ -65,7 +65,7 @@ class Queue {
 				this.resource = null;
 				this.track = undefined;
 				// Do not log if stopping. Queue.stop will send its own STOPPED reason instead of FINISHED. Do not log if shouldntCallFinish obviously.
-				if (!this.actions.stopping && !this.actions.shouldntCallFinish) sendToParent({ op: "event", type: "TrackEndEvent", guildId: this.guildID, reason: "FINISH", track }, this.clientID);
+				if (!this.actions.stopping && !this.actions.shouldntCallFinish) sendToParent({ op: "event", type: "TrackEndEvent", guildId: this.guildID, reason: "FINISHED", track }, this.clientID);
 				this.actions.stopping = false;
 				this.actions.shouldntCallFinish = false;
 			} else if (newState.status === Discord.AudioPlayerStatus.Playing && oldState.status !== Discord.AudioPlayerStatus.Paused && oldState.status !== Discord.AudioPlayerStatus.AutoPaused) {
@@ -81,11 +81,11 @@ class Queue {
 		});
 	}
 
-	public get state() {
+	public get state(): import("lavalink-types").PlayerState & { guildId: string } {
 		const position = Math.floor(((this.resource?.playbackDuration || 0) + this.actions.seekTime) * this.actions.rate);
 		if (this.track && this.track.end && position >= this.track.end) this.stop(this.track.track, true);
 		return {
-			time: String(Date.now()),
+			time: Date.now(),
 			position: position,
 			connected: this.connection.state.status === Discord.VoiceConnectionStatus.Ready,
 			ping: this.connection.ping.ws || Infinity,

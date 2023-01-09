@@ -9,6 +9,9 @@ import Constants from "../Constants.js";
 
 const ytm = new ytmapi.default();
 const usableRegex = /^https?:\/\/(?:\w+)?\.?youtu\.?be(?:.com)?\/(?:watch\?v=)?[\w-]+/;
+const normalizeRegex = /[^A-Za-z0-9:/.=&_\-?]/g;
+
+const disallowedPLTypes = ["LL", "WL"];
 
 class YouTubeSource extends Plugin {
 	public source = "youtube";
@@ -25,15 +28,16 @@ class YouTubeSource extends Plugin {
 
 	public async infoHandler(resource: string, searchShort?: string) {
 		if (searchShort === "yt") {
-			const validated = dl.yt_validate(resource);
+			const normalized = decodeURIComponent(resource).replace(normalizeRegex, "");
+			const validated = dl.yt_validate(normalized);
 			if (validated) {
 				try {
-					const ID = dl.extractID(resource);
+					const ID = dl.extractID(normalized);
 					if (validated === "video") {
 						const d = await dl.video_basic_info(ID);
 						return { entries: [YouTubeSource.songResultToTrack(d.video_details)] };
-					} else {
-						const d = await dl.playlist_info(resource, { incomplete: true });
+					} else if (validated === "playlist") {
+						const d = await dl.playlist_info(normalized, { incomplete: true });
 						if (!d) throw new Error("NO_PLAYLIST");
 						await d.fetch();
 						const entries = [] as Array<import("play-dl").YouTubeVideo>;
@@ -47,19 +51,11 @@ class YouTubeSource extends Plugin {
 								selectedTrack: 1
 							}
 						};
-					}
+					} else return YouTubeSource.doSearch(resource);
 				} catch {
-					return doSearch();
+					return YouTubeSource.doSearch(resource);
 				}
-			} else return doSearch();
-
-			// eslint-disable-next-line no-inner-declarations
-			async function doSearch() {
-				const searchResults = await dl.search(resource, { limit: 10, source: { youtube: "video" } }) as Array<import("play-dl").YouTubeVideo>;
-				const found = searchResults.find(v => v.id === resource);
-				if (found) return { entries: [YouTubeSource.songResultToTrack(found)] };
-				return { entries: searchResults.map(YouTubeSource.songResultToTrack) };
-			}
+			} else return YouTubeSource.doSearch(resource);
 		} else if (searchShort === "ytm") {
 			const tracks = await ytm.searchSongs(resource);
 			return {
@@ -78,7 +74,7 @@ class YouTubeSource extends Plugin {
 		if (resource.startsWith("http")) url = new URL(resource);
 		if (url && url.searchParams.get("list") && url.searchParams.get("list")!.startsWith("FL_") || resource.startsWith("FL_")) throw new Error("Favorite list playlists cannot be fetched.");
 
-		if (url && url.searchParams.has("list") || resource.startsWith("PL")) {
+		if ((url && url.searchParams.has("list") && !disallowedPLTypes.includes(url.searchParams.get("list")!)) || resource.startsWith("PL")) {
 			const pl = await dl.playlist_info(resource, { incomplete: true });
 			if (!pl) throw new Error("NO_PLAYLIST");
 			await pl.fetch(100 * lavalinkConfig.lavalink.server.youtubePlaylistLoadLimit);
@@ -96,7 +92,14 @@ class YouTubeSource extends Plugin {
 			};
 		}
 
-		const id = dl.extractID(resource);
+		if (url) {
+			url.searchParams.delete("list");
+			url.searchParams.delete("index");
+			resource = url.toString();
+		}
+
+		const normalized = decodeURIComponent(resource).replace(normalizeRegex, "");
+		const id = dl.extractID(normalized);
 		const data = await dl.video_basic_info(id);
 
 		return { entries: [YouTubeSource.songResultToTrack(data.video_details)] };
@@ -129,6 +132,13 @@ class YouTubeSource extends Plugin {
 			uri: `https://youtube.com/watch?v=${i.id}`,
 			isStream: length === 0
 		};
+	}
+
+	private static async doSearch(resource: string) {
+		const searchResults = await dl.search(resource, { limit: 10, source: { youtube: "video" } }) as Array<import("play-dl").YouTubeVideo>;
+		const found = searchResults.find(v => v.id === resource);
+		if (found) return { entries: [YouTubeSource.songResultToTrack(found)] };
+		return { entries: searchResults.map(YouTubeSource.songResultToTrack) };
 	}
 }
 
