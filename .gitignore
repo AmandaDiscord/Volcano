@@ -1,5 +1,9 @@
 .turbo
 .yarn/cache
 .yarn/unplugged
+.yarn/releases
 
 node_modules/
+/soundcloud.txt
+/dist
+/application.yml

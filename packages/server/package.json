@@ -35,22 +35,23 @@
 		"@lavalink/encoding": "^0.1.2",
 		"backtracker": "3.3.2",
 		"html-entities": "^2.3.3",
-		"music-metadata": "^8.1.0",
+		"music-metadata": "^8.1.1",
 		"node-html-parser": "^6.1.4",
 		"play-dl": "^1.9.6",
 		"twitch-m3u8": "github:AmandaDiscord/twitch-m3u8#ba927b26fb3c5cb118d75c20f990c5cce8a1ae7a",
 		"volcano-sdk": "github:AmandaDiscord/VolcanoSDK#c9195e6891ec641ec9a9da3e7cb87a47fa6f8033",
-		"ws": "^8.11.0",
-		"yaml": "^2.1.3",
-		"ytmusic-api": "^3.1.1"
+		"ws": "^8.12.0",
+		"yaml": "^2.2.1",
+		"ytmusic-api": "^4.1.0"
 	},
 	"devDependencies": {
-		"@types/ws": "^8.5.3",
-		"lavalink-types": "1.0.2",
+		"@types/ws": "^8.5.4",
+		"lavalink-types": "1.0.3",
 		"tsup": "^6.5.0"
 	},
 	"files": [
 		"./dist",
+		"./plugins",
 		"./LICENSE",
 		"./README.md"
 	]
