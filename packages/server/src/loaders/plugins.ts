@@ -51,7 +51,7 @@ export async function loadPlugin(dir: string) {
 	}
 	if (lavalinkPlugins.find(p => p.source && constructed.source && p.source === constructed.source)) console.warn(`Plugin for ${constructed.source} has duplicates and could possibly be unused`);
 	lavalinkPlugins.push(constructed);
-	lavalinkLog(`Loaded plugin for ${constructed.constructor.name}`);
+	console.log(`Loaded plugin for ${constructed.constructor.name}`);
 
 	const foundIndex = lavalinkPlugins.findIndex(p => p.source === "http");
 	if (foundIndex !== -1) {
