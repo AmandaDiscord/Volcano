@@ -21,7 +21,7 @@ class HTTPSource extends Plugin {
 		else return false;
 	}
 
-	private static async followURLS(url: string, redirects = 0): Promise<ReturnType<typeof import("../util/Util.js")["socketToRequest"]>> {
+	private static async followURLS(url: string, redirects = 0): Promise<{ url: string; data: Awaited<ReturnType<typeof import("../util/Util.js")["socketToRequest"]>> }> {
 		if (redirects > 3) throw new Error("TOO_MANY_REDIRECTS");
 		const stream = await Util.connect(url, { headers: Constants.baseHTTPRequestHeaders });
 		const data = await Util.socketToRequest(stream);
@@ -29,7 +29,7 @@ class HTTPSource extends Plugin {
 			data.end();
 			data.destroy();
 			return this.followURLS(data.headers["location"], redirects++);
-		} else return data;
+		} else return { url, data };
 	}
 
 	public async infoHandler(resource: string) {
@@ -39,7 +39,9 @@ class HTTPSource extends Plugin {
 		let probe: string;
 		let chunked = false;
 
-		const data = await HTTPSource.followURLS(resource);
+		const followed = await HTTPSource.followURLS(resource);
+		resource = followed.url;
+		const data = followed.data;
 
 		const mimeMatch = data.headers["content-type"]?.match(mimeRegex);
 		if (!mimeMatch || (mimeMatch[1] === "application" && !supportedApplicationTypes.includes(mimeMatch[2]))) {
