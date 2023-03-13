@@ -49,13 +49,9 @@ const paths: {
 				const searchablePlugin = lavalinkPlugins.find(p => p.canBeUsed?.(resource, match[1] || undefined));
 				if (searchablePlugin) {
 					if (searchablePlugin.source && lavalinkConfig.lavalink.server.sources[searchablePlugin.source] === false) return Util.standardErrorHandler(`${searchablePlugin.source} is not enabled`, res, payload);
-					if (searchablePlugin.source && lavalinkConfig.lavalink.server[`${searchablePlugin.source}SearchEnabled`] === false) return Util.standardErrorHandler(`${searchablePlugin.source} searching is not enabled`, res, payload);
+					if (isSearch && searchablePlugin.source && lavalinkConfig.lavalink.server[`${searchablePlugin.source}SearchEnabled`] === false) return Util.standardErrorHandler(`${searchablePlugin.source} searching is not enabled`, res, payload);
 					const result = await searchablePlugin.infoHandler?.(resource, match[1] || undefined);
 					if (result && searchablePlugin.source) assignResults(result, searchablePlugin.source, payload);
-				} else {
-					const yt = lavalinkPlugins.find(p => p.source === "youtube")!;
-					const result = await yt.infoHandler?.(resource, "yt");
-					if (result) assignResults(result, yt.source!, payload);
 				}
 
 				if (payload.tracks.length === 0) {
