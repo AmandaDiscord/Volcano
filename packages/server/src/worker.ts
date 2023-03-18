@@ -329,14 +329,8 @@ export function onPlayerUpdate(clientID: string, guildID: string, data: UpdatePl
 		methods.onVoiceServerUpdate({ guild_id: guildID, token: data.voice.token, endpoint: data.voice.endpoint });
 	}
 
-	const withEncoded = data as Exclude<typeof data, { identifier?: string }>;
-	const withIdentifier = data as Exclude<typeof data, { encodedTrack?: string | null }>;
-
+	const withEncoded = data as Exclude<typeof data, { identifier?: string }>; // In the route, identifier searching is done and deleted from pl
 	const track = withEncoded.encodedTrack;
-
-	if (withIdentifier.identifier !== undefined && withEncoded.encodedTrack === undefined) { // prefer the track if both are present
-		void 0;
-	}
 
 	if (track !== undefined) {
 		if (!track && q.track) q.stop(q.track.track);
