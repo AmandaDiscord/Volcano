@@ -4,6 +4,10 @@
 		"lint": {
 			"dependsOn": [],
 			"outputs": []
+		},
+		"build": {
+			"dependsOn": ["^lint"],
+			"outputs": []
 		}
 	}
 }

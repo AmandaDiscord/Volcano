@@ -1,10 +1,11 @@
 const startTime: number = Date.now();
 
-import HTTP from "http";
+import HTTP, { IncomingMessage, ServerResponse } from "http";
 import os from "os";
 import util from "util";
 import path from "path";
 import fs from "fs";
+import type { Socket } from "net";
 
 import "./util/Logger.js";
 import "./loaders/keys.js";
@@ -23,7 +24,7 @@ try {
 const pkg = await fs.promises.readFile(path.join(lavalinkDirname, "../package.json"), "utf-8").then(JSON.parse);
 
 const buildInfo = await fs.promises.readFile(path.join(lavalinkDirname, "buildinfo.json"), "utf-8").then(JSON.parse).catch(() => ({
-	build_time: null as number | null,
+	build_time: null,
 	branch: "unknown",
 	commit: "unknown"
 })) as {
@@ -61,7 +62,7 @@ console.log(`OS: ${Constants.platformNames[process.platform] || process.platform
 const http = HTTP.createServer(serverHandler);
 
 const allDigitRegex = /^\d+$/;
-http.on("upgrade", async (request: HTTP.IncomingMessage, socket: import("net").Socket, head: Buffer) => {
+http.on("upgrade", async (request: IncomingMessage, socket: Socket, head: Buffer) => {
 	console.log(`Incoming connection from /${request.socket.remoteAddress}:${request.socket.remotePort}`);
 
 	const temp401 = "HTTP/1.1 401 Unauthorized\r\n\r\n";
@@ -80,36 +81,42 @@ http.on("upgrade", async (request: HTTP.IncomingMessage, socket: import("net").S
 	websocket.handleWSUpgrade(request, socket, head);
 });
 
-async function serverHandler(req: import("http").IncomingMessage, res: import("http").ServerResponse): Promise<unknown> {
+async function serverHandler(req: IncomingMessage, res: ServerResponse): Promise<unknown> {
+	const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
 	try {
-		const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
-
 		const isInvalidPassword = !!lavalinkConfig.lavalink.server.password.length && (!req.headers.authorization || req.headers.authorization !== String(lavalinkConfig.lavalink.server.password));
 
 		// This is just for rest. Upgrade requests for the websocket are handled in the http upgrade event.
 		if (url.pathname !== "/" && isInvalidPassword) {
 			console.error(`Authorization missing for ${req.socket.remoteAddress} on ${req.method!.toUpperCase()} ${url.pathname}`);
-			return res.writeHead(401, "Unauthorized", Object.assign({}, Constants.baseHTTPResponseHeaders, { ["Content-Type"]: "text/plain" })).end("Unauthorized");
+			return res.writeHead(401, { "Lavalink-Api-Version": global.lavalinkMajor, "Content-Length": 0 }).end();
 		}
 
 		const path = paths[url.pathname];
 		const method = req.method?.toUpperCase() || "";
 		if (path) {
-			if (!path.methods.includes(method)) res.writeHead(405).end();
-			else if (req.headers["range"]) res.writeHead(416).end();
-			else if (req.headers["expect"]) res.writeHead(417).end();
+			if (!path.methods.includes(method)) {
+				const Util = await import("./util/Util.js");
+				const whiteLabel405 = `<html><body><h1>Whitelabel Error Page</h1><p>This application has no explicit mapping for ${url.pathname}, so you are seeing this as a fallback.</p><div id='created'>${Util.dateToMSTString(new Date())}</div><div>There was an unexpected error (type=Method Not Allowed, status=405).</div><div>Request method &#39;${method}&#39; not supported</div></body></html>`;
+				res.writeHead(405, { "Lavalink-Api-Version": global.lavalinkMajor, "Content-Type": "text/html", "Content-Language": "en-US", "Content-Length": Buffer.byteLength(whiteLabel405) }).end(whiteLabel405);
+			}
 			else await path.handle(req, res, url);
 		} else {
-			const filtered = lavalinkPlugins.filter(p => !!p.routeHandler);
-			for (const plugin of filtered) {
-				await plugin.routeHandler!(url, req, res);
+			for (const plugin of lavalinkPlugins) {
+				await plugin.routeHandler?.(url, req, res);
 			}
 		}
 
-		if (!res.headersSent && res.writable) return res.writeHead(404, "Not Found", Constants.baseHTTPResponseHeaders).end("Not Found");
+		if (!res.headersSent && res.writable) {
+			const Util = await import("./util/Util.js");
+			const whiteLabel404 = `<html><body><h1>Whitelabel Error Page</h1><p>This application has no explicit mapping for ${url.pathname}, so you are seeing this as a fallback.</p><div id='created'>${Util.dateToMSTString(new Date())}</div><div>There was an unexpected error (type=Not Found, status=404).</div><div>Not Found</div></body></html>`;
+			return res.writeHead(404, { "Lavalink-Api-Version": global.lavalinkMajor, "Content-Type": "text/html", "Content-Language": "en-US", "Content-Length": Buffer.byteLength(whiteLabel404) }).end(whiteLabel404);
+		}
 	} catch (e) {
-		if (!res.headersSent) res.writeHead(500, "Internal server error", Object.assign({}, Constants.baseHTTPResponseHeaders, { ["Content-Type"]: "text/plain" }));
-		if (res.writable) res.end(util.inspect(e, false, Infinity, false));
+		if (!res.headersSent && res.writable) {
+			const Util = await import("./util/Util.js");
+			Util.createErrorResponse(res, 500, url, e?.message || "An unknown error occured");
+		}
 	}
 }
 

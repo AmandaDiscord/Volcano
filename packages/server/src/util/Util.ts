@@ -1,8 +1,15 @@
 import util from "util";
-import net from "net";
+import net, { NetConnectOpts, Socket } from "net";
 import tls from "tls";
 import os from "os";
 import { pipeline, Transform } from "stream";
+
+import type { IncomingMessage, ServerResponse } from "http";
+import type { ConnectionOptions } from "tls";
+import type { TransformCallback } from "stream";
+import type { Mixin, ConnectionResponseEvents } from "volcano-sdk/types.js";
+import type { TrackLoadingResult, Stats, Severity, ErrorResponse } from "lavalink-types";
+import type { VoiceConnection, AudioPlayer, VoiceConnectionStatus, AudioPlayerStatus, VoiceConnectionState, AudioPlayerState } from "@discordjs/voice";
 
 import Constants from "../Constants.js";
 
@@ -27,7 +34,7 @@ export function processLoad(): Promise<number> {
 
 const errorRegex = /(Error|ERROR):? ?/;
 
-export function standardErrorHandler(e: Error | string, response: import("http").ServerResponse, payload: import("lavalink-types").TrackLoadingResult, severity: import("lavalink-types").Severity = "COMMON"): void {
+export function standardTrackLoadingErrorHandler(e: Error | string, response: ServerResponse, payload: TrackLoadingResult, severity: Severity = "COMMON"): void {
 	console.log(`Load failed\n${util.inspect(e, false, Infinity, true)}`);
 	payload.loadType = "LOAD_FAILED";
 	payload.exception = {
@@ -35,7 +42,44 @@ export function standardErrorHandler(e: Error | string, response: import("http")
 		severity: severity,
 		cause: (typeof e === "string" ? new Error().stack || "unknown" : (e as Error).name)
 	};
-	response.writeHead(200, "OK", Constants.baseHTTPResponseHeaders).end(JSON.stringify(payload));
+	response.writeHead(200, Constants.baseHTTPResponseHeaders).end(JSON.stringify(payload));
+}
+
+const statusErrorNameMap = {
+	400: "Bad Request" as const,
+	404: "Not Found" as const,
+	408: "Request Timeout" as const,
+	413: "Payload Too Large" as const,
+	415: "Unsupported Media Type" as const,
+	500: "Internal Server Error" as const
+};
+
+export function createErrorResponse(response: ServerResponse, status: keyof typeof statusErrorNameMap, url: URL, message: string): void {
+	const trace = url.searchParams.get("trace");
+	const value: ErrorResponse = {
+		timestamp: Date.now(),
+		status,
+		error: statusErrorNameMap[status],
+		message,
+		path: url.pathname
+	};
+	if (trace === "true") value.trace = new Error().stack;
+	response.writeHead(status, statusErrorNameMap[status], Constants.baseHTTPResponseHeaders).end(JSON.stringify(value));
+}
+
+export async function wrapRequestBodyToErrorResponse(request: IncomingMessage, response: ServerResponse, url: URL, timeout = 10000): Promise<Buffer | null> {
+	let body: Buffer | null = null;
+	try {
+		body = await requestBody(request, timeout);
+	} catch (e) {
+		const [status, message] = e?.message === "BYTE_SIZE_DOES_NOT_MATCH_LENGTH"
+			? [413 as const, "Content-Length doesn't match body size"]
+			: e?.message === "TIMEOUT_WAITING_FOR_BODY_REACHED"
+				? [408 as const, `Waited for body for ${timeout} ms, but not completed`]
+				: [500 as const, "An unknown error occurred waiting for the body"];
+		createErrorResponse(response, status, url, message);
+	}
+	return body;
 }
 
 export function isObject<T>(val: T): val is Record<any, any> {
@@ -46,7 +90,7 @@ export function isValidKey(key: string) {
 	return key !== "__proto__" && key !== "constructor" && key !== "prototype";
 }
 
-export function mixin<T extends Record<string, any>, S extends Array<Record<string, any>>>(target: T, ...sources: S): import("volcano-sdk/types.js").Mixin<T, S> {
+export function mixin<T extends Record<string, any>, S extends Array<Record<string, any>>>(target: T, ...sources: S): Mixin<T, S> {
 	for (const obj of sources) {
 		if (isObject(obj)) {
 			for (const key in obj) {
@@ -54,7 +98,7 @@ export function mixin<T extends Record<string, any>, S extends Array<Record<stri
 			}
 		}
 	}
-	return target as unknown as import("volcano-sdk/types.js").Mixin<T, S>;
+	return target as unknown as Mixin<T, S>;
 }
 
 function mixinStep(target: Record<string, any>, val: Record<string, any>, key: string) {
@@ -94,7 +138,7 @@ function getServerName(host?: string) {
 	return servername;
 }
 
-export async function connect(url: string, opts?: { method?: string; keepAlive?: boolean; headers?: { [header: string]: any } }): Promise<import("net").Socket> {
+export async function connect(url: string, opts?: { method?: string; keepAlive?: boolean; headers?: { [header: string]: any } }): Promise<Socket> {
 	const decoded = new URL(url);
 	const options = {
 		method: "GET",
@@ -107,14 +151,14 @@ export async function connect(url: string, opts?: { method?: string; keepAlive?:
 	if (opts) mixin(options, opts);
 	const port = decoded.port.length ? Number(decoded.port) : (decoded.protocol === "https:" || decoded.protocol === "wss:" ? 443 : 80);
 	const servername = getServerName(decoded.host) || undefined;
-	let socket: import("net").Socket;
-	const connectOptions: import("tls").ConnectionOptions = { host: decoded.host, port, rejectUnauthorized: false, ALPNProtocols: ["http/1.1", "http/1.0", "icy"], servername };
+	let socket: Socket;
+	const connectOptions: ConnectionOptions = { host: decoded.host, port, rejectUnauthorized: false, ALPNProtocols: ["http/1.1", "http/1.0", "icy"], servername };
 
 	let res: Parameters<ConstructorParameters<PromiseConstructor>["0"]>["0"] | undefined = undefined;
 	const promise = new Promise(resolve => res = resolve);
 
 	if (port === 443) socket = tls.connect(connectOptions, res);
-	else socket = net.connect(connectOptions as import("net").NetConnectOpts, res);
+	else socket = net.connect(connectOptions as NetConnectOpts, res);
 
 	socket.setNoDelay(true);
 
@@ -127,8 +171,6 @@ export async function connect(url: string, opts?: { method?: string; keepAlive?:
 
 const responseRegex = /((?:HTTP\/[\d.]+)|(?:ICY)) (\d+) ?(.+)?/;
 const headerRegex = /([^:]+): *([^\r\n]+)/;
-
-type ConnectionResponseEvents = import("volcano-sdk/types.js").ConnectionResponseEvents
 
 export interface ConnectionResponse {
 	addListener<E extends keyof ConnectionResponseEvents>(event: E, listener: (...args: ConnectionResponseEvents[E]) => any): this;
@@ -153,7 +195,7 @@ export class ConnectionResponse extends Transform {
 	public status: number;
 	public message: string;
 
-	public _transform(chunk: Buffer, encoding: BufferEncoding, callback: import("stream").TransformCallback): void {
+	public _transform(chunk: Buffer, encoding: BufferEncoding, callback: TransformCallback): void {
 		if (this.headersReceived) {
 			this.push(chunk);
 			return callback();
@@ -195,7 +237,7 @@ export class ConnectionResponse extends Transform {
 	}
 }
 
-export async function socketToRequest(socket: import("net").Socket): Promise<ConnectionResponse> {
+export async function socketToRequest(socket: Socket): Promise<ConnectionResponse> {
 	const response = pipeline(socket, new ConnectionResponse(), noop);
 	const promise = new Promise<ConnectionResponse>(res => {
 		response.once("headers", () => res(response));
@@ -211,13 +253,12 @@ export async function socketToRequest(socket: import("net").Socket): Promise<Con
 	return response;
 }
 
-export function requestBody(req: import("http").IncomingMessage, timeout = 10000): Promise<Buffer> {
-	if (!req.headers["content-length"]) throw new Error("CONTENT_LENGTH_REQURED");
+export function requestBody(req: IncomingMessage, timeout = 10000): Promise<Buffer> {
 	const sizeToMeet = req.headers["content-length"] ? Number(req.headers["content-length"]) : Infinity;
 	return new Promise<Buffer>((res, rej) => {
 		let timer: NodeJS.Timeout | null = null;
 		let totalSize = 0;
-		const chunks: Array<Buffer> = [];
+		const acc = new BufferAccumulator(sizeToMeet);
 		function onData(chunk: Buffer) {
 			totalSize += chunk.byteLength;
 			if (totalSize > sizeToMeet) {
@@ -225,12 +266,12 @@ export function requestBody(req: import("http").IncomingMessage, timeout = 10000
 				req.removeListener("end", onEnd);
 				return rej(new Error("BYTE_SIZE_DOES_NOT_MATCH_LENGTH"));
 			}
-			chunks.push(chunk);
+			acc.add(chunk);
 		}
 		function onEnd() {
 			clearTimeout(timer!);
 			req.removeListener("data", onData);
-			res(Buffer.concat(chunks));
+			res(acc.concat() ?? Buffer.allocUnsafe(0));
 		}
 		req.on("data", onData);
 		req.once("end", onEnd);
@@ -242,38 +283,97 @@ export function requestBody(req: import("http").IncomingMessage, timeout = 10000
 	});
 }
 
+export type AccumulatorNode = {
+	chunk: Buffer;
+	next: AccumulatorNode | null;
+}
+
+export class BufferAccumulator {
+	public first: AccumulatorNode | null = null;
+	public last: AccumulatorNode | null = null;
+	public size = 0;
+	public expecting: number | null;
+
+	private _allocated: Buffer | null = null;
+	private _streamed: number | null = null;
+
+	public constructor(expecting?: number) {
+		if (expecting) {
+			this._allocated = Buffer.allocUnsafe(expecting);
+			this._streamed = 0;
+		}
+		this.expecting = expecting ?? null;
+	}
+
+	public add(buf: Buffer): void {
+		if (this._allocated && this._streamed !== null && this.expecting !== null) {
+			if (this._streamed === this.expecting) return;
+			if ((this._streamed + buf.byteLength) > this.expecting) buf.subarray(0, this.expecting - this._streamed).copy(this._allocated, this._streamed);
+			else buf.copy(this._allocated, this._streamed);
+			return;
+		}
+		const obj = { chunk: buf, next: null };
+		if (!this.first) this.first = obj;
+		if (this.last) this.last.next = obj;
+		this.last = obj;
+		this.size += buf.byteLength;
+	}
+
+	public concat(): Buffer | null {
+		if (this._allocated) return this._allocated;
+		if (!this.first) return null;
+		if (!this.first.next) return this.first.chunk;
+		const r = Buffer.allocUnsafe(this.size);
+		let written = 0;
+		let current: AccumulatorNode | null = this.first;
+		while (current) {
+			current.chunk.copy(r, written);
+			written += current.chunk.byteLength;
+			current = current.next;
+		}
+		return r;
+	}
+}
+
 // This is a proper rewrite of entersState. entersState does some weird stuff with Node internal methods which could lead to
 // events never firing and causing the thread to be locked and cause abort errors somehow.
-export function waitForResourceToEnterState(resource: import("@discordjs/voice").VoiceConnection, status: import("@discordjs/voice").VoiceConnectionStatus, timeoutMS: number): Promise<void>;
-export function waitForResourceToEnterState(resource: import("@discordjs/voice").AudioPlayer, status: import("@discordjs/voice").AudioPlayerStatus, timeoutMS: number): Promise<void>;
-export function waitForResourceToEnterState(resource: import("@discordjs/voice").VoiceConnection | import("@discordjs/voice").AudioPlayer, status: import("@discordjs/voice").VoiceConnectionStatus | import("@discordjs/voice").AudioPlayerStatus, timeoutMS: number): Promise<void> {
+export function waitForResourceToEnterState(resource: VoiceConnection, status: VoiceConnectionStatus, timeoutMS: number): Promise<void>;
+export function waitForResourceToEnterState(resource: AudioPlayer, status: AudioPlayerStatus, timeoutMS: number): Promise<void>;
+export function waitForResourceToEnterState(resource: VoiceConnection | AudioPlayer, status: VoiceConnectionStatus | AudioPlayerStatus, timeoutMS: number): Promise<void> {
 	return new Promise((res, rej) => {
 		if (resource.state.status === status) res(void 0);
 		let timeout: NodeJS.Timeout | undefined = undefined;
-		function onStateChange(_oldState: import("@discordjs/voice").VoiceConnectionState | import("@discordjs/voice").AudioPlayerState, newState: import("@discordjs/voice").VoiceConnectionState | import("@discordjs/voice").AudioPlayerState) {
+		function onStateChange(_oldState: VoiceConnectionState | AudioPlayerState, newState: VoiceConnectionState | AudioPlayerState) {
 			if (newState.status !== status) return;
 			if (timeout) clearTimeout(timeout);
-			(resource as import("@discordjs/voice").AudioPlayer).removeListener("stateChange", onStateChange);
+			(resource as AudioPlayer).removeListener("stateChange", onStateChange);
 			return res(void 0);
 		}
-		(resource as import("@discordjs/voice").AudioPlayer).on("stateChange", onStateChange);
+		(resource as AudioPlayer).on("stateChange", onStateChange);
 		timeout = setTimeout(() => {
-			(resource as import("@discordjs/voice").AudioPlayer).removeListener("stateChange", onStateChange);
+			(resource as AudioPlayer).removeListener("stateChange", onStateChange);
 			rej(new Error("Didn't enter state in time"));
 		}, timeoutMS);
 	});
 }
 
-export async function getStats(): Promise<import("lavalink-types").Stats> {
+export async function getStats(): Promise<Stats> {
 	const memory = process.memoryUsage();
 	const free: number = memory.heapTotal - memory.heapUsed;
 	const pload: number = await processLoad();
 	const osload: Array<number> = os.loadavg();
 	const worker = await import("../worker.js");
-	const threadStats = worker.handleMessage({ op: Constants.workerOPCodes.STATS });
+
+	let playing = 0;
+	const accumulator: { [gid: string]: number } = {};
+	for (const q of worker.queues.values()) {
+		if (!q.actions.paused) playing++;
+		accumulator[q.guildID] = q.state.ping;
+	}
+
 	return {
-		players: threadStats.players,
-		playingPlayers: threadStats.playingPlayers,
+		players: worker.queues.size,
+		playingPlayers: playing,
 		uptime: Math.floor(process.uptime() * 1000),
 		memory: {
 			reservable: memory.heapTotal - free,
@@ -325,4 +425,11 @@ function stringifyStep(object: any, references: Set<any>): any {
 	return rebuilt;
 }
 
-export default { processLoad, standardErrorHandler, isObject, isValidKey, mixin, connect, socketToRequest, noop, requestBody, waitForResourceToEnterState, getStats, createTimeoutForPromise, ConnectionResponse, stringify };
+const mstDayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const mstMonthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+export function dateToMSTString(date: Date) {
+	return `${mstDayNames[date.getDay()]} ${mstMonthNames[date.getMonth()]} ${date.getDate()} ${date.getHours()}:${date.getMinutes()}:${date.getSeconds()} MST ${date.getFullYear()}`;
+}
+
+export default { processLoad, standardTrackLoadingErrorHandler, createErrorResponse, wrapRequestBodyToErrorResponse, isObject, isValidKey, mixin, connect, socketToRequest, noop, requestBody, waitForResourceToEnterState, getStats, createTimeoutForPromise, ConnectionResponse, stringify, dateToMSTString };

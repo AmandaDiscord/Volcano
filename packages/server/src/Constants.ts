@@ -1,3 +1,5 @@
+import type { LavaLinkConfig } from "volcano-sdk/types.js";
+
 export const defaultOptions = {
 	spring: {
 		main: {
@@ -47,7 +49,7 @@ export const defaultOptions = {
 			lavalink: "INFO"
 		}
 	}
-} as RequiredObjectDeep<import("volcano-sdk/types.js").LavaLinkConfig>;
+} as RequiredObjectDeep<LavaLinkConfig>;
 
 export const baseHTTPResponseHeaders = {
 	"Lavalink-Api-Version": "3",
