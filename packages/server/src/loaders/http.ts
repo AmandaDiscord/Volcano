@@ -14,9 +14,53 @@ import type { TrackLoadingResult, DecodeTrackResult, DecodeTracksResult, Track, 
 
 const IDRegex = /(?:(\w{1,4})search:)?(.+)/;
 
+const symErrorLoad = Symbol("ERROR_WITH_LOAD");
+
 export type Path = {
 	methods: Array<string>;
 	handle(req: import("http").IncomingMessage, res: import("http").ServerResponse, url: URL): any;
+}
+
+async function doTrackLoad(id?: string | null, logRequest = true): Promise<{ sym?: symbol; error?: Error; result: TrackLoadingResult }> {
+	const payload: TrackLoadingResult = {
+		loadType: "NO_MATCHES",
+		tracks: []
+	};
+	if (!id || typeof id !== "string") return { error: new Error("Invalid or no identifier query string provided."), result: payload };
+
+	const identifier = entities.decode(id);
+	const match = identifier.match(IDRegex);
+	if (!match) {
+		if (logRequest) console.log(`Got request to load for identifier "${identifier}"`);
+		return { error: new Error("Identifier did not match regex"), result: payload }; // Should theoretically never happen, but TypeScript doesn't know this
+	}
+
+	const isSearch = !!match[1];
+	const resource = match[2];
+
+	if (!resource) return { error: new Error("Invalid or no identifier query string provided."), result: payload };
+	if (logRequest) console.log(`Got request to load for identifier "${resource}"`);
+
+	try {
+		const searchablePlugin = lavalinkPlugins.find(p => p.canBeUsed?.(resource, match[1] || undefined));
+		if (searchablePlugin) {
+			if (searchablePlugin.source && lavalinkConfig.lavalink.server.sources[searchablePlugin.source] === false) return { error: new Error(`${searchablePlugin.source} is not enabled`), result: payload };
+			if (searchablePlugin.source && lavalinkConfig.lavalink.server[`${searchablePlugin.source}SearchEnabled`] === false) return { error: new Error(`${searchablePlugin.source} searching is not enabled`), result: payload };
+			const result = await searchablePlugin.infoHandler?.(resource, match[1] || undefined);
+			if (result && searchablePlugin.source) assignResults(result, searchablePlugin.source, payload);
+		}
+
+		if (payload.tracks.length === 0) {
+			delete payload.playlistInfo;
+			return { result: payload };
+		} else if (payload.tracks.length === 1 && logRequest) console.log(`Loaded track ${payload.tracks[0].info.title}`);
+		payload.loadType = (payload.tracks.length > 0 && isSearch)
+			? "SEARCH_RESULT"
+			: (payload.playlistInfo ? "PLAYLIST_LOADED" : "TRACK_LOADED");
+		return { result: payload };
+	} catch (e) {
+		return { sym: symErrorLoad, error: (e instanceof Error) ? e : new Error(String(e)), result: payload };
+	}
 }
 
 const paths: {
@@ -25,48 +69,9 @@ const paths: {
 	[`/v${lavalinkMajor}/loadtracks`]: {
 		methods: ["GET"],
 		async handle(req, res, url) {
-			const id = url.searchParams.get("identifier");
-			const payload: TrackLoadingResult = {
-				loadType: "NO_MATCHES",
-				tracks: []
-			};
-
-			if (!id || typeof id !== "string") return Util.standardTrackLoadingErrorHandler("Invalid or no identifier query string provided.", res, payload);
-
-			const identifier = entities.decode(id);
-
-			const match = identifier.match(IDRegex);
-			if (!match) {
-				console.log(`Got request to load for identifier "${identifier}"`);
-				return Util.standardTrackLoadingErrorHandler("Identifier did not match regex", res, payload, "FAULT"); // Should theoretically never happen, but TypeScript doesn't know this
-			}
-
-			const isSearch = !!match[1];
-			const resource = match[2];
-
-			if (!resource) return Util.standardTrackLoadingErrorHandler("Invalid or no identifier query string provided.", res, payload);
-			console.log(`Got request to load for identifier "${resource}"`);
-			try {
-				const searchablePlugin = lavalinkPlugins.find(p => p.canBeUsed?.(resource, match[1] || undefined));
-				if (searchablePlugin) {
-					if (searchablePlugin.source && lavalinkConfig.lavalink.server.sources[searchablePlugin.source] === false) return Util.standardTrackLoadingErrorHandler(`${searchablePlugin.source} is not enabled`, res, payload);
-					if (searchablePlugin.source && lavalinkConfig.lavalink.server[`${searchablePlugin.source}SearchEnabled`] === false) return Util.standardTrackLoadingErrorHandler(`${searchablePlugin.source} searching is not enabled`, res, payload);
-					const result = await searchablePlugin.infoHandler?.(resource, match[1] || undefined);
-					if (result && searchablePlugin.source) assignResults(result, searchablePlugin.source, payload);
-				}
-
-				if (payload.tracks.length === 0) {
-					delete payload.playlistInfo;
-					return res.writeHead(200, Constants.baseHTTPResponseHeaders).end(JSON.stringify(payload));
-				}
-				else if (payload.tracks.length === 1) console.log(`Loaded track ${payload.tracks[0].info.title}`);
-				payload.loadType = (payload.tracks.length > 0 && isSearch)
-					? "SEARCH_RESULT"
-					: (payload.playlistInfo ? "PLAYLIST_LOADED" : "TRACK_LOADED");
-				return res.writeHead(200, Constants.baseHTTPResponseHeaders).end(JSON.stringify(payload));
-			} catch (e) {
-				return Util.standardTrackLoadingErrorHandler(e, res, payload);
-			}
+			const result = await doTrackLoad(url.searchParams.get("identifier"));
+			if (result.sym && result.error) return Util.standardTrackLoadingErrorHandler(result.error, res, result.result);
+			else return res.writeHead(200, Constants.baseHTTPResponseHeaders).end(JSON.stringify(result.result));
 		}
 	},
 
@@ -253,37 +258,12 @@ const routes: {
 				const data: UpdatePlayerData = JSON.parse(body.toString());
 				const withId = data as Exclude<typeof data, { encodedTrack?: string | null }>;
 				if (withId.identifier !== undefined && (data as Exclude<typeof data, { identifier?: string; }>).encodedTrack === undefined) {
-					const match = withId.identifier.match(IDRegex);
-					if (!match) return Util.createErrorResponse(res, 400, url, "identifier didn't match ID regex. This should never happen");
-
-					const isSearch = !!match[1];
-					const resource = match[2];
-
-					const payload: TrackLoadingResult = {
-						loadType: "NO_MATCHES",
-						tracks: []
-					};
-
-					if (!resource) return Util.createErrorResponse(res, 400, url, "Invalid or no identifier query string provided.");
-					try {
-						const searchablePlugin = lavalinkPlugins.find(p => p.canBeUsed?.(resource, match[1] || undefined));
-						if (searchablePlugin) {
-							if (searchablePlugin.source && lavalinkConfig.lavalink.server.sources[searchablePlugin.source] === false) return Util.createErrorResponse(res, 400, url, `${searchablePlugin.source} is not enabled`);
-							if (searchablePlugin.source && lavalinkConfig.lavalink.server[`${searchablePlugin.source}SearchEnabled`] === false) return Util.createErrorResponse(res, 400, url, `${searchablePlugin.source} searching is not enabled`);
-							const result = await searchablePlugin.infoHandler?.(resource, match[1] || undefined);
-							if (result && searchablePlugin.source) assignResults(result, searchablePlugin.source, payload);
-						}
-
-						if (payload.tracks.length === 0) return Util.createErrorResponse(res, 400, url, "No results for identifier");
-						payload.loadType = (payload.tracks.length > 0 && isSearch)
-							? "SEARCH_RESULT"
-							: (payload.playlistInfo ? "PLAYLIST_LOADED" : "TRACK_LOADED");
-						if (payload.loadType !== "TRACK_LOADED") return Util.createErrorResponse(res, 400, url, "Result of identifier search was not TRACK_LOADED");
-						delete withId.identifier;
-						(data as Exclude<typeof data, { identifier?: string; }>).encodedTrack = payload.tracks[0].encoded;
-					} catch (e) {
-						return Util.createErrorResponse(res, 500, url, e?.message ? e.message : String(e));
-					}
+					const result = await doTrackLoad(withId.identifier);
+					if (result.sym && result.error && result.sym !== symErrorLoad) return Util.createErrorResponse(res, 400, url, result.error.message);
+					else if (result.sym && result.error && result.sym === symErrorLoad) return Util.createErrorResponse(res, 500, url, result.error.message);
+					else if (result.result.loadType !== "TRACK_LOADED") return Util.createErrorResponse(res, 400, url, "Result of identifier search was not TRACK_LOADED");
+					delete withId.identifier;
+					(data as Exclude<typeof data, { identifier?: string; }>).encodedTrack = result.result.tracks[0].encoded;
 				}
 				const worker = await import("../worker.js");
 				const payload = worker.onPlayerUpdate(session.userID, guildID, data, noReplace);
