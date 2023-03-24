@@ -7,7 +7,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Setup Node
-        uses: actions/setup-node@v1
+        uses: actions/setup-node@v3
         with:
           node-version: '18.x'
 
@@ -25,6 +25,7 @@ jobs:
         with:
           name: build-artifact
           path: |
+            package.json
             packages/server/dist/
             packages/server/scripts/
             LICENSE
