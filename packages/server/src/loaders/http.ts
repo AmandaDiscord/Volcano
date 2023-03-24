@@ -71,7 +71,10 @@ const paths: {
 		async handle(req, res, url) {
 			const result = await doTrackLoad(url.searchParams.get("identifier"));
 			if (result.sym && result.error) return Util.standardTrackLoadingErrorHandler(result.error, res, result.result);
-			else return res.writeHead(200, Constants.baseHTTPResponseHeaders).end(JSON.stringify(result.result));
+			else {
+				const payload = JSON.stringify(result.result);
+				return res.writeHead(200, Object.assign({ "Content-Length": Buffer.byteLength(payload) }, Constants.baseHTTPResponseHeaders)).end(payload);
+			}
 		}
 	},
 
@@ -85,7 +88,8 @@ const paths: {
 			}
 			if (!track || typeof track !== "string") return Util.createErrorResponse(res, 400, url, "invalid track");
 			const data: DecodeTrackResult = convertDecodedTrackToResponse(track, encoding.decode(track));
-			return res.writeHead(200, Constants.baseHTTPResponseHeaders).end(JSON.stringify(data));
+			const payload = JSON.stringify(data);
+			return res.writeHead(200, Object.assign({ "Content-Length": Buffer.byteLength(payload) }, Constants.baseHTTPResponseHeaders)).end(payload);
 		}
 	},
 
@@ -97,7 +101,8 @@ const paths: {
 			if (!body) return;
 			const array = JSON.parse(body.toString()) as Array<string>;
 			const data: DecodeTracksResult = array.map(t => convertDecodedTrackToResponse(t, encoding.decode(t)));
-			return res.writeHead(200, Constants.baseHTTPResponseHeaders).end(JSON.stringify(data));
+			const payload = JSON.stringify(data);
+			return res.writeHead(200, Object.assign({ "Content-Length": Buffer.byteLength(payload) }, Constants.baseHTTPResponseHeaders)).end(payload);
 		}
 	},
 
@@ -116,7 +121,7 @@ const paths: {
 				commit: string;
 			};
 			const pkg = await fs.promises.readFile(path.join(lavalinkDirname, "../package.json"), "utf-8").then(JSON.parse);
-			const payload: GetLavalinkInfoResult = {
+			const data: GetLavalinkInfoResult = {
 				version: {
 					semver: lavalinkVersion,
 					major: Number(major),
@@ -139,23 +144,26 @@ const paths: {
 					version: p.version ?? "0.0.0"
 				}))
 			};
-			return res.writeHead(200, Constants.baseHTTPResponseHeaders).end(JSON.stringify(payload));
+			const payload = JSON.stringify(data);
+			return res.writeHead(200, Object.assign({ "Content-Length": Buffer.byteLength(payload) }, Constants.baseHTTPResponseHeaders)).end(payload);
 		}
 	},
 
 	[`/v${lavalinkMajor}/stats`]: {
 		methods: ["GET"],
 		async handle(req, res) {
-			const payload = await Util.getStats() as unknown as GetLavalinkStatsResult;
-			payload.frameStats = null;
-			return res.writeHead(200, Constants.baseHTTPResponseHeaders).end(JSON.stringify(payload));
+			const data = await Util.getStats() as unknown as GetLavalinkStatsResult;
+			data.frameStats = null;
+			const payload = JSON.stringify(data);
+			return res.writeHead(200, Object.assign({ "Content-Length": Buffer.byteLength(payload) }, Constants.baseHTTPResponseHeaders)).end(payload);
 		}
 	},
 
 	"/version": {
 		methods: ["GET"],
 		handle(req, res) {
-			return res.writeHead(200, Object.assign({}, Constants.baseHTTPResponseHeaders, { "Content-Type": "text/plain" })).end(`${lavalinkVersion}_null`);
+			const payload = `${lavalinkVersion}_null`;
+			return res.writeHead(200, Object.assign({ "Content-Type": "text/plain", "Content-Length": Buffer.byteLength(payload) }, Constants.baseHTTPResponseHeaders)).end(payload);
 		}
 	}
 };
@@ -172,7 +180,7 @@ const routes: {
 			const websocket = await import("./websocket.js");
 			if (!websocket.sessionExists(sessionID)) return Util.createErrorResponse(res, 404, url, "Session not found");
 			const queues = await websocket.getQueuesForSession(sessionID);
-			const payload: GetPlayersResult = queues.map(q => {
+			const data: GetPlayersResult = queues.map(q => {
 				const decodedTrack = q.track ? encoding.decode(q.track.track) : undefined;
 				return {
 					guildId: q.guildID,
@@ -205,7 +213,8 @@ const routes: {
 					}
 				};
 			});
-			return res.writeHead(200, Constants.baseHTTPResponseHeaders).end(JSON.stringify(payload));
+			const payload = JSON.stringify(data);
+			return res.writeHead(200, Object.assign({ "Content-Length": Buffer.byteLength(payload) }, Constants.baseHTTPResponseHeaders)).end(payload);
 		},
 	},
 	[`/v${lavalinkMajor}/sessions/:sessionID/players/:guildID`]: {
@@ -217,7 +226,7 @@ const routes: {
 				const q = await websocket.getQueueForSession(sessionID, guildID);
 				if (!q) return Util.createErrorResponse(res, 404, url, "Player not found");
 				const decodedTrack = q.track ? encoding.decode(q.track.track) : undefined;
-				const payload: GetPlayerResult = {
+				const data: GetPlayerResult = {
 					guildId: q.guildID,
 					track: decodedTrack ? {
 						encoded: q.track!.track,
@@ -247,7 +256,8 @@ const routes: {
 						ping: q.state.ping
 					}
 				};
-				return res.writeHead(200, Constants.baseHTTPResponseHeaders).end(JSON.stringify(payload));
+				const payload = JSON.stringify(data);
+				return res.writeHead(200, Object.assign({ "Content-Length": Buffer.byteLength(payload) }, Constants.baseHTTPResponseHeaders)).end(payload);
 			} else if (req.method === "PATCH") {
 				if (req.headers["content-type"] !== "application/json") return Util.createErrorResponse(res, 415, url, "Content-Type must be application/json");
 				const session = websocket.getSession(sessionID);
@@ -268,7 +278,8 @@ const routes: {
 				const worker = await import("../worker.js");
 				const payload = worker.onPlayerUpdate(session.userID, guildID, data, noReplace);
 				websocket.declareClientToPlayer(session.userID, guildID, sessionID);
-				return res.writeHead(200, Constants.baseHTTPResponseHeaders).end(JSON.stringify(payload));
+				const stringified = JSON.stringify(payload);
+				return res.writeHead(200, Object.assign({ "Content-Length": Buffer.byteLength(stringified) }, Constants.baseHTTPResponseHeaders)).end(stringified);
 			} else if (req.method === "DELETE") {
 				const q = await websocket.getQueueForSession(sessionID, guildID);
 				if (!q) return Util.createErrorResponse(res, 404, url, "Player not found");
@@ -287,7 +298,8 @@ const routes: {
 			if (!body) return;
 			const data: UpdateSessionData = JSON.parse(body.toString());
 			const payload = websocket.updateResumeInfo(sessionID, data.resumingKey, data.timeout);
-			return res.writeHead(200, Constants.baseHTTPResponseHeaders).end(JSON.stringify(payload));
+			const stringified = JSON.stringify(payload);
+			return res.writeHead(200, Object.assign({ "Content-Length": Buffer.byteLength(stringified) }, Constants.baseHTTPResponseHeaders)).end(stringified);
 		}
 	}
 };

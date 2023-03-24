@@ -42,7 +42,8 @@ export function standardTrackLoadingErrorHandler(e: Error | string, response: Se
 		severity: severity,
 		cause: (typeof e === "string" ? new Error().stack || "unknown" : (e as Error).name)
 	};
-	response.writeHead(200, Constants.baseHTTPResponseHeaders).end(JSON.stringify(payload));
+	const stringified = JSON.stringify(payload);
+	response.writeHead(200, Object.assign({ "Content-Length": Buffer.byteLength(stringified) }, Constants.baseHTTPResponseHeaders)).end(stringified);
 }
 
 const statusErrorNameMap = {
@@ -64,7 +65,8 @@ export function createErrorResponse(response: ServerResponse, status: keyof type
 		path: url.pathname
 	};
 	if (trace === "true") value.trace = new Error().stack;
-	response.writeHead(status, statusErrorNameMap[status], Constants.baseHTTPResponseHeaders).end(JSON.stringify(value));
+	const payload = JSON.stringify(value);
+	response.writeHead(status, Object.assign({ "Content-Length": Buffer.byteLength(payload) }, Constants.baseHTTPResponseHeaders)).end(payload);
 }
 
 export async function wrapRequestBodyToErrorResponse(request: IncomingMessage, response: ServerResponse, url: URL, timeout = 10000): Promise<Buffer | null> {
