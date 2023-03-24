@@ -13,6 +13,9 @@ jobs:
 
       - name: Install, Lint, Compile, and create build info for server
         run: |
+          rm ./.yarnrc.yml
+          mv ./.yarnrc.nopath.yml ./.yarnrc.yml
+          yarn set version 3.3.0
           yarn install
           yarn run lint
           npm --prefix ./packages/server run build
