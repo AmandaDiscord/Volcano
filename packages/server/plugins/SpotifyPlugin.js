@@ -3,11 +3,10 @@ import htmlParse from "node-html-parser";
 
 class SpotifyPlugin extends Plugin {
 	/**
-	 * @param {import("volcano-sdk/types").Logger} logger
 	 * @param {import("volcano-sdk/types").Utils} utils
 	 */
-	constructor(logger, utils) {
-		super(logger, utils);
+	constructor(utils) {
+		super(utils);
 
 		this.source = "spotify";
 	}

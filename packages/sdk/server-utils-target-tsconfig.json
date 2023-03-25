@@ -1,0 +1,11 @@
+{
+	"extends": "../../tsconfig.json",
+	"compilerOptions": {
+		"outDir": "./server-dts",
+		"declaration": true,
+		"sourceMap": false,
+		"emitDeclarationOnly": true,
+		"removeComments": false
+	},
+	"include": ["../server/src/util/Util.ts"]
+}

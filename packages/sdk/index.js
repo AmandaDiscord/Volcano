@@ -1,7 +1,7 @@
 module.exports.Plugin = class Plugin {
-	constructor(logger, utils) {
+	/** @param {import("./types").Utils} utils */
+	constructor(utils) {
 		this.version = "1.0.0";
-		this.logger = logger;
 		this.utils = utils;
 	}
 };

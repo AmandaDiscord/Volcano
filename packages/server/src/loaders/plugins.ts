@@ -17,7 +17,7 @@ const sources = await Promise.all([
 for (const module of sources) {
 	let constructed: import("volcano-sdk").Plugin;
 	try {
-		constructed = new module.default(console, Util);
+		constructed = new module.default(Util);
 		await constructed.initialize?.();
 		lavalinkSources.add(constructed);
 	} catch (e) {
@@ -42,7 +42,7 @@ export async function loadPlugin(dir: string) {
 	let constructed: import("volcano-sdk").Plugin;
 	try {
 		const module = await import(`file://${dir}`) as { default: typeof import("volcano-sdk").Plugin };
-		constructed = new module.default(console, Util);
+		constructed = new module.default(Util);
 		await constructed.initialize?.();
 	} catch (e) {
 		console.warn(`Plugin from ${dir} had errors when initializing and has been ignored from the plugin list`);

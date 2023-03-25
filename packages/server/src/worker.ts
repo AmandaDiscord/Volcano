@@ -102,7 +102,7 @@ export class Queue {
 		this.play().catch(e => console.error(util.inspect(e, false, Infinity, true)));
 	}
 
-	public async getResource(decoded: import("@lavalink/encoding").TrackInfo, meta: NonNullable<typeof this.track>): Promise<Discord.AudioResource<import("@lavalink/encoding").TrackInfo>> {
+	public async getResource(decoded: import("@lavalink/encoding").TrackInfo, meta: NonNullable<Queue["track"]>): Promise<Discord.AudioResource<import("@lavalink/encoding").TrackInfo>> {
 		if (lavalinkConfig.lavalink.server.sources[decoded.source] === false) throw new Error(`${decoded.source.toUpperCase()}_NOT_ENABLED`);
 
 		let output: Readable | null = null;

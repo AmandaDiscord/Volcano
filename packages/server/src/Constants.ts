@@ -1,5 +1,3 @@
-import type { LavaLinkConfig } from "volcano-sdk/types.js";
-
 export const defaultOptions = {
 	spring: {
 		main: {
@@ -7,7 +5,7 @@ export const defaultOptions = {
 		}
 	},
 	server: {
-		port: process.env.PORT || 2333,
+		port: Number(process.env.PORT || 2333),
 		address: "0.0.0.0"
 	},
 	lavalink: {
@@ -49,7 +47,7 @@ export const defaultOptions = {
 			lavalink: "INFO"
 		}
 	}
-} as RequiredObjectDeep<LavaLinkConfig>;
+};
 
 export const baseHTTPResponseHeaders = {
 	"Lavalink-Api-Version": "3" as const,

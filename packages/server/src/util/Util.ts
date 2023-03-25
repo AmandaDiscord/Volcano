@@ -1,3 +1,5 @@
+import "volcano-sdk";
+
 import util from "util";
 import net, { NetConnectOpts, Socket } from "net";
 import tls from "tls";
@@ -7,13 +9,14 @@ import { pipeline, Transform } from "stream";
 import type { IncomingMessage, ServerResponse } from "http";
 import type { ConnectionOptions } from "tls";
 import type { TransformCallback } from "stream";
-import type { Mixin, ConnectionResponseEvents } from "volcano-sdk/types.js";
 import type { TrackLoadingResult, Stats, Severity, ErrorResponse } from "lavalink-types";
 import type { VoiceConnection, AudioPlayer, VoiceConnectionStatus, AudioPlayerStatus, VoiceConnectionState, AudioPlayerState } from "@discordjs/voice";
 
 import Constants from "../Constants.js";
 
 const cpuCount = os.cpus().length;
+
+export type Mixin<T extends { [key: string | number | symbol]: any }, SR extends Array<{ [key: string | number | symbol]: any }>> = SR extends Array<infer O> ? T & O : never;
 
 export function noop() { void 0; }
 
@@ -92,7 +95,7 @@ export function isValidKey(key: string) {
 	return key !== "__proto__" && key !== "constructor" && key !== "prototype";
 }
 
-export function mixin<T extends Record<string, any>, S extends Array<Record<string, any>>>(target: T, ...sources: S): Mixin<T, S> {
+export function mixin<T extends { [key: string | number | symbol]: any }, S extends Array<{ [key: string | number | symbol]: any }>>(target: T, ...sources: S): Mixin<T, S> {
 	for (const obj of sources) {
 		if (isObject(obj)) {
 			for (const key in obj) {
@@ -174,6 +177,15 @@ export async function connect(url: string, opts?: { method?: string; keepAlive?:
 const responseRegex = /((?:HTTP\/[\d.]+)|(?:ICY)) (\d+) ?(.+)?/;
 const headerRegex = /([^:]+): *([^\r\n]+)/;
 
+export interface ConnectionResponseEvents {
+	headers: [ConnectionResponse["headers"]];
+	readable: [];
+	data: [any];
+	end: [];
+	close: [];
+	error: [Error];
+}
+
 export interface ConnectionResponse {
 	addListener<E extends keyof ConnectionResponseEvents>(event: E, listener: (...args: ConnectionResponseEvents[E]) => any): this;
 	emit<E extends keyof ConnectionResponseEvents>(event: E, ...args: ConnectionResponseEvents[E]): boolean;
@@ -240,7 +252,7 @@ export class ConnectionResponse extends Transform {
 }
 
 export async function socketToRequest(socket: Socket): Promise<ConnectionResponse> {
-	const response = pipeline(socket, new ConnectionResponse(), noop);
+	const response = pipeline<Socket, ConnectionResponse>(socket, new ConnectionResponse(), noop);
 	const promise = new Promise<ConnectionResponse>(res => {
 		response.once("headers", () => res(response));
 	});
@@ -430,7 +442,7 @@ function stringifyStep(object: any, references: Set<any>): any {
 const mstDayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const mstMonthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-export function dateToMSTString(date: Date) {
+export function dateToMSTString(date: Date): string {
 	return `${mstDayNames[date.getDay()]} ${mstMonthNames[date.getMonth()]} ${date.getDate()} ${date.getHours()}:${date.getMinutes()}:${date.getSeconds()} MST ${date.getFullYear()}`;
 }
 

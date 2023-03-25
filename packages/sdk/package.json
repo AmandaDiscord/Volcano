@@ -5,7 +5,9 @@
 	"main": "index.js",
 	"types": "index.d.ts",
 	"scripts": {
-		"lint": "eslint . --ext js,ts"
+		"lint": "eslint . --ext js,ts",
+		"generate-utils-dts": "tsc -p ./server-utils-target-tsconfig.json && node ./purge-unused-dts.js",
+		"postinstall": "npm run generate-utils-dts"
 	},
 	"repository": {
 		"type": "git",
@@ -18,6 +20,11 @@
 	],
 	"author": "PapiOphidian",
 	"license": "MIT",
+	"dependencies": {
+		"@discordjs/voice": "^0.15.0",
+		"@types/ws": "^8.5.4",
+		"lavalink-types": "^2.0.2"
+	},
 	"bugs": {
 		"url": "https://github.com/AmandaDiscord/Volcano/issues"
 	},
