@@ -23,7 +23,7 @@ jobs:
 
       - uses: actions/upload-artifact@v3
         with:
-          name: build-artifact
+          name: server-artifact
           path: |
             package.json
             packages/server/dist/
@@ -33,3 +33,13 @@ jobs:
             PLUGINS.md
             PUBLIC_SERVERS.md
             README.md
+
+          name: sdk-artifact
+          path: |
+            package.json
+            packages/sdk/index.d.ts
+            packages/sdk/index.js
+            packages/sdk/package.json
+            packages/sdk/README.md
+            packages/sdk/server-utils.d.ts
+            packages/sdk/types.d.ts
