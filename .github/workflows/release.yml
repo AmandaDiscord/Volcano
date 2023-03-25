@@ -34,6 +34,8 @@ jobs:
             PUBLIC_SERVERS.md
             README.md
 
+      - uses: actions/upload-artifact@v3
+        with:
           name: sdk-artifact
           path: |
             package.json
