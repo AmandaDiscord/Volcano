@@ -108,7 +108,6 @@ class YouTubeSource extends Plugin {
 
 		const normalized = decodeURIComponent(resource).replace(normalizeRegex, "");
 		const id = dl.extractID(normalized);
-		console.log(id);
 		const data = await dl.video_basic_info(id);
 
 		return { entries: [YouTubeSource.songResultToTrack(data.video_details)] };
