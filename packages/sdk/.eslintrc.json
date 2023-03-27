@@ -1,4 +1,4 @@
 {
 	"extends": "../../.eslintrc.json",
-	"ignorePatterns": ["server-utils.d.ts"]
+	"ignorePatterns": ["/server-dts/**/*.d.ts"]
 }

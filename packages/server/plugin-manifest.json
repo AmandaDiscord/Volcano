@@ -3,5 +3,10 @@
     "name": "SpotifyPlugin",
     "version": "1.0.0",
     "resolved": "builtin:SpotifyPlugin.js"
+  },
+  "ExtraHTTPRoutes": {
+    "name": "ExtraHTTPRoutes",
+    "version": "1.0.0",
+    "resolved": "builtin:ExtraHTTPRoutes.js"
   }
 }

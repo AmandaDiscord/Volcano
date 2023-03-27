@@ -7,5 +7,10 @@
 		"emitDeclarationOnly": true,
 		"removeComments": false
 	},
-	"include": ["../server/src/util/Util.ts"]
+	"include": [
+		"../server/src/Constants.ts",
+		"../server/src/util/Util.ts",
+		"../server/src/loaders/http.ts",
+		"../server/src/loaders/websocket.ts"
+	]
 }

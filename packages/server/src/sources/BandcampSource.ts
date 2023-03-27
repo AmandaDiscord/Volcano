@@ -2,9 +2,6 @@ import htmlParse from "node-html-parser";
 import entities from "html-entities";
 import { Plugin } from "volcano-sdk";
 
-import Util from "../util/Util.js";
-import Constants from "../Constants.js";
-
 const usableRegex = /^https:\/\/[^.]+.bandcamp.com\/(?:album|track)\/[^/]+/;
 const streamRegex = /(https:\/\/t4\.bcbits\.com\/stream\/[^}]+)/;
 const durationRegex = /^P(\d{2})H(\d{2})M(\d{2})S$/;
@@ -14,18 +11,18 @@ class BandcampSource extends Plugin {
 	public source = "bandcamp";
 
 	public canBeUsed(resource: string) {
-		return !!resource.match(usableRegex);
+		return usableRegex.test(resource);
 	}
 
 	public async infoHandler(resource: string) {
-		const html = await fetch(resource, { redirect: "follow", headers: Constants.baseHTTPRequestHeaders }).then(d => d.text());
+		const html = await fetch(resource, { redirect: "follow", headers: this.utils.Constants.baseHTTPRequestHeaders }).then(d => d.text());
 		const data = BandcampSource.parse(html);
 		const value: Awaited<ReturnType<NonNullable<Plugin["infoHandler"]>>> = { entries: [] };
 		if (data["@type"].includes("MusicAlbum")) {
 			value.plData = { name: data.name, selectedTrack: 0 };
 			const toFetch: Array<string> = data.albumRelease.filter(r => !!r["@id"].match(trackRegex)).map(i => i["@id"]);
 			await Promise.all(toFetch.map(async url => {
-				const html2 = await fetch(url, { redirect: "follow", headers: Constants.baseHTTPRequestHeaders }).then(d => d.text());
+				const html2 = await fetch(url, { redirect: "follow", headers: this.utils.Constants.baseHTTPRequestHeaders }).then(d => d.text());
 				const data2 = BandcampSource.parse(html2);
 				value.entries.push(BandcampSource.trackToResource(data2));
 			}));
@@ -37,12 +34,12 @@ class BandcampSource extends Plugin {
 	}
 
 	public async streamHandler(info: import("@lavalink/encoding").TrackInfo) {
-		const html = await fetch(info.uri!, { redirect: "follow", headers: Constants.baseHTTPRequestHeaders }).then(d => d.text());
+		const html = await fetch(info.uri!, { redirect: "follow", headers: this.utils.Constants.baseHTTPRequestHeaders }).then(d => d.text());
 		const parser = htmlParse.default(html);
 		const head = parser.getElementsByTagName("head")[0];
 		const stream = head.toString().match(streamRegex);
 		if (!stream) throw new Error("NO_STREAM_URL");
-		const response = await Util.connect(entities.decode(stream[1].replace("&quot;", "")), { headers: Constants.baseHTTPRequestHeaders });
+		const response = await this.utils.connect(entities.decode(stream[1].replace("&quot;", "")), { headers: this.utils.Constants.baseHTTPRequestHeaders });
 
 		return { stream: response };
 	}

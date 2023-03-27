@@ -97,7 +97,7 @@ async function serverHandler(req: IncomingMessage, res: ServerResponse): Promise
 		if (path) {
 			if (!path.methods.includes(method)) {
 				const Util = await import("./util/Util.js");
-				const whiteLabel405 = `<html><body><h1>Whitelabel Error Page</h1><p>This application has no explicit mapping for ${url.pathname}, so you are seeing this as a fallback.</p><div id='created'>${Util.dateToMSTString(new Date())}</div><div>There was an unexpected error (type=Method Not Allowed, status=405).</div><div>Request method &#39;${method}&#39; not supported</div></body></html>`;
+				const whiteLabel405 = `<html><body><h1>Whitelabel Error Page</h1><p>This application has no explicit mapping for ${url.pathname}, so you are seeing this as a fallback.</p><div id='created'>${Util.default.dateToMSTString(new Date())}</div><div>There was an unexpected error (type=Method Not Allowed, status=405).</div><div>Request method &#39;${method}&#39; not supported</div></body></html>`;
 				res.writeHead(405, { "Lavalink-Api-Version": global.lavalinkMajor, "Content-Type": "text/html", "Content-Language": "en-US", "Content-Length": Buffer.byteLength(whiteLabel405) }).end(whiteLabel405);
 			}
 			else await path.handle(req, res, url);
@@ -109,13 +109,13 @@ async function serverHandler(req: IncomingMessage, res: ServerResponse): Promise
 
 		if (!res.headersSent && res.writable) {
 			const Util = await import("./util/Util.js");
-			const whiteLabel404 = `<html><body><h1>Whitelabel Error Page</h1><p>This application has no explicit mapping for ${url.pathname}, so you are seeing this as a fallback.</p><div id='created'>${Util.dateToMSTString(new Date())}</div><div>There was an unexpected error (type=Not Found, status=404).</div><div>Not Found</div></body></html>`;
+			const whiteLabel404 = `<html><body><h1>Whitelabel Error Page</h1><p>This application has no explicit mapping for ${url.pathname}, so you are seeing this as a fallback.</p><div id='created'>${Util.default.dateToMSTString(new Date())}</div><div>There was an unexpected error (type=Not Found, status=404).</div><div>Not Found</div></body></html>`;
 			return res.writeHead(404, { "Lavalink-Api-Version": global.lavalinkMajor, "Content-Type": "text/html", "Content-Language": "en-US", "Content-Length": Buffer.byteLength(whiteLabel404) }).end(whiteLabel404);
 		}
 	} catch (e) {
 		if (!res.headersSent && res.writable) {
 			const Util = await import("./util/Util.js");
-			Util.createErrorResponse(res, 500, url, e?.message || "An unknown error occured");
+			Util.default.createErrorResponse(res, 500, url, e?.message || "An unknown error occured");
 		}
 	}
 }

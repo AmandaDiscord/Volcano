@@ -1,8 +1,6 @@
 import * as dl from "play-dl";
 import { Plugin } from "volcano-sdk";
 
-import Util from "../util/Util.js";
-
 const identifierRegex = /^O:/;
 const usableRegex = /^https:\/\/(?:on\.)?soundcloud\.(?:app\.goo\.)?(?:com|gl)/;
 const onSoundCloudStart = "https://on.soundcloud.com/";
@@ -14,7 +12,7 @@ class SoundcloudSource extends Plugin {
 
 	public canBeUsed(resource: string, searchShort?: string) {
 		if (searchShort === this.searchShorts[0]) return true;
-		else return !!resource.match(usableRegex);
+		else return usableRegex.test(resource);
 	}
 
 	public async infoHandler(resource: string, searchShort?: string) {
@@ -25,8 +23,8 @@ class SoundcloudSource extends Plugin {
 		}
 
 		if ((resource.slice(0, onSoundCloudStart.length) === onSoundCloudStart) || (resource.slice(0, soundcloudAppGooglStart.length) === soundcloudAppGooglStart)) {
-			const socket = await Util.connect(resource);
-			const request = await Util.socketToRequest(socket);
+			const socket = await this.utils.connect(resource);
+			const request = await this.utils.socketToRequest(socket);
 			if (!request.headers.location) throw e;
 			resource = request.headers.location;
 		}
@@ -40,7 +38,14 @@ class SoundcloudSource extends Plugin {
 
 		if (result.type === "playlist") {
 			const playlist = result as import("play-dl").SoundCloudPlaylist;
-			return { entries: (playlist.tracks as Array<import("play-dl").SoundCloudTrack>).map(SoundcloudSource.songResultToTrack) };
+			await playlist.fetch();
+			return {
+				plData: {
+					name: playlist.name,
+					selectedTrack: 0
+				},
+				entries: (playlist.tracks as Array<import("play-dl").SoundCloudTrack>).map(SoundcloudSource.songResultToTrack)
+			};
 		}
 
 		if (result.type === "track") return { entries: [SoundcloudSource.songResultToTrack(result as import("play-dl").SoundCloudTrack)] };

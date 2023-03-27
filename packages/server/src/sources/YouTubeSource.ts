@@ -4,9 +4,6 @@ import * as dl from "play-dl";
 import ytmapi from "ytmusic-api";
 import { Plugin } from "volcano-sdk";
 
-import Util from "../util/Util.js";
-import Constants from "../Constants.js";
-
 const ytm = new ytmapi.default();
 const usableRegex = /^https?:\/\/(?:\w+)?\.?youtu\.?be(?:.com)?\/(?:watch\?v=)?[\w-]+/;
 const normalizeRegex = /[^A-Za-z0-9:/.=&_\-?]/g;
@@ -23,7 +20,7 @@ class YouTubeSource extends Plugin {
 
 	public canBeUsed(resource: string, searchShort?: string) {
 		if (searchShort && this.searchShorts.includes(searchShort)) return true;
-		else return !!resource.match(usableRegex);
+		else return usableRegex.test(resource);
 	}
 
 	public async infoHandler(resource: string, searchShort?: string) {
@@ -74,6 +71,12 @@ class YouTubeSource extends Plugin {
 		if (resource.startsWith("http")) url = new URL(resource);
 		if (url && url.searchParams.get("list") && url.searchParams.get("list")!.startsWith("FL_") || resource.startsWith("FL_")) throw new Error("Favorite list playlists cannot be fetched.");
 
+		if (url && url.host === "youtu.be" && url.searchParams.has("list") && !url.pathname.startsWith("/watch")) {
+			const v = url.pathname.slice(1);
+			url.searchParams.set("v", v);
+			resource = `https://www.youtube.com/watch?v=${v}&list=${url.searchParams.get("list")}${url.searchParams.has("index") ? `&index=${url.searchParams.get("index")}` : ""}`;
+		}
+
 		if ((url && url.searchParams.has("list") && !disallowedPLTypes.includes(url.searchParams.get("list")!)) || resource.startsWith("PL")) {
 			const pl = await dl.playlist_info(resource, { incomplete: true });
 			if (!pl) throw new Error("NO_PLAYLIST");
@@ -83,11 +86,16 @@ class YouTubeSource extends Plugin {
 				if (i > lavalinkConfig.lavalink.server.youtubePlaylistLoadLimit) continue;
 				entries.push(...pl.page(i));
 			}
+			const foundInPl = url?.searchParams.has("v") ? entries.findIndex(v => v.id === url!.searchParams.get("v")) : -1;
 			return {
 				entries: entries.map(YouTubeSource.songResultToTrack),
 				plData: {
 					name: pl.title!,
-					selectedTrack: url?.searchParams.get("index") ? Number(url.searchParams.get("index")) : 0
+					selectedTrack: url?.searchParams.get("index")
+						? Number(url.searchParams.get("index"))
+						: foundInPl !== -1
+							? foundInPl
+							: 0
 				}
 			};
 		}
@@ -100,6 +108,7 @@ class YouTubeSource extends Plugin {
 
 		const normalized = decodeURIComponent(resource).replace(normalizeRegex, "");
 		const id = dl.extractID(normalized);
+		console.log(id);
 		const data = await dl.video_basic_info(id);
 
 		return { entries: [YouTubeSource.songResultToTrack(data.video_details)] };
@@ -112,7 +121,7 @@ class YouTubeSource extends Plugin {
 		} else {
 			const i = await dl.video_info(info.uri!);
 			const selected = i.format[i.format.length - 1];
-			const response = await Util.connect(selected.url!, { headers: Constants.baseHTTPRequestHeaders });
+			const response = await this.utils.connect(selected.url!, { headers: this.utils.Constants.baseHTTPRequestHeaders });
 
 			return { stream: response };
 		}

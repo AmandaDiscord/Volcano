@@ -43,5 +43,5 @@ jobs:
             packages/sdk/index.js
             packages/sdk/package.json
             packages/sdk/README.md
-            packages/sdk/server-utils.d.ts
+            packages/sdk/server-dts/
             packages/sdk/types.d.ts

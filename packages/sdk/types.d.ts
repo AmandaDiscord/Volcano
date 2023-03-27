@@ -2,8 +2,6 @@ import type { IncomingMessage, ServerResponse } from "http";
 import type { Readable } from "stream";
 import type { WebSocket } from "ws";
 
-export * as Utils from "./server-utils";
-
 export type TrackInfo = {
 	title: string;
 	author: string;
@@ -29,13 +27,12 @@ export type StreamData = {
 export type LavaLinkConfig = OptionalDeep<typeof import("./server-dts/Constants")["defaultOptions"]>;
 
 export class Plugin {
-	public utils: Utils;
 	public version: string;
 
 	public source?: string;
 	public searchShorts?: Array<string>;
 
-	public constructor(utils: Utils);
+	public constructor(public utils: typeof import("./server-dts/util/Util")["default"]);
 
 	public initialize?(): any;
 	public canBeUsed?(resource: string, searchShort?: string): boolean;

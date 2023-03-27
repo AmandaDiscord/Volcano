@@ -17,4 +17,5 @@ if (fs.existsSync(configDir)) {
 
 global.lavalinkConfig = Util.mixin({}, Constants.defaultOptions, cfgparsed) as typeof lavalinkConfig;
 
+export const lavalinkConfig = global.lavalinkConfig;
 export default { lavalinkConfig };

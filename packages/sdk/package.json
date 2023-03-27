@@ -1,13 +1,13 @@
 {
 	"name": "volcano-sdk",
-	"version": "2.0.0-rc.1",
+	"version": "2.0.0-rc.2",
 	"description": "An SDK for creating Plugins for Volcano",
 	"main": "index.js",
 	"types": "index.d.ts",
 	"scripts": {
 		"lint": "eslint . --ext js,ts",
-		"generate-utils-dts": "tsc -p ./server-utils-target-tsconfig.json && node ./purge-unused-dts.js",
-		"postinstall": "npm run generate-utils-dts"
+		"build": "node prebuild.js && tsc -p ./server-tsconfig.json",
+		"postinstall": "npm run build"
 	},
 	"repository": {
 		"type": "git",

@@ -45,7 +45,7 @@ async function doTrackLoad(id?: string | null, logRequest = true): Promise<{ sym
 		const searchablePlugin = lavalinkPlugins.find(p => p.canBeUsed?.(resource, match[1] || undefined));
 		if (searchablePlugin) {
 			if (searchablePlugin.source && lavalinkConfig.lavalink.server.sources[searchablePlugin.source] === false) return { error: new Error(`${searchablePlugin.source} is not enabled`), result: payload };
-			if (searchablePlugin.source && lavalinkConfig.lavalink.server[`${searchablePlugin.source}SearchEnabled`] === false) return { error: new Error(`${searchablePlugin.source} searching is not enabled`), result: payload };
+			if (isSearch && searchablePlugin.source && lavalinkConfig.lavalink.server[`${searchablePlugin.source}SearchEnabled`] === false) return { error: new Error(`${searchablePlugin.source} searching is not enabled`), result: payload };
 			const result = await searchablePlugin.infoHandler?.(resource, match[1] || undefined);
 			if (result && searchablePlugin.source) assignResults(result, searchablePlugin.source, payload);
 		}

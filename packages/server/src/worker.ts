@@ -7,6 +7,7 @@ import prism from "prism-media";
 import Constants from "./Constants.js";
 import Util from "./util/Util.js";
 import websocket from "./loaders/websocket.js";
+import { lavalinkConfig } from "./loaders/config.js";
 
 import type { UpdatePlayerData, UpdatePlayerResult, PlayerState, Filters } from "lavalink-types";
 import type { Readable } from "stream";

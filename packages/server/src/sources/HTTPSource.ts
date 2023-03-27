@@ -4,9 +4,6 @@ import m3u8 from "m3u8stream";
 
 import { Plugin } from "volcano-sdk";
 
-import Constants from "../Constants.js";
-import Util from "../util/Util.js";
-
 const mimeRegex = /^(audio|video|application)\/(.+)$/;
 const httpRegex = /^https?:\/\//;
 const supportedApplicationTypes = ["ogg", "x-mpegURL"];
@@ -17,19 +14,18 @@ class HTTPSource extends Plugin {
 	public source = "http";
 
 	public canBeUsed(resource: string) {
-		if (resource.match(httpRegex)) return true;
-		else return false;
+		return httpRegex.test(resource);
 	}
 
-	private static async followURLS(url: string, redirects = 0): Promise<ReturnType<typeof import("../util/Util.js")["socketToRequest"]>> {
+	private async followURLS(url: string, redirects = 0): Promise<{ url: string; data: InstanceType<Plugin["utils"]["ConnectionResponse"]> }> {
 		if (redirects > 3) throw new Error("TOO_MANY_REDIRECTS");
-		const stream = await Util.connect(url, { headers: Constants.baseHTTPRequestHeaders });
-		const data = await Util.socketToRequest(stream);
+		const stream = await this.utils.connect(url, { headers: this.utils.Constants.baseHTTPRequestHeaders });
+		const data = await this.utils.socketToRequest(stream);
 		if (redirectStatusCodes.includes(data.status) && data.headers["location"]) {
 			data.end();
 			data.destroy();
 			return this.followURLS(data.headers["location"], redirects++);
-		} else return data;
+		} else return { url, data };
 	}
 
 	public async infoHandler(resource: string) {
@@ -39,7 +35,9 @@ class HTTPSource extends Plugin {
 		let probe: string;
 		let chunked = false;
 
-		const data = await HTTPSource.followURLS(resource);
+		const followed = await this.followURLS(resource);
+		resource = followed.url;
+		const data = followed.data;
 
 		const mimeMatch = data.headers["content-type"]?.match(mimeRegex);
 		if (!mimeMatch || (mimeMatch[1] === "application" && !supportedApplicationTypes.includes(mimeMatch[2]))) {
@@ -83,7 +81,7 @@ class HTTPSource extends Plugin {
 				duration: true
 			});
 			try {
-				parsed = await Util.createTimeoutForPromise(promise, 5000);
+				parsed = await this.utils.createTimeoutForPromise(promise, 5000);
 				if (parsed.format.container) probe = parsed.format.container;
 			} catch {
 				parsed = { common: {}, format: {} } as IAudioMetadata;
@@ -114,7 +112,7 @@ class HTTPSource extends Plugin {
 	public async streamHandler(info: import("@lavalink/encoding").TrackInfo) {
 		if (info.probeInfo!.raw === "x-mpegURL" || info.uri!.endsWith(".m3u8")) return { stream: m3u8(info.uri!), type: StreamType.Arbitrary };
 		else {
-			const response = await Util.connect(info.uri!, { headers: Constants.baseHTTPRequestHeaders });
+			const response = await this.utils.connect(info.uri!, { headers: this.utils.Constants.baseHTTPRequestHeaders });
 			let type: StreamType | undefined = undefined;
 			if (info.probeInfo!.raw === "ogg") type = StreamType.OggOpus;
 			else if (info.probeInfo!.raw === "opus") type = StreamType.Opus;
