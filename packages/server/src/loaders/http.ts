@@ -163,7 +163,7 @@ const paths: {
 		methods: ["GET"],
 		handle(req, res) {
 			const payload = `${lavalinkVersion}_null`;
-			return res.writeHead(200, Object.assign({ "Content-Type": "text/plain", "Content-Length": Buffer.byteLength(payload) }, Constants.baseHTTPResponseHeaders)).end(payload);
+			return res.writeHead(200, Object.assign({}, Constants.baseHTTPResponseHeaders, { "Content-Type": "text/plain", "Content-Length": Buffer.byteLength(payload) })).end(payload);
 		}
 	}
 };
