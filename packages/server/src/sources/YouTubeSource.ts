@@ -26,7 +26,7 @@ class YouTubeSource extends Plugin {
 		let url: URL | undefined = undefined;
 		if (resource.startsWith("http")) url = new URL(resource);
 
-		if (url && ((url.pathname.startsWith("results") && url.searchParams.has("search_query")) || (url.pathname.startsWith("search") && url.searchParams.has("q")))) {
+		if (url && ((url.pathname.startsWith("/results") && url.searchParams.has("search_query")) || (url.pathname.startsWith("/search") && url.searchParams.has("q")))) {
 			searchShort = url.searchParams.has("search_query") ? "yt" : "ytm";
 			resource = searchShort === "yt" ? url.searchParams.get("search_query")! : url.searchParams.get("q")!;
 		}
