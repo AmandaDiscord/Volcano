@@ -344,14 +344,14 @@ export function onPlayerUpdate(clientID: string, guildID: string, data: UpdatePl
 		if (q.player.state.status === Discord.AudioPlayerStatus.Playing || q.player.state.status === Discord.AudioPlayerStatus.Paused) q.volume(data.volume);
 		else q.actions.volume = data.volume;
 	}
-	if (data.paused) {
+	if (data.paused !== undefined) {
 		if (q.player.state.status === Discord.AudioPlayerStatus.Playing && data.paused) q.pause();
 		else if (q.player.state.status === Discord.AudioPlayerStatus.Paused && !data.paused) q.resume();
 		else q.actions.trackPausing = data.paused;
 	}
-	if (data.position) q.seek(data.position);
+	if (data.position !== undefined) q.seek(data.position);
 	if (data.filters) q.filters(data.filters);
-	if (data.endTime && q.track) q.track.end = data.endTime;
+	if (data.endTime !== undefined && q.track) q.track.end = data.endTime;
 
 	const decodedTrack = q.track ? encoding.decode(q.track.track) : undefined;
 
