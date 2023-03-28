@@ -6,7 +6,6 @@ import { Plugin } from "volcano-sdk";
 
 const ytm = new ytmapi.default();
 const usableRegex = /^https?:\/\/(?:\w+)?\.?youtu\.?be(?:.com)?\/(?:watch\?v=)?[\w-]+/;
-const normalizeRegex = /[^A-Za-z0-9:/.=&_\-?]/g;
 
 const disallowedPLTypes = ["LL", "WL"];
 
@@ -25,7 +24,7 @@ class YouTubeSource extends Plugin {
 
 	public async infoHandler(resource: string, searchShort?: string) {
 		if (searchShort === "yt") {
-			const normalized = decodeURIComponent(resource).replace(normalizeRegex, "");
+			const normalized = decodeURIComponent(resource);
 			const validated = dl.yt_validate(normalized);
 			if (validated) {
 				try {
@@ -106,8 +105,7 @@ class YouTubeSource extends Plugin {
 			resource = url.toString();
 		}
 
-		const normalized = decodeURIComponent(resource).replace(normalizeRegex, "");
-		const id = dl.extractID(normalized);
+		const id = url && url.searchParams.has("v") ? url.searchParams.get("v")! : dl.extractID(decodeURIComponent(resource));
 		const data = await dl.video_basic_info(id);
 
 		return { entries: [YouTubeSource.songResultToTrack(data.video_details)] };
