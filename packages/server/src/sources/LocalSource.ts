@@ -13,12 +13,12 @@ class LocalSource extends Plugin {
 
 	public async infoHandler(resource: string) {
 		const stat = await fs.promises.stat(resource).catch(() => void 0);
-		if (!stat) throw new Error("FILE_NOT_EXISTS");
-		if (!stat.isFile()) throw new Error("PATH_NOT_FILE");
+		if (!stat) throw new Error("That file does not exist");
+		if (!stat.isFile()) throw new Error("The path provided doesn't lead to a file");
+		const fileEnding = path.extname(resource).replace(".", "");
+		if (!fileEnding) throw new Error("The provided doesn't have a file extension");
 
 		const meta = await parseStream(fs.createReadStream(resource), { size: stat.size, path: resource }, { skipCovers: true, skipPostHeaders: true, includeChapters: false, duration: true });
-		const fileEnding = path.extname(resource).replace(".", "");
-		if (!fileEnding) throw new Error("NO_FILE_EXTENSION");
 
 		return {
 			entries: [

@@ -18,7 +18,7 @@ class HTTPSource extends Plugin {
 	}
 
 	private async followURLS(url: string, redirects = 0): Promise<{ url: string; data: InstanceType<Plugin["utils"]["ConnectionResponse"]> }> {
-		if (redirects > 3) throw new Error("TOO_MANY_REDIRECTS");
+		if (redirects > 3) throw new Error(`Too many redirects. Was redirected ${redirects} times`);
 		const stream = await this.utils.connect(url, { headers: this.utils.Constants.baseHTTPRequestHeaders });
 		const data = await this.utils.socketToRequest(stream);
 		if (redirectStatusCodes.includes(data.status) && data.headers["location"]) {
@@ -43,7 +43,7 @@ class HTTPSource extends Plugin {
 		if (!mimeMatch || (mimeMatch[1] === "application" && !supportedApplicationTypes.includes(mimeMatch[2]))) {
 			data.end();
 			data.destroy();
-			throw new Error(`${"UNSUPPORTED_FILE_TYPE"} ${data.headers["content-type"]}`);
+			throw new Error(`Don't know how to interpret ${data.headers["content-type"]}. Expected a known audio/video format`);
 		}
 
 		Object.keys(data.headers).forEach(key => {

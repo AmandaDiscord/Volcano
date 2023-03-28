@@ -24,7 +24,7 @@ class SpotifyPlugin extends Plugin {
 	 * @returns {Promise<string>}
 	 */
 	async followURLS(url, redirects = 0) {
-		if (redirects > 3) throw new Error("TOO_MANY_REDIRECTS");
+		if (redirects > 3) throw new Error(`Too many redirects. Was redirected ${redirects} times`);
 		const stream = await this.utils.connect(url, { headers: this.utils.Constants.baseHTTPRequestHeaders });
 		const data = await this.utils.socketToRequest(stream);
 		if (redirectStatusCodes.includes(data.status) && data.headers["location"]) {
@@ -73,7 +73,7 @@ class SpotifyPlugin extends Plugin {
 
 	/** @param {import("@lavalink/encoding").TrackInfo} info */
 	async streamHandler(info) {
-		if (!info.uri) throw new Error("NO_URI");
+		if (!info.uri) throw new Error("There was no URI for playback");
 		return { stream: await this.utils.connect(info.uri) };
 	}
 }

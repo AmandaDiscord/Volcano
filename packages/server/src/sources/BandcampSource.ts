@@ -38,7 +38,7 @@ class BandcampSource extends Plugin {
 		const parser = htmlParse.default(html);
 		const head = parser.getElementsByTagName("head")[0];
 		const stream = head.toString().match(streamRegex);
-		if (!stream) throw new Error("NO_STREAM_URL");
+		if (!stream) throw new Error("There was no stream URL for that track");
 		const response = await this.utils.connect(entities.decode(stream[1].replace("&quot;", "")), { headers: this.utils.Constants.baseHTTPRequestHeaders });
 
 		return { stream: response };
@@ -49,7 +49,7 @@ class BandcampSource extends Plugin {
 		const head = parser.getElementsByTagName("head")[0];
 		const script = head.querySelector("script[type=\"application/ld+json\"]")?.innerHTML || "{}";
 		const data = JSON.parse(script);
-		if (!data.name) throw new Error("CANNOT_EXTRACT_BANDCAMP_INFO");
+		if (!data.name) throw new Error("No information about that track was given");
 		return data;
 	}
 

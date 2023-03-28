@@ -35,7 +35,7 @@ class YouTubeSource extends Plugin {
 						return { entries: [YouTubeSource.songResultToTrack(d.video_details)] };
 					} else if (validated === "playlist") {
 						const d = await dl.playlist_info(normalized, { incomplete: true });
-						if (!d) throw new Error("NO_PLAYLIST");
+						if (!d) throw new Error("Input validated as a playlist but failed to extract as a playlist");
 						await d.fetch();
 						const entries = [] as Array<import("play-dl").YouTubeVideo>;
 						for (let i = 1; i < d.total_pages + 1; i++) {
@@ -79,7 +79,7 @@ class YouTubeSource extends Plugin {
 
 		if ((url && url.searchParams.has("list") && !disallowedPLTypes.includes(url.searchParams.get("list")!)) || resource.startsWith("PL")) {
 			const pl = await dl.playlist_info(resource, { incomplete: true });
-			if (!pl) throw new Error("NO_PLAYLIST");
+			if (!pl) throw new Error("URL has a list search param but isn't a playlist");
 			await pl.fetch(100 * lavalinkConfig.lavalink.server.youtubePlaylistLoadLimit);
 			const entries = [] as Array<import("play-dl").YouTubeVideo>;
 			for (let i = 1; i < pl.total_pages + 1; i++) {
@@ -130,7 +130,7 @@ class YouTubeSource extends Plugin {
 		const length = Math.round(i.durationInSec * 1000);
 		if (!i.id) {
 			console.warn(`Video(?) didn't have ID attached to it:\n${util.inspect(i, false, 3, true)}`);
-			throw new Error("YOUTUBE_VIDEO_HAS_NO_ID");
+			throw new Error("One or more videos provided by YouTube didn't have an ID in its data");
 		}
 		return {
 			identifier: i.id,

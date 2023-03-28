@@ -16,7 +16,6 @@ class SoundcloudSource extends Plugin {
 	}
 
 	public async infoHandler(resource: string, searchShort?: string) {
-		const e = new Error("SOUNDCLOUD_NOT_FETCHABLE_RESOURCE");
 		if (searchShort === this.searchShorts[0]) {
 			const results = await dl.search(resource, { source: { soundcloud: "tracks" } });
 			return { entries: results.map(SoundcloudSource.songResultToTrack) };
@@ -25,7 +24,7 @@ class SoundcloudSource extends Plugin {
 		if ((resource.slice(0, onSoundCloudStart.length) === onSoundCloudStart) || (resource.slice(0, soundcloudAppGooglStart.length) === soundcloudAppGooglStart)) {
 			const socket = await this.utils.connect(resource);
 			const request = await this.utils.socketToRequest(socket);
-			if (!request.headers.location) throw e;
+			if (!request.headers.location) throw new Error("Expected a redirect from known redirect URL but didn't get one");
 			resource = request.headers.location;
 		}
 
@@ -33,7 +32,7 @@ class SoundcloudSource extends Plugin {
 		try {
 			result = await dl.soundcloud(resource);
 		} catch {
-			throw e;
+			throw new Error("There was an error trying to extract the soundcloud info");
 		}
 
 		if (result.type === "playlist") {
@@ -50,7 +49,7 @@ class SoundcloudSource extends Plugin {
 
 		if (result.type === "track") return { entries: [SoundcloudSource.songResultToTrack(result as import("play-dl").SoundCloudTrack)] };
 
-		throw e;
+		throw new Error("Unsupported result type. Expected a playlist or a track. Users cannot be played.");
 	}
 
 	public async streamHandler(info: import("@lavalink/encoding").TrackInfo) {
@@ -60,7 +59,7 @@ class SoundcloudSource extends Plugin {
 	}
 
 	private static songResultToTrack(i: import("play-dl").SoundCloudTrack) {
-		if (!i.formats?.[0]) throw new Error("NO_SOUNDCLOUD_SONG_STREAM_URL");
+		if (!i.formats?.[0]) throw new Error("There were no stream URLs for one or multiple tracks returned by SoundCloud");
 		return {
 			identifier: `${i.formats[0].format.protocol === "hls" ? "O:" : ""}${i.formats[0].url}`,
 			author: i.user.name,
