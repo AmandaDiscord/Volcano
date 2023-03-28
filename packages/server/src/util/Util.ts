@@ -4,7 +4,7 @@ import tls from "tls";
 import os from "os";
 import { pipeline, Transform } from "stream";
 
-import type { IncomingMessage, ServerResponse } from "http";
+import type { HttpRequest, HttpResponse } from "uWebSockets.js";
 import type { ConnectionOptions } from "tls";
 import type { TransformCallback } from "stream";
 import type { TrackLoadingResult, Stats, Severity, ErrorResponse } from "lavalink-types";
@@ -229,7 +229,31 @@ const Util = {
 		});
 	},
 
-	standardTrackLoadingErrorHandler(e: Error | string, response: ServerResponse, payload: TrackLoadingResult, severity: Severity = "COMMON"): void {
+	getIPFromArrayBuffer(arr: ArrayBuffer): string {
+		const uintarr = new Uint8Array(arr);
+		if (uintarr.length === 16) {
+			let result = "";
+			let lastOneWas0 = false;
+			let compressed = false;
+			for (let i = 1; i < uintarr.length + 1; i++) {
+				let compressingThisOne = false;
+				const stringified = uintarr[i - 1].toString(16);
+				if (stringified === "0") lastOneWas0 = true;
+				compressingThisOne = stringified === "0" && !compressed;
+				if (stringified !== "0" && lastOneWas0 && !compressed) {
+					result += "::";
+					compressed = true;
+				}
+				result += `${compressingThisOne ? "" : stringified}`;
+				if ((i % 2) === 0 && i !== uintarr.length && !compressingThisOne) result += ":";
+			}
+			return result;
+		}
+		return uintarr.join(".");
+	},
+
+	standardTrackLoadingErrorHandler(e: Error | string, response: HttpResponse, payload: TrackLoadingResult, severity: Severity = "COMMON"): void {
+		if (response.aborted) return;
 		console.log(`Load failed\n${util.inspect(e, false, Infinity, true)}`);
 		payload.loadType = "LOAD_FAILED";
 		payload.exception = {
@@ -238,34 +262,47 @@ const Util = {
 			cause: (typeof e === "string" ? new Error().stack || "unknown" : (e as Error).name)
 		};
 		const stringified = JSON.stringify(payload);
-		response.writeHead(200, Object.assign({ "Content-Length": Buffer.byteLength(stringified) }, Constants.baseHTTPResponseHeaders)).end(stringified);
+		response.writeStatus("200 OK");
+		Util.assignHeadersToResponse(response, Constants.baseHTTPResponseHeaders);
+		response.end(stringified, true);
 	},
 
-	createErrorResponse(response: ServerResponse, status: keyof typeof statusErrorNameMap, url: URL, message: string): void {
-		const trace = url.searchParams.get("trace");
+	assignHeadersToResponse(response: HttpResponse, headers: Record<string, string>) {
+		for (const [header, value] of Object.entries(headers)) {
+			response.writeHeader(header, value);
+		}
+	},
+
+	createErrorResponse(request: HttpRequest, response: HttpResponse, status: keyof typeof statusErrorNameMap, message: string): void {
+		if (response.aborted) return;
+		const params = new URLSearchParams(request.getQuery());
+		const trace = params.get("trace");
 		const value: ErrorResponse = {
 			timestamp: Date.now(),
 			status,
 			error: statusErrorNameMap[status],
 			message,
-			path: url.pathname
+			path: request.getUrl()
 		};
 		if (trace === "true") value.trace = new Error().stack;
 		const payload = JSON.stringify(value);
-		response.writeHead(status, Object.assign({ "Content-Length": Buffer.byteLength(payload) }, Constants.baseHTTPResponseHeaders)).end(payload);
+		response.writeStatus(`${status} ${value.error}`);
+		Util.assignHeadersToResponse(response, Constants.baseHTTPResponseHeaders);
+		response.end(payload, true);
 	},
 
-	async wrapRequestBodyToErrorResponse(request: IncomingMessage, response: ServerResponse, url: URL, timeout = 10000): Promise<Buffer | null> {
+	async wrapRequestBodyToErrorResponse(request: HttpRequest, response: HttpResponse, timeout = 10000): Promise<Buffer | null> {
 		let body: Buffer | null = null;
 		try {
-			body = await Util.requestBody(request, timeout);
+			body = await Util.requestBody(request, response, timeout);
 		} catch (e) {
+			if (response.aborted) return null;
 			const [status, message] = e?.message === "BYTE_SIZE_DOES_NOT_MATCH_LENGTH"
 				? [413 as const, "Content-Length doesn't match body size"]
 				: e?.message === "TIMEOUT_WAITING_FOR_BODY_REACHED"
 					? [408 as const, `Waited for body for ${timeout} ms, but not completed`]
 					: [500 as const, "An unknown error occurred waiting for the body"];
-			Util.createErrorResponse(response, status, url, message);
+			Util.createErrorResponse(request, response, status, message);
 		}
 		return body;
 	},
@@ -354,33 +391,29 @@ const Util = {
 		return response;
 	},
 
-	requestBody(req: IncomingMessage, timeout = 10000): Promise<Buffer> {
-		const sizeToMeet = req.headers["content-length"] ? Number(req.headers["content-length"]) : Infinity;
+	requestBody(request: HttpRequest, response: HttpResponse, timeout = 10000): Promise<Buffer> {
+		const sizeToMeet = request.getHeader("content-length") ? Number(request.getHeader("content-length")) : Infinity;
 		return new Promise<Buffer>((res, rej) => {
 			let timer: NodeJS.Timeout | null = null;
 			let totalSize = 0;
 			const acc = new BufferAccumulator(sizeToMeet);
-			function onData(chunk: Buffer) {
+			response.onData((chunk, last) => {
 				totalSize += chunk.byteLength;
 				if (totalSize > sizeToMeet) {
-					req.removeListener("data", onData);
-					req.removeListener("end", onEnd);
+					clearTimeout(timer!);
 					return rej(new Error("BYTE_SIZE_DOES_NOT_MATCH_LENGTH"));
 				}
-				acc.add(chunk);
-			}
-			function onEnd() {
+				acc.add(Buffer.from(chunk));
+				if (last) {
+					clearTimeout(timer!);
+					res(acc.concat() ?? Buffer.allocUnsafe(0));
+				}
+			});
+			response.onAborted(() => {
 				clearTimeout(timer!);
-				req.removeListener("data", onData);
-				res(acc.concat() ?? Buffer.allocUnsafe(0));
-			}
-			req.on("data", onData);
-			req.once("end", onEnd);
-			timer = setTimeout(() => {
-				req.removeListener("data", onData);
-				req.removeListener("end", onEnd);
-				rej(new Error("TIMEOUT_WAITING_FOR_BODY_REACHED"));
-			}, timeout);
+				rej(new Error("CLIENT_ABORTED"));
+			});
+			timer = setTimeout(() => rej(new Error("TIMEOUT_WAITING_FOR_BODY_REACHED")), timeout);
 		});
 	},
 
