@@ -5,7 +5,7 @@ import ytmapi from "ytmusic-api";
 import { Plugin } from "volcano-sdk";
 
 const ytm = new ytmapi.default();
-const usableRegex = /^https?:\/\/(?:\w+)?\.?youtu\.?be(?:.com)?\/(?:watch\?v=)?[\w-]+/;
+const usableRegex = /^https?:\/\/(?:\w+)?\.?youtu\.?be(?:.com)?\/(?:(?:watch\?v=)|(?:results\?search_query=)|(?:search\?q=))?[\w-]+/;
 
 const disallowedPLTypes = ["LL", "WL"];
 
@@ -23,6 +23,14 @@ class YouTubeSource extends Plugin {
 	}
 
 	public async infoHandler(resource: string, searchShort?: string) {
+		let url: URL | undefined = undefined;
+		if (resource.startsWith("http")) url = new URL(resource);
+
+		if (url && ((url.pathname.startsWith("results") && url.searchParams.has("search_query")) || (url.pathname.startsWith("search") && url.searchParams.has("q")))) {
+			searchShort = url.searchParams.has("search_query") ? "yt" : "ytm";
+			resource = searchShort === "yt" ? url.searchParams.get("search_query")! : url.searchParams.get("q")!;
+		}
+
 		if (searchShort === "yt") {
 			const normalized = decodeURIComponent(resource);
 			const validated = dl.yt_validate(normalized);
@@ -66,8 +74,6 @@ class YouTubeSource extends Plugin {
 			};
 		}
 
-		let url: URL | undefined = undefined;
-		if (resource.startsWith("http")) url = new URL(resource);
 		if (url && url.searchParams.get("list") && url.searchParams.get("list")!.startsWith("FL_") || resource.startsWith("FL_")) throw new Error("Favorite list playlists cannot be fetched.");
 
 		if (url && url.host === "youtu.be" && url.searchParams.has("list") && !url.pathname.startsWith("/watch")) {
