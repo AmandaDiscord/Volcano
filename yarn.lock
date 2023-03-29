@@ -3299,8 +3299,8 @@ __metadata:
   resolution: "volcano-sdk@workspace:packages/sdk"
   dependencies:
     "@discordjs/voice": ^0.15.0
-    "@types/ws": ^8.5.4
     lavalink-types: ^2.0.2
+    uWebSockets.js: "uNetworking/uWebSockets.js#v20.20.0"
   languageName: unknown
   linkType: soft
 

@@ -1,6 +1,5 @@
-import type { IncomingMessage, ServerResponse } from "http";
 import type { Readable } from "stream";
-import type { WebSocket } from "ws";
+import type { LoadType } from "lavalink-types";
 
 export type TrackInfo = {
 	title: string;
@@ -17,6 +16,7 @@ export type TrackData = {
 		name: string;
 		selectedTrack: number;
 	};
+	loadType?: LoadType;
 };
 
 export type StreamData = {
@@ -39,6 +39,5 @@ export class Plugin {
 	public infoHandler?(resource: string, searchShort?: string): TrackData | Promise<TrackData>;
 	public streamHandler?(info: any, usingFFMPEG: boolean): StreamData | Promise<StreamData>;
 	public streamPipeline?(stream: Readable, filters?: Array<string>): StreamData | Promise<StreamData>;
-	public onWSMessage?(packet: Record<any, any>, socket: WebSocket): any;
-	public routeHandler?(url: URL, req: IncomingMessage, res: ServerResponse): any;
+	public postHTTPProcessUnknown(url: string, headers: Record<string, string>): TrackData | Promise<TrackData>;
 }

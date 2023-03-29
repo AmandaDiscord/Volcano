@@ -7,7 +7,6 @@ import { Plugin } from "volcano-sdk";
 const mimeRegex = /^(audio|video|application)\/(.+)$/;
 const httpRegex = /^https?:\/\//;
 const supportedApplicationTypes = ["ogg", "x-mpegURL"];
-const redirectStatusCodes = [301, 302, 303, 307, 308];
 const pcmTypes = ["pcm", "wav"];
 
 class HTTPSource extends Plugin {
@@ -17,17 +16,6 @@ class HTTPSource extends Plugin {
 		return httpRegex.test(resource);
 	}
 
-	private async followURLS(url: string, redirects = 0): Promise<{ url: string; data: InstanceType<Plugin["utils"]["ConnectionResponse"]> }> {
-		if (redirects > 3) throw new Error(`Too many redirects. Was redirected ${redirects} times`);
-		const stream = await this.utils.connect(url, { headers: this.utils.Constants.baseHTTPRequestHeaders });
-		const data = await this.utils.socketToRequest(stream);
-		if (redirectStatusCodes.includes(data.status) && data.headers["location"]) {
-			data.end();
-			data.destroy();
-			return this.followURLS(data.headers["location"], redirects++);
-		} else return { url, data };
-	}
-
 	public async infoHandler(resource: string) {
 		let parsed: IAudioMetadata | undefined;
 		let isCast = false;
@@ -35,7 +23,7 @@ class HTTPSource extends Plugin {
 		let probe: string;
 		let chunked = false;
 
-		const followed = await this.followURLS(resource);
+		const followed = await this.utils.followURLS(resource);
 		resource = followed.url;
 		const data = followed.data;
 
@@ -43,12 +31,19 @@ class HTTPSource extends Plugin {
 		if (!mimeMatch || (mimeMatch[1] === "application" && !supportedApplicationTypes.includes(mimeMatch[2]))) {
 			data.end();
 			data.destroy();
+			for (const plugin of lavalinkPlugins) {
+				const result = await plugin.postHTTPProcessUnknown?.(resource, data.headers);
+				if (result.entries.length) return result;
+			}
 			throw new Error(`Don't know how to interpret ${data.headers["content-type"]}. Expected a known audio/video format`);
 		}
 
-		Object.keys(data.headers).forEach(key => {
-			if (key.startsWith("icy-")) isIcy = isCast = true;
-		});
+		if (data.protocol === "ICY") isIcy = isCast = true;
+		if (!isIcy) {
+			Object.keys(data.headers).forEach(key => {
+				if (key.startsWith("icy-")) isIcy = isCast = true;
+			});
+		}
 
 		chunked = !!data.headers["transfer-encoding"]?.includes("chunked") || isCast || (data.headers["content-type"] === "application/x-mpegURL");
 		probe = mimeMatch ? mimeMatch[2] : "*";

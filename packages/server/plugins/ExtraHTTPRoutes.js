@@ -1,21 +1,22 @@
 import { Plugin } from "volcano-sdk";
 
 class ExtraHTTPRoutes extends Plugin {
-	/**
-	 * @param {URL} url
-	 * @param {import("http").IncomingMessage} req
-	 * @param {import("http").ServerResponse} res
-	 */
-	async routeHandler(url, req, res) {
-		if (url.pathname === `/v${global.lavalinkMajor}/ping`) {
+	async initialize() {
+		const http = await this.utils.getHTTP();
+		const worker = await this.utils.getWorker();
+
+		http.default.get(`/v${global.lavalinkMajor}/ping`, (res, req) => {
+			if (!this.utils.authenticate(req, res)) return;
+
 			/** @type {{ [gid: string]: number }}} */
 			const accumulator = {};
-			const worker = await this.utils.getWorker();
 			for (const q of worker.queues.values()) {
 				accumulator[q.guildID] = q.state.ping;
 			}
-			res.writeHead(200, this.utils.Constants.baseHTTPResponseHeaders).end(JSON.stringify(accumulator));
-		}
+			res.writeStatus("200 OK");
+			this.utils.assignHeadersToResponse(res, this.utils.Constants.baseHTTPResponseHeaders);
+			res.end(JSON.stringify(accumulator), true);
+		});
 	}
 }
 

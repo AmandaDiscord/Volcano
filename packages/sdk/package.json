@@ -22,8 +22,8 @@
 	"license": "MIT",
 	"dependencies": {
 		"@discordjs/voice": "^0.15.0",
-		"@types/ws": "^8.5.4",
-		"lavalink-types": "^2.0.2"
+		"lavalink-types": "^2.0.2",
+		"uWebSockets.js": "uNetworking/uWebSockets.js#v20.20.0"
 	},
 	"bugs": {
 		"url": "https://github.com/AmandaDiscord/Volcano/issues"

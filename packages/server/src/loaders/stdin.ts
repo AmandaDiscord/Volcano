@@ -4,6 +4,7 @@ import fs from "fs";
 import { spawn } from "child_process";
 
 import plugins from "./plugins.js";
+import Constants from "../Constants.js";
 
 const pluginManifestDir = path.join(lavalinkDirname, "../plugin-manifest.json");
 
@@ -73,14 +74,22 @@ async function customEval(input: string, _context: import("vm").Context, _filena
 	const afterCommand = split.slice(1).join(" ");
 
 	if (command === "exit") return callback(null, process.exit());
-	else if (command === "installplugin") return install(afterCommand);
-	else if (command === "reinstallall") {
+	else if (command === "installplugin") {
+		await install(afterCommand);
+		return callback(null, "done");
+	} else if (command === "reinstallall") {
 		const manifestStr = await fs.promises.readFile(pluginManifestDir, { encoding: "utf-8" });
 		const manifest = JSON.parse(manifestStr) as PluginManifest;
 		for (const plugin of Object.values(manifest)) {
 			if (plugin.resolved.startsWith("builtin:")) continue;
 			await install(plugin.resolved);
 		}
+		callback(null, "done");
+	} else if (command === "fetch") {
+		const Util = await import("../util/Util.js");
+		const result = await Util.default.connect(afterCommand, { headers: Constants.baseHTTPRequestHeaders });
+		const req = await Util.default.socketToRequest(result);
+		console.log(req);
 	} else callback(null, "unknown command");
 }
 

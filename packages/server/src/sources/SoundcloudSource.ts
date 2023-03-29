@@ -3,8 +3,6 @@ import { Plugin } from "volcano-sdk";
 
 const identifierRegex = /^O:/;
 const usableRegex = /^https:\/\/(?:on\.)?soundcloud\.(?:app\.goo\.)?(?:com|gl)/;
-const onSoundCloudStart = "https://on.soundcloud.com/";
-const soundcloudAppGooglStart = "https://soundcloud.app.goo.gl/";
 
 class SoundcloudSource extends Plugin {
 	public source = "soundcloud";
@@ -21,12 +19,10 @@ class SoundcloudSource extends Plugin {
 			return { entries: results.map(SoundcloudSource.songResultToTrack) };
 		}
 
-		if ((resource.slice(0, onSoundCloudStart.length) === onSoundCloudStart) || (resource.slice(0, soundcloudAppGooglStart.length) === soundcloudAppGooglStart)) {
-			const socket = await this.utils.connect(resource);
-			const request = await this.utils.socketToRequest(socket);
-			if (!request.headers.location) throw new Error("Expected a redirect from known redirect URL but didn't get one");
-			resource = request.headers.location;
-		}
+		const followed = await this.utils.followURLS(resource);
+		followed.data.end();
+		followed.data.destroy();
+		resource = followed.url;
 
 		let result: import("play-dl").SoundCloud;
 		try {

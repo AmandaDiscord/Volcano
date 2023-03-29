@@ -60,8 +60,8 @@ app.ws(`/v${lavalinkMajor}/websocket`, {
 
 
 app.get(`/v${lavalinkMajor}/loadtracks`, async (res, req) => {
-	if (!authenticate(req, res)) return;
-	attachAborthandler(res);
+	if (!Util.authenticate(req, res)) return;
+	Util.attachAborthandler(res);
 
 
 	const params = new URLSearchParams(req.getQuery());
@@ -78,7 +78,7 @@ app.get(`/v${lavalinkMajor}/loadtracks`, async (res, req) => {
 
 
 app.get(`/v${lavalinkMajor}/decodetrack`, (res, req) => {
-	if (!authenticate(req, res)) return;
+	if (!Util.authenticate(req, res)) return;
 
 
 	const params = new URLSearchParams(req.getQuery());
@@ -97,8 +97,8 @@ app.get(`/v${lavalinkMajor}/decodetrack`, (res, req) => {
 
 
 app.post(`/v${lavalinkMajor}/decodetracks`, async (res, req) => {
-	if (!authenticate(req, res)) return;
-	attachAborthandler(res);
+	if (!Util.authenticate(req, res)) return;
+	Util.attachAborthandler(res);
 
 
 	if (req.getHeader("content-type") !== "application/json") return Util.createErrorResponse(req, res, 415, "Content-Type must be application/json");
@@ -115,8 +115,8 @@ app.post(`/v${lavalinkMajor}/decodetracks`, async (res, req) => {
 
 
 app.get(`/v${lavalinkMajor}/info`, async (res, req) => {
-	if (!authenticate(req, res)) return;
-	attachAborthandler(res);
+	if (!Util.authenticate(req, res)) return;
+	Util.attachAborthandler(res);
 
 
 	const [major, minor, patchStr] = lavalinkVersion.split(".");
@@ -163,8 +163,8 @@ app.get(`/v${lavalinkMajor}/info`, async (res, req) => {
 
 
 app.get(`/v${lavalinkMajor}/stats`, async (res, req) => {
-	if (!authenticate(req, res)) return;
-	attachAborthandler(res);
+	if (!Util.authenticate(req, res)) return;
+	Util.attachAborthandler(res);
 
 
 	const data = await Util.getStats() as unknown as GetLavalinkStatsResult;
@@ -178,7 +178,7 @@ app.get(`/v${lavalinkMajor}/stats`, async (res, req) => {
 
 
 app.get("/version", (res, req) => {
-	if (!authenticate(req, res)) return;
+	if (!Util.authenticate(req, res)) return;
 
 
 	const payload = `${lavalinkVersion}_null`;
@@ -190,8 +190,8 @@ app.get("/version", (res, req) => {
 
 
 app.get(`/v${lavalinkMajor}/sessions/:sessionID/players`, async (res, req) => {
-	if (!authenticate(req, res)) return;
-	attachAborthandler(res);
+	if (!Util.authenticate(req, res)) return;
+	Util.attachAborthandler(res);
 
 
 	const sessionID = req.getParameter(0);
@@ -241,8 +241,8 @@ app.get(`/v${lavalinkMajor}/sessions/:sessionID/players`, async (res, req) => {
 
 
 app.get(`/v${lavalinkMajor}/sessions/:sessionID/players/:guildID`, async (res, req) => {
-	if (!authenticate(req, res)) return;
-	attachAborthandler(res);
+	if (!Util.authenticate(req, res)) return;
+	Util.attachAborthandler(res);
 
 
 	const sessionID = req.getParameter(0);
@@ -291,8 +291,8 @@ app.get(`/v${lavalinkMajor}/sessions/:sessionID/players/:guildID`, async (res, r
 	return res.end(payload, true);
 });
 app.patch(`/v${lavalinkMajor}/sessions/:sessionID/players/:guildID`, async (res, req) => {
-	if (!authenticate(req, res)) return;
-	attachAborthandler(res);
+	if (!Util.authenticate(req, res)) return;
+	Util.attachAborthandler(res);
 
 
 	const sessionID = req.getParameter(0);
@@ -332,8 +332,8 @@ app.patch(`/v${lavalinkMajor}/sessions/:sessionID/players/:guildID`, async (res,
 	return res.end(stringified, true);
 });
 app.del(`/v${lavalinkMajor}/sessions/:sessionID/players/:guildID`, async (res, req) => {
-	if (!authenticate(req, res)) return;
-	attachAborthandler(res);
+	if (!Util.authenticate(req, res)) return;
+	Util.attachAborthandler(res);
 
 
 	const sessionID = req.getParameter(0);
@@ -353,8 +353,8 @@ app.del(`/v${lavalinkMajor}/sessions/:sessionID/players/:guildID`, async (res, r
 
 
 app.patch(`/v${lavalinkMajor}/sessions/:sessionID`, async (res, req) => {
-	if (!authenticate(req, res)) return;
-	attachAborthandler(res);
+	if (!Util.authenticate(req, res)) return;
+	Util.attachAborthandler(res);
 
 
 	const sessionID = req.getParameter(0);
@@ -443,25 +443,6 @@ function convertDecodedTrackToResponse(encoded: string, data: import("@lavalink/
 			sourceName: data.source
 		}
 	};
-}
-
-function authenticate(req: uWS.HttpRequest, res: uWS.HttpResponse) {
-	const auth = req.getHeader("authorization");
-	if (auth !== lavalinkConfig.lavalink.server.password) {
-		const ip = Util.getIPFromArrayBuffer(res.getRemoteAddress());
-		console.error(`Authorization missing for ${ip} on ${req.getMethod().toUpperCase()} ${req.getUrl()}`);
-		res.writeStatus("401 Unauthorized")
-			.writeHeader("Lavalink-Api-Version", lavalinkMajor)
-			.endWithoutBody(0, true);
-		return false;
-	}
-	return true;
-}
-
-function attachAborthandler(res: uWS.HttpResponse) {
-	res.onAborted(() => {
-		res.aborted = true;
-	});
 }
 
 export default app;

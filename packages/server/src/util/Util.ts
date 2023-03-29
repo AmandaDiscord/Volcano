@@ -66,7 +66,8 @@ interface ConnectionResponse {
 
 class ConnectionResponse extends Transform {
 	private headersReceived = false;
-	public headers: { [header: string]: string };
+	private receivedStatus = false;
+	public headers: { [header: string]: string } = {};
 	public protocol: string;
 	public status: number;
 	public message: string;
@@ -77,39 +78,48 @@ class ConnectionResponse extends Transform {
 			return callback();
 		}
 
-		this.headersReceived = true;
 		const string = chunk.toString("utf-8");
 		const lines = string.split("\n");
-		const match = (lines[0] || "").match(responseRegex);
-		if (!match) {
-			console.warn(`First line in Buffer isn't an HTTP or ICY status: ${lines[0]}`);
-			this.protocol = "UNKNOWN";
-			this.status = 0;
-			this.message = "";
-			this.headers = {};
-			this.emit("headers", this.headers);
-			this.push(chunk);
-			callback();
-		} else {
-			const headers = {};
-			let passed = 1;
-			for (const line of lines.slice(1)) {
-				const header = line.match(headerRegex);
-				if (!header) break;
-				passed++;
-				headers[header[1].toLowerCase()] = header[2];
+
+		if (!this.receivedStatus) {
+			const match = (lines[0] || "").match(responseRegex);
+			if (!match) {
+				this.headersReceived = true;
+				console.warn(`First line in Buffer isn't an HTTP or ICY status: ${lines[0]}`);
+				this.protocol = "UNKNOWN";
+				this.status = 0;
+				this.message = "";
+				this.emit("headers", this.headers);
+				this.push(chunk);
+				callback();
+			} else {
+				this.protocol = match[1];
+				this.status = Number(match[2]);
+				this.message = match[3] || "";
+				lines.splice(0, 1);
 			}
-			const sliced = lines.slice(passed + 2);
-			this.protocol = match[1];
-			this.status = Number(match[2]);
-			this.message = match[3] || "";
-			this.headers = headers;
-			this.emit("headers", this.headers);
-			if (!sliced.length) return callback();
-			const remaining = Buffer.from(sliced.join("\n"));
-			this.push(remaining);
-			callback();
+			this.receivedStatus = true;
 		}
+
+		const headers = {};
+		let passed = 0;
+		for (const line of lines) {
+			const header = line.match(headerRegex);
+			if (!header) {
+				this.headersReceived = true;
+				this.emit("headers", this.headers);
+				lines.splice(0, passed);
+				if (lines[0] === "\r" && lines[1] === "") lines.splice(0, 2);
+				break;
+			}
+			passed++;
+			headers[header[1].toLowerCase()] = header[2];
+		}
+		Object.assign(this.headers, headers);
+		if (!lines.length) return callback();
+		const remaining = Buffer.from(lines.join("\n"));
+		this.push(remaining);
+		callback();
 	}
 }
 
@@ -210,6 +220,8 @@ function stringifyStep(object: any, references: Set<any>): any {
 
 const mstDayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const mstMonthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+const redirectStatusCodes = [301, 302, 303, 307, 308];
 
 const Util = {
 	noop() { void 0; },
@@ -498,6 +510,36 @@ const Util = {
 	},
 
 	Constants,
+
+	attachAborthandler(res: HttpResponse) {
+		res.onAborted(() => {
+			res.aborted = true;
+		});
+	},
+
+	authenticate(req: HttpRequest, res: HttpResponse) {
+		const auth = req.getHeader("authorization");
+		if (auth !== lavalinkConfig.lavalink.server.password) {
+			const ip = Util.getIPFromArrayBuffer(res.getRemoteAddress());
+			console.error(`Authorization missing for ${ip} on ${req.getMethod().toUpperCase()} ${req.getUrl()}`);
+			res.writeStatus("401 Unauthorized")
+				.writeHeader("Lavalink-Api-Version", lavalinkMajor)
+				.endWithoutBody(0, true);
+			return false;
+		}
+		return true;
+	},
+
+	async followURLS(url: string, headers?: Record<string, string>, redirects = 0): Promise<{ url: string; data: ConnectionResponse }> {
+		if (redirects > 3) throw new Error(`Too many redirects. Was redirected ${redirects} times`);
+		const stream = await Util.connect(url, { headers: Object.assign(headers || {}, Constants.baseHTTPRequestHeaders) });
+		const data = await Util.socketToRequest(stream);
+		if (redirectStatusCodes.includes(data.status) && data.headers["location"]) {
+			data.end();
+			data.destroy();
+			return Util.followURLS(data.headers["location"], headers, redirects++);
+		} else return { url, data };
+	}
 };
 
 function getHostname(host: string): string {
