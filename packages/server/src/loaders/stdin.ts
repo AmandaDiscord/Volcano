@@ -48,13 +48,16 @@ async function install(url: string) {
 		if (Object.keys(fetched.dependencies).length) {
 			try {
 				await new Promise((res, rej) => {
-					const command = "yarn";
+					const command = process.platform === "win32" ? "yarn.cmd" : "yarn";
 					const child = spawn(command, ["add", (Object.entries(fetched.dependencies) as unknown as [string, string]).map(([d, ver]) => ver.startsWith("github:") ? ver.replace("github:", "") : `${d}@${ver.replace(versionSpecifierRegex, "")}`).join(" ")], { cwd: path.join(lavalinkDirname, "../") });
 					child.once("exit", () => res);
 					child.once("error", (er) => {
 						rej(er);
 						child.kill();
 					});
+					setTimeout(() => {
+						child.kill();
+					}, 30000);
 				});
 			} catch (er) {
 				return console.error(er);
