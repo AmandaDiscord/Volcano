@@ -50,14 +50,25 @@ async function install(url: string) {
 				await new Promise((res, rej) => {
 					const command = process.platform === "win32" ? "yarn.cmd" : "yarn";
 					const child = spawn(command, ["add", (Object.entries(fetched.dependencies) as unknown as [string, string]).map(([d, ver]) => ver.startsWith("github:") ? ver.replace("github:", "") : `${d}@${ver.replace(versionSpecifierRegex, "")}`).join(" ")], { cwd: path.join(lavalinkDirname, "../") });
-					child.once("exit", () => res);
-					child.once("error", (er) => {
+					const timer = setTimeout(() => {
+						child.kill();
+						child.removeListener("exit", onExit);
+						child.removeListener("error", onError);
+						res(void 0);
+					}, 30000);
+					const onExit = () => {
+						child.removeListener("error", onError);
+						clearTimeout(timer);
+						res(void 0);
+					};
+					const onError = er => {
+						child.removeListener("exit", onExit);
+						clearTimeout(timer);
 						rej(er);
 						child.kill();
-					});
-					setTimeout(() => {
-						child.kill();
-					}, 30000);
+					};
+					child.once("exit", onExit);
+					child.once("error", onError);
 				});
 			} catch (er) {
 				return console.error(er);
