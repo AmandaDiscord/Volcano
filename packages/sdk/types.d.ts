@@ -17,6 +17,7 @@ export type TrackData = {
 		selectedTrack: number;
 	};
 	loadType?: LoadType;
+	source?: string;
 };
 
 export type StreamData = {

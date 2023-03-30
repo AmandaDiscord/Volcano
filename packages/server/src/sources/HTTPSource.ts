@@ -7,6 +7,7 @@ import { Plugin } from "volcano-sdk";
 const mimeRegex = /^(audio|video|application)\/(.+)$/;
 const httpRegex = /^https?:\/\//;
 const supportedApplicationTypes = ["ogg", "x-mpegURL"];
+const unsupportedAudioTypes = ["midi"];
 const pcmTypes = ["pcm", "wav"];
 
 class HTTPSource extends Plugin {
@@ -28,12 +29,15 @@ class HTTPSource extends Plugin {
 		const data = followed.data;
 
 		const mimeMatch = data.headers["content-type"]?.match(mimeRegex);
-		if (!mimeMatch || (mimeMatch[1] === "application" && !supportedApplicationTypes.includes(mimeMatch[2]))) {
+		if (!mimeMatch || (mimeMatch[1] === "application" && !supportedApplicationTypes.includes(mimeMatch[2])) || (mimeMatch[1] === "audio" && unsupportedAudioTypes.includes(mimeMatch[2]))) {
 			data.end();
 			data.destroy();
 			for (const plugin of lavalinkPlugins) {
 				const result = await plugin.postHTTPProcessUnknown?.(resource, data.headers);
-				if (result.entries.length) return result;
+				if (result && result.entries.length) {
+					if (!result.source && plugin.source) result.source = plugin.source;
+					return result;
+				}
 			}
 			throw new Error(`Don't know how to interpret ${data.headers["content-type"]}. Expected a known audio/video format`);
 		}

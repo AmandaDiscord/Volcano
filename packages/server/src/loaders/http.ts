@@ -418,6 +418,7 @@ async function doTrackLoad(id?: string | null, logRequest = true): Promise<{ sym
 }
 
 function assignResults(result: Awaited<ReturnType<NonNullable<import("volcano-sdk").Plugin["infoHandler"]>>>, source: string, payload: import("lavalink-types").TrackLoadingResult) {
+	if (result.source) source = result.source;
 	payload.tracks = result.entries.map(t => ({
 		encoded: encoding.encode(Object.assign({ flags: 1, version: 2, source: source, position: BigInt(0), probeInfo: t["probeInfo"] }, t, { length: BigInt(t.length) })),
 		info: Object.assign({ position: 0 }, (() => {
