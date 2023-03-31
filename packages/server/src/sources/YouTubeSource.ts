@@ -6,6 +6,7 @@ import { Plugin } from "volcano-sdk";
 
 const ytm = new ytmapi.default();
 const usableRegex = /^https?:\/\/(?:\w+)?\.?youtu\.?be(?:.com)?\/(?:(?:watch\?v=)|(?:results\?search_query=)|(?:search\?q=))?[\w-]+/;
+const httpRegex = /^https?:\/\//;
 
 const disallowedPLTypes = ["LL", "WL"];
 
@@ -24,7 +25,7 @@ class YouTubeSource extends Plugin {
 
 	public async infoHandler(resource: string, searchShort?: string) {
 		let url: URL | undefined = undefined;
-		if (resource.startsWith("http")) url = new URL(resource);
+		if (httpRegex.test(resource)) url = new URL(resource);
 
 		if (url && ((url.pathname.startsWith("/results") && url.searchParams.has("search_query")) || (url.pathname.startsWith("/search") && url.searchParams.has("q")))) {
 			searchShort = url.searchParams.has("search_query") ? "yt" : "ytm";
@@ -84,6 +85,11 @@ class YouTubeSource extends Plugin {
 			result.data.destroy();
 			resource = result.url;
 			url = new URL(resource);
+			const cont = url.searchParams.get("continue");
+			if (cont) {
+				resource = cont;
+				url = new URL(cont);
+			}
 		}
 
 		if ((url && url.searchParams.has("list") && !disallowedPLTypes.includes(url.searchParams.get("list")!)) || resource.startsWith("PL")) {
@@ -119,6 +125,7 @@ class YouTubeSource extends Plugin {
 			url.searchParams.delete("list");
 			url.searchParams.delete("index");
 			url.searchParams.delete("app");
+			url.searchParams.delete("t");
 			resource = url.toString();
 		}
 

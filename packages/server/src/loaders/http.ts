@@ -66,7 +66,7 @@ app.get(`/v${lavalinkMajor}/loadtracks`, async (res, req) => {
 
 	const params = new URLSearchParams(req.getQuery());
 	const result = await doTrackLoad(params.get("identifier"));
-	if (result.sym && result.error) return Util.standardTrackLoadingErrorHandler(result.error, res, result.result);
+	if (result.error) return Util.standardTrackLoadingErrorHandler(result.error, res, result.result);
 	else {
 		if (res.aborted) return;
 		const payload = JSON.stringify(result.result);
