@@ -21,7 +21,7 @@
 	"author": "PapiOphidian",
 	"license": "MIT",
 	"dependencies": {
-		"@discordjs/voice": "^0.15.0",
+		"@discordjs/voice": "^0.16.0",
 		"lavalink-types": "^2.0.2",
 		"uWebSockets.js": "uNetworking/uWebSockets.js#v20.20.0"
 	},

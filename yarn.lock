@@ -46,16 +46,16 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@discordjs/voice@npm:^0.15.0":
-  version: 0.15.0
-  resolution: "@discordjs/voice@npm:0.15.0"
+"@discordjs/voice@npm:^0.16.0":
+  version: 0.16.0
+  resolution: "@discordjs/voice@npm:0.16.0"
   dependencies:
     "@types/ws": ^8.5.4
-    discord-api-types: ^0.37.35
+    discord-api-types: ^0.37.37
     prism-media: ^1.3.5
     tslib: ^2.5.0
-    ws: ^8.12.1
-  checksum: caf16a0f424f55223df24e5595a6fc525fb752539559f2d280fa7e9ca1f560ee175ff70fa185c68ee1abe357538977200c71e0f73e5caeea1032fd5a6f814a43
+    ws: ^8.13.0
+  checksum: 521824475c5257cf2098b7e7303e44c7906c2126603c7d85de14ad5f6ec12e61e459e18af92b97a11d504db91209aeb5b3e0c324b1f4f790c20e8db925fd66e9
   languageName: node
   linkType: hard
 
@@ -387,10 +387,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/node@npm:^18.15.10":
-  version: 18.15.10
-  resolution: "@types/node@npm:18.15.10"
-  checksum: 9aeae0b683eda82892def5315812bdee3f1a28c4898b7e70f8e2514564538b16c4dccbe8339c1266f8fc1d707a48f152689264a854f5ebc2eba5011e793612d9
+"@types/node@npm:^18.15.11":
+  version: 18.15.11
+  resolution: "@types/node@npm:18.15.11"
+  checksum: 977b4ad04708897ff0eb049ecf82246d210939c82461922d20f7d2dcfd81bbc661582ba3af28869210f7e8b1934529dcd46bff7d448551400f9d48b9d3bddec3
   languageName: node
   linkType: hard
 
@@ -927,10 +927,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"content-type@npm:^1.0.4":
-  version: 1.0.4
-  resolution: "content-type@npm:1.0.4"
-  checksum: 3d93585fda985d1554eca5ebd251994327608d2e200978fdbfba21c0c679914d5faf266d17027de44b34a72c7b0745b18584ecccaa7e1fdfb6a68ac7114f12e0
+"content-type@npm:^1.0.5":
+  version: 1.0.5
+  resolution: "content-type@npm:1.0.5"
+  checksum: 566271e0a251642254cde0f845f9dd4f9856e52d988f4eb0d0dcffbb7a1f8ec98de7a5215fc628f3bce30fe2fb6fd2bc064b562d721658c59b544e2d34ea2766
   languageName: node
   linkType: hard
 
@@ -1021,10 +1021,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"discord-api-types@npm:^0.37.35":
-  version: 0.37.36
-  resolution: "discord-api-types@npm:0.37.36"
-  checksum: ba3de3640270738c6fcef515a5d3a22069c89973e7d95984a7ddf1633a6e01fef2b99d4524f4535771694f87e4d779aa7511f21e06abd1c25707b4791c29d386
+"discord-api-types@npm:^0.37.37":
+  version: 0.37.37
+  resolution: "discord-api-types@npm:0.37.37"
+  checksum: 6b680f52c19aebf0dd1a714ef109a55bfe6786d10fd410f7bf1ee9244041f8b10ba81a988799a832382b34b2ae5ef3027ee31f6d1cf4555f1647252635c6eaaa
   languageName: node
   linkType: hard
 
@@ -1404,14 +1404,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"file-type@npm:^18.0.0":
-  version: 18.0.0
-  resolution: "file-type@npm:18.0.0"
+"file-type@npm:^18.2.1":
+  version: 18.2.1
+  resolution: "file-type@npm:18.2.1"
   dependencies:
     readable-web-to-node-stream: ^3.0.2
     strtok3: ^7.0.0
     token-types: ^5.0.1
-  checksum: 67f5a927b8030e35a4faf9dd9dea9e17bcb042fb61b9851b7dd1b1b3bb3ecfdd9f83bc3bc72686316ea2bac70df652c61e10affa9b5957b1a3d731df4925e3cb
+  checksum: bbc9381292e96a72ecd892f9f5e1a9a8d3f9717955841346e55891acfe099135bfa149f7dad51f35ee52b5e7e0a1a02d7375061b2800758011682c2e9d96953e
   languageName: node
   linkType: hard
 
@@ -2227,18 +2227,18 @@ __metadata:
   languageName: node
   linkType: hard
 
-"music-metadata@npm:^8.1.3":
-  version: 8.1.3
-  resolution: "music-metadata@npm:8.1.3"
+"music-metadata@npm:^8.1.4":
+  version: 8.1.4
+  resolution: "music-metadata@npm:8.1.4"
   dependencies:
     "@tokenizer/token": ^0.3.0
-    content-type: ^1.0.4
+    content-type: ^1.0.5
     debug: ^4.3.4
-    file-type: ^18.0.0
+    file-type: ^18.2.1
     media-typer: ^1.1.0
     strtok3: ^7.0.0
     token-types: ^5.0.1
-  checksum: 243ae3626b4c495fed45e569de86e66ffddbf358b8942a1f67da6150b57a23521d0ccd5c7cc8831aafdb75ac16f5c4012c40ebfee44985d412b2b640052ffd22
+  checksum: 818862b30bce2e060f84a5ee115147ba0b375f85cd25466dd34afa6bd99261b5eafc77c06078d25e51ba6118ed6926ecd0c655b27ff2a6945e02671b34ae206a
   languageName: node
   linkType: hard
 
@@ -3107,58 +3107,58 @@ __metadata:
   languageName: node
   linkType: hard
 
-"turbo-darwin-64@npm:1.8.6":
-  version: 1.8.6
-  resolution: "turbo-darwin-64@npm:1.8.6"
+"turbo-darwin-64@npm:1.8.8":
+  version: 1.8.8
+  resolution: "turbo-darwin-64@npm:1.8.8"
   conditions: os=darwin & cpu=x64
   languageName: node
   linkType: hard
 
-"turbo-darwin-arm64@npm:1.8.6":
-  version: 1.8.6
-  resolution: "turbo-darwin-arm64@npm:1.8.6"
+"turbo-darwin-arm64@npm:1.8.8":
+  version: 1.8.8
+  resolution: "turbo-darwin-arm64@npm:1.8.8"
   conditions: os=darwin & cpu=arm64
   languageName: node
   linkType: hard
 
-"turbo-linux-64@npm:1.8.6":
-  version: 1.8.6
-  resolution: "turbo-linux-64@npm:1.8.6"
+"turbo-linux-64@npm:1.8.8":
+  version: 1.8.8
+  resolution: "turbo-linux-64@npm:1.8.8"
   conditions: os=linux & cpu=x64
   languageName: node
   linkType: hard
 
-"turbo-linux-arm64@npm:1.8.6":
-  version: 1.8.6
-  resolution: "turbo-linux-arm64@npm:1.8.6"
+"turbo-linux-arm64@npm:1.8.8":
+  version: 1.8.8
+  resolution: "turbo-linux-arm64@npm:1.8.8"
   conditions: os=linux & cpu=arm64
   languageName: node
   linkType: hard
 
-"turbo-windows-64@npm:1.8.6":
-  version: 1.8.6
-  resolution: "turbo-windows-64@npm:1.8.6"
+"turbo-windows-64@npm:1.8.8":
+  version: 1.8.8
+  resolution: "turbo-windows-64@npm:1.8.8"
   conditions: os=win32 & cpu=x64
   languageName: node
   linkType: hard
 
-"turbo-windows-arm64@npm:1.8.6":
-  version: 1.8.6
-  resolution: "turbo-windows-arm64@npm:1.8.6"
+"turbo-windows-arm64@npm:1.8.8":
+  version: 1.8.8
+  resolution: "turbo-windows-arm64@npm:1.8.8"
   conditions: os=win32 & cpu=arm64
   languageName: node
   linkType: hard
 
-"turbo@npm:^1.8.6":
-  version: 1.8.6
-  resolution: "turbo@npm:1.8.6"
+"turbo@npm:^1.8.8":
+  version: 1.8.8
+  resolution: "turbo@npm:1.8.8"
   dependencies:
-    turbo-darwin-64: 1.8.6
-    turbo-darwin-arm64: 1.8.6
-    turbo-linux-64: 1.8.6
-    turbo-linux-arm64: 1.8.6
-    turbo-windows-64: 1.8.6
-    turbo-windows-arm64: 1.8.6
+    turbo-darwin-64: 1.8.8
+    turbo-darwin-arm64: 1.8.8
+    turbo-linux-64: 1.8.8
+    turbo-linux-arm64: 1.8.8
+    turbo-windows-64: 1.8.8
+    turbo-windows-arm64: 1.8.8
   dependenciesMeta:
     turbo-darwin-64:
       optional: true
@@ -3174,7 +3174,7 @@ __metadata:
       optional: true
   bin:
     turbo: bin/turbo
-  checksum: f20983be69ac689eb8193adff5838fbc1248dc987fbecfa7433996ee50934dc5574c98f2b09e552bfae48386f2077ce810e203a8a9961819106098384bf4e806
+  checksum: 6dcfd7b38e2dd9abe279bda54e474be3463df51428f0b91c5e0539e9fd8c9b1efec562df629946f5ca92ede05f0aba35027481065d054249334e11692085ddb7
   languageName: node
   linkType: hard
 
@@ -3298,7 +3298,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "volcano-sdk@workspace:packages/sdk"
   dependencies:
-    "@discordjs/voice": ^0.15.0
+    "@discordjs/voice": ^0.16.0
     lavalink-types: ^2.0.2
     uWebSockets.js: "uNetworking/uWebSockets.js#v20.20.0"
   languageName: unknown
@@ -3309,7 +3309,7 @@ __metadata:
   resolution: "volcano-server@workspace:packages/server"
   dependencies:
     "@discordjs/opus": 0.9.0
-    "@discordjs/voice": ^0.15.0
+    "@discordjs/voice": ^0.16.0
     "@lavalink/encoding": ^0.1.2
     backtracker: 3.3.2
     ffmpeg-static: ^5.1.0
@@ -3317,7 +3317,7 @@ __metadata:
     lavalink-types: 2.0.2
     libsodium-wrappers: 0.7.11
     m3u8stream: ^0.8.6
-    music-metadata: ^8.1.3
+    music-metadata: ^8.1.4
     node-html-parser: ^6.1.5
     play-dl: ^1.9.6
     tsup: ^6.7.0
@@ -3333,11 +3333,11 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "volcano@workspace:."
   dependencies:
-    "@types/node": ^18.15.10
+    "@types/node": ^18.15.11
     "@typescript-eslint/eslint-plugin": ^5.57.0
     "@typescript-eslint/parser": ^5.57.0
     eslint: ^8.36.0
-    turbo: ^1.8.6
+    turbo: ^1.8.8
     typescript: ^5.0.2
   languageName: unknown
   linkType: soft
@@ -3411,7 +3411,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"ws@npm:^8.12.1":
+"ws@npm:^8.13.0":
   version: 8.13.0
   resolution: "ws@npm:8.13.0"
   peerDependencies:

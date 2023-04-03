@@ -5,7 +5,7 @@ import ytmapi from "ytmusic-api";
 import { Plugin } from "volcano-sdk";
 
 const ytm = new ytmapi.default();
-const usableRegex = /^https:\/\/(?:(?:www\.)|(?:music\.))?youtu\.?be(?:\.com)?\//;
+const usableRegex = /^https:\/\/(?:(?:www\.)|(?:music\.)|(?:m\.))?youtu\.?be(?:\.com)?\//;
 const httpRegex = /^https:\/\//;
 
 const disallowedPLTypes = ["LL", "WL"];
@@ -165,24 +165,20 @@ class YouTubeSource extends Plugin {
 		let site: "yt" | "ytm" | undefined = undefined;
 
 		if (url) {
+			const paths = url.pathname.slice(1).split("/");
 			if (url.hostname === "youtu.be" && url.pathname !== "/") {
 				id = url.pathname.slice(1);
 				plid = url.searchParams.get("list") ?? undefined;
-			} else if (url.hostname === "www.youtube.com" || url.hostname === "youtube.com") {
-				if (url.pathname === "/results" && url.searchParams.has("search_query")) {
+			} else if (url.hostname === "www.youtube.com" || url.hostname === "youtube.com" || url.hostname === "m.youtube.com") {
+				if (paths[0] === "results" && url.searchParams.has("search_query")) {
 					search = url.searchParams.get("search_query")!;
 					site = "yt";
 				} else if (cannotExtractRoutes.includes(url.pathname)) return { type: "cannot_extract" } as R;
 				else if (url.pathname[1] === "@") {
-					const sliced = url.pathname.slice(1);
-					const nextSlash = sliced.indexOf("/");
-					search = nextSlash === -1 ? sliced : sliced.slice(0, nextSlash);
+					search = paths[0];
 					site = "yt";
-				} else if (url.pathname.startsWith("/channel/")) {
-					let channel = url.pathname.slice(9);
-					const afterChannel = channel.indexOf("/");
-					if (afterChannel !== -1) channel = channel.slice(0, afterChannel);
-
+				} else if (paths[0] === "channel" && paths[1]) {
+					const channel = paths[1];
 					if (channel[0] === "U" && channel[1] === "C" && channel[2] === "_") {
 						search = channel.slice(3);
 						site = "yt";
@@ -191,8 +187,8 @@ class YouTubeSource extends Plugin {
 						search = channel;
 						site = "yt";
 					}
-
-				} else if (url.pathname.startsWith("/shorts/")) id = url.pathname.slice(8);
+				} else if (paths[0] === "shorts" && paths[1]) id = paths[1];
+				else if (paths[0] === "live" && paths[1]) id = paths[1];
 				else {
 					id = url.searchParams.get("v") ?? undefined;
 					plid = url.searchParams.get("list") ?? undefined;
