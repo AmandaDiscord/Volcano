@@ -49,9 +49,13 @@ async function install(url: string) {
 			try {
 				await new Promise((res, rej) => {
 					const command = process.platform === "win32" ? "yarn.cmd" : "yarn";
-					const child = spawn(command, ["add", (Object.entries(fetched.dependencies) as unknown as [string, string]).map(([d, ver]) => ver.startsWith("github:") ? ver.replace("github:", "") : `${d}@${ver.replace(versionSpecifierRegex, "")}`).join(" ")], { cwd: path.join(lavalinkDirname, "../") });
+					const add = (Object.entries(fetched.dependencies) as unknown as [string, string]).map(([d, ver]) => ver.startsWith("github:") ? `${d}@https://github.com/${ver.replace("github:", "")}` : `${d}@${ver.replace(versionSpecifierRegex, "")}`).join(" ");
+					console.log("Adding child packages", add);
+					const child = spawn(command, ["add", add], { cwd: path.join(lavalinkDirname, "../") });
+					child.stdout.pipe(process.stdout);
 					const timer = setTimeout(() => {
 						child.kill();
+						console.warn("timed out waiting for yarn. Some packages may not have installed");
 						child.removeListener("exit", onExit);
 						child.removeListener("error", onError);
 						res(void 0);
