@@ -429,6 +429,28 @@ const Util = {
 		});
 	},
 
+	responseBody(response: ConnectionResponse, timeout = 10000): Promise<Buffer> {
+		const sizeToMeet = response.headers["content-length"] ? Number(response.headers["content-length"]) : Infinity;
+		return new Promise<Buffer>((res, rej) => {
+			let timer: NodeJS.Timeout | null = null;
+			let totalSize = 0;
+			const acc = new BufferAccumulator(sizeToMeet);
+			response.on("data", (chunk: Buffer) => {
+				totalSize += chunk.byteLength;
+				if (totalSize > sizeToMeet) {
+					clearTimeout(timer!);
+					return rej(new Error("BYTE_SIZE_DOES_NOT_MATCH_LENGTH"));
+				}
+				acc.add(Buffer.from(chunk));
+			});
+			response.on("end", () => {
+				clearTimeout(timer!);
+				res(acc.concat() ?? Buffer.allocUnsafe(0));
+			});
+			timer = setTimeout(() => rej(new Error("TIMEOUT_WAITING_FOR_BODY_REACHED")), timeout);
+		});
+	},
+
 	BufferAccumulator,
 
 	waitForResourceToEnterState,

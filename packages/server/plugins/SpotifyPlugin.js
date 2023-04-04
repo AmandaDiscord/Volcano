@@ -18,23 +18,40 @@ class SpotifyPlugin extends Plugin {
 	 * @returns {Promise<import("volcano-sdk/types.js").TrackData>}
 	 */
 	async infoHandler(resource) {
-		const followed = await this.utils.followURLS(resource);
-		resource = followed.url;
-		followed.data.end();
-		followed.data.destroy();
-		if (resource.startsWith("https://spotify.app.link")) throw new Error("Cannot follow spotify.app.link urls");
-		const response = await fetch(resource, { redirect: "follow" });
-		const data = await response.text();
+		const data = await this.getFromLink(resource);
+		return data;
+	}
+
+	/**
+	 * @param {string} url
+	 * @returns {Promise<import("volcano-sdk/types.js").TrackData>}
+	 */
+	async getFromLink(url, depth = 0) {
+		const followed = depth === 0 ? await this.utils.followURLS(url) : { url, data: await this.utils.connect(url, { headers: this.utils.Constants.baseHTTPRequestHeaders }).then(r => this.utils.socketToRequest(r)) };
+		url = followed.url;
+
+		if (url.startsWith("https://spotify.app.link")) {
+			followed.data.end();
+			followed.data.destroy();
+			throw new Error("Cannot follow spotify.app.link urls");
+		}
+
+		const body = await this.utils.responseBody(followed.data);
+
+		const data = body.toString();
+
 		const parser = htmlParse.default(data);
 		const head = parser.getElementsByTagName("head")[0];
 
 		const type = head.querySelector("meta[property=\"og:type\"]")?.getAttribute("content") || "music.song";
 		const title = head.querySelector("meta[property=\"og:title\"]")?.getAttribute("content") || `Unknown ${type === "music.playlist" ? "Track" : "Playlist"}`;
 		if (type === "music.playlist") {
-			const notFetched = "Track not fetched";
-			/** @type {Array<import("volcano-sdk/types.js").TrackInfo>} */
-			const trackList = head.querySelectorAll("meta[name=\"music:song\"]").map(i => ({ title: notFetched, author: notFetched, length: 0, uri: i.getAttribute("content") || "", identifier: i.getAttribute("content") || "", isStream: false }));
-			return { entries: trackList, plData: { name: title, selectedTrack: 0 } };
+			if (depth !== 0) throw new Error("Spotify playlist in a playlist?");
+			/** @type {Array<string>} */
+			const trackList = head.querySelectorAll("meta[name=\"music:song\"]").map(i => i.getAttribute("content") || "");
+			const filtered = await trackList.filter(i => i.length);
+			const tracks = await Promise.all(filtered.map(track => this.getFromLink(track, depth++)));
+			return { entries: tracks.map(i => i.entries).flat(), plData: { name: title, selectedTrack: 0 } };
 		}
 
 		const author = head.querySelector("meta[property=\"og:description\"]")?.getAttribute("content")?.split("·")?.slice(0, -2).join("·")?.trim() || "Unknown Artist";
@@ -42,7 +59,7 @@ class SpotifyPlugin extends Plugin {
 		const duration = +(head.querySelector("meta[name=\"music:duration\"]")?.getAttribute("content") || 0);
 		const trackNumber = +(head.querySelector("meta[name=\"music:album:track\"]")?.getAttribute("content") || 0);
 		/** @type {import("volcano-sdk/types.js").TrackInfo} */
-		const thisTrack = { uri, title, author, length: duration * 1000, identifier: resource, isStream: false };
+		const thisTrack = { uri, title, author, length: duration * 1000, identifier: url, isStream: false };
 		if (trackNumber) return { entries: [thisTrack], plData: { name: "Unknown Playlist", selectedTrack: (trackNumber || 1) - 1 } };
 		return { entries: [thisTrack] };
 	}
