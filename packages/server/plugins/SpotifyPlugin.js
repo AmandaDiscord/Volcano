@@ -27,7 +27,7 @@ class SpotifyPlugin extends Plugin {
 	 * @returns {Promise<import("volcano-sdk/types.js").TrackData>}
 	 */
 	async getFromLink(url, depth = 0) {
-		const followed = depth === 0 ? await this.utils.followURLS(url) : { url, data: await this.utils.connect(url, { headers: this.utils.Constants.baseHTTPRequestHeaders }).then(r => this.utils.socketToRequest(r)) };
+		const followed = depth === 0 ? await this.utils.followURLS(url, { Connection: "close" }) : { url, data: await this.utils.connect(url, { headers: { Connection: "close", ...this.utils.Constants.baseHTTPRequestHeaders } }).then(r => this.utils.socketToRequest(r)) };
 		url = followed.url;
 
 		if (url.startsWith("https://spotify.app.link")) {
@@ -42,6 +42,8 @@ class SpotifyPlugin extends Plugin {
 
 		const parser = htmlParse.default(data);
 		const head = parser.getElementsByTagName("head")[0];
+
+		if (!head) return { entries: [] };
 
 		const type = head.querySelector("meta[property=\"og:type\"]")?.getAttribute("content") || "music.song";
 		const title = head.querySelector("meta[property=\"og:title\"]")?.getAttribute("content") || `Unknown ${type === "music.playlist" ? "Track" : "Playlist"}`;

@@ -435,19 +435,25 @@ const Util = {
 			let timer: NodeJS.Timeout | null = null;
 			let totalSize = 0;
 			const acc = new BufferAccumulator(sizeToMeet);
-			response.on("data", (chunk: Buffer) => {
+			const onData = (chunk: Buffer) => {
 				totalSize += chunk.byteLength;
 				if (totalSize > (sizeToMeet || Infinity)) {
 					clearTimeout(timer!);
 					return rej(new Error("BYTE_SIZE_DOES_NOT_MATCH_LENGTH"));
 				}
-				acc.add(Buffer.from(chunk));
-			});
-			response.on("end", () => {
+				acc.add(chunk);
+			};
+			const onEnd = () => {
 				clearTimeout(timer!);
 				res(acc.concat() ?? Buffer.allocUnsafe(0));
-			});
-			timer = setTimeout(() => rej(new Error("TIMEOUT_WAITING_FOR_BODY_REACHED")), timeout);
+			};
+			response.on("data", onData);
+			response.once("end", onEnd);
+			timer = setTimeout(() => {
+				response.removeListener("data", onData);
+				response.removeListener("end", onEnd);
+				rej(new Error(`Timed out waiting for a website to finish sending the response body. Waited ${timeout} ms`));
+			}, timeout);
 		});
 	},
 
