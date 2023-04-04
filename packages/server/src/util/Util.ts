@@ -404,14 +404,14 @@ const Util = {
 	},
 
 	requestBody(request: HttpRequest, response: HttpResponse, timeout = 10000): Promise<Buffer> {
-		const sizeToMeet = request.getHeader("content-length") ? Number(request.getHeader("content-length")) : Infinity;
+		const sizeToMeet = request.getHeader("content-length") ? Number(request.getHeader("content-length")) : undefined;
 		return new Promise<Buffer>((res, rej) => {
 			let timer: NodeJS.Timeout | null = null;
 			let totalSize = 0;
 			const acc = new BufferAccumulator(sizeToMeet);
 			response.onData((chunk, last) => {
 				totalSize += chunk.byteLength;
-				if (totalSize > sizeToMeet) {
+				if (totalSize > (sizeToMeet || Infinity)) {
 					clearTimeout(timer!);
 					return rej(new Error("BYTE_SIZE_DOES_NOT_MATCH_LENGTH"));
 				}
@@ -430,14 +430,14 @@ const Util = {
 	},
 
 	responseBody(response: ConnectionResponse, timeout = 10000): Promise<Buffer> {
-		const sizeToMeet = response.headers["content-length"] ? Number(response.headers["content-length"]) : Infinity;
+		const sizeToMeet = response.headers["content-length"] ? Number(response.headers["content-length"]) : undefined;
 		return new Promise<Buffer>((res, rej) => {
 			let timer: NodeJS.Timeout | null = null;
 			let totalSize = 0;
 			const acc = new BufferAccumulator(sizeToMeet);
 			response.on("data", (chunk: Buffer) => {
 				totalSize += chunk.byteLength;
-				if (totalSize > sizeToMeet) {
+				if (totalSize > (sizeToMeet || Infinity)) {
 					clearTimeout(timer!);
 					return rej(new Error("BYTE_SIZE_DOES_NOT_MATCH_LENGTH"));
 				}
