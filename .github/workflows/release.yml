@@ -13,6 +13,7 @@ jobs:
 
       - name: Install, Lint, Compile, and create build info for server
         run: |
+          corepack enable
           rm ./.yarnrc.yml
           mv ./.yarnrc.nopath.yml ./.yarnrc.yml
           yarn set version 3.3.0
