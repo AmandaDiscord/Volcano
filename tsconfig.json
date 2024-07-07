@@ -9,7 +9,7 @@
 		"experimentalDecorators": true,
 		"incremental": false,
 		"lib": ["esnext", "dom"],
-		"module": "ESNext",
+		"module": "NodeNext",
 		"moduleResolution": "NodeNext",
 		"noUnusedLocals": false,
 		"pretty": true,

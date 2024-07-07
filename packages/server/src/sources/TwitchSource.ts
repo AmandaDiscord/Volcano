@@ -17,18 +17,18 @@ class TwitchSource extends Plugin {
 	}
 
 	public async infoHandler(resource: string) {
-		const vod = resource.match(vodRegex);
+		const vod = vodRegex.exec(resource);
 		if (vod) {
 			const data = await twitch.getVod(vod[1]) as Array<import("twitch-m3u8").Stream>;
 			if (!data.length) throw new Error("There were no stream URLs available for that vod");
 			const audioOnly = data.find(d => d.quality === "Audio only");
-			const chosen = audioOnly ? audioOnly : data[0];
+			const chosen = audioOnly ?? data[0];
 			const streamerName = chosen.url.split("_").slice(1, audioOnly ? -3 : -2).join("_");
 			const res = await fetch(resource, { redirect: "follow", headers: this.utils.Constants.baseHTTPRequestHeaders }).then(r => r.text());
 			const parser = htmlParse.default(res);
 			const head = parser.getElementsByTagName("head")[0];
-			const title = entities.decode(head.querySelector("meta[property=\"og:title\"]")?.getAttribute("content")?.split("-").slice(0, -1).join("-").trim() || `Twitch Stream of ${streamerName}`);
-			const duration = +(head.querySelector("meta[property=\"og:video:duration\"]")?.getAttribute("content") || 0) * 1000;
+			const title = entities.decode(head.querySelector("meta[property=\"og:title\"]")?.getAttribute("content")?.split("-").slice(0, -1).join("-").trim() ?? `Twitch Stream of ${streamerName}`);
+			const duration = +(head.querySelector("meta[property=\"og:video:duration\"]")?.getAttribute("content") ?? 0) * 1000;
 			return {
 				entries: [
 					{
@@ -43,7 +43,7 @@ class TwitchSource extends Plugin {
 			};
 		}
 
-		const user = resource.match(channelRegex);
+		const user = channelRegex.exec(resource);
 		if (!user) throw new Error("The provided link was not to a user or a vod");
 		const data = await twitch.getStream(user[1]);
 		if (!data.length) throw new Error("There were no stream URLs available for that stream");
@@ -51,7 +51,7 @@ class TwitchSource extends Plugin {
 		const res = await fetch(uri, { redirect: "follow", headers: this.utils.Constants.baseHTTPRequestHeaders }).then(r => r.text());
 		const parser = htmlParse.default(res);
 		const head = parser.getElementsByTagName("head")[0];
-		const title = entities.decode(head.querySelector("meta[property=\"og:description\"]")?.getAttribute("content") || `Twitch Stream of ${user[1]}`);
+		const title = entities.decode(head.querySelector("meta[property=\"og:description\"]")?.getAttribute("content") ?? `Twitch Stream of ${user[1]}`);
 		return {
 			entries: [
 				{
@@ -67,12 +67,12 @@ class TwitchSource extends Plugin {
 	}
 
 	public async streamHandler(info: import("@lavalink/encoding").TrackInfo) {
-		const vod = info.uri!.match(vodRegex);
-		const user = info.uri!.match(channelRegex);
+		const vod = vodRegex.exec(info.uri!);
+		const user = channelRegex.exec(info.uri!);
 		const streams = await twitch[vod ? "getVod" : "getStream"](vod ? vod[1] : user![1]) as Array<import("twitch-m3u8").Stream>;
 		if (!streams.length) throw new Error("There were no available streams for playback");
 		const audioOnly = streams.find(d => d.quality === "Audio only");
-		const chosen = audioOnly ? audioOnly : streams[0];
+		const chosen = audioOnly ?? streams[0];
 		return { stream: m3u8(chosen.url) };
 	}
 }

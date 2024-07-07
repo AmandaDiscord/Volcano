@@ -82,7 +82,7 @@ class ConnectionResponse extends Transform {
 		const lines = string.split("\n");
 
 		if (!this.receivedStatus) {
-			const match = (lines[0] || "").match(responseRegex);
+			const match = responseRegex.exec(lines[0]);
 			if (!match) {
 				this.headersReceived = true;
 				console.warn(`First line in Buffer isn't an HTTP or ICY status: ${lines[0]}`);
@@ -104,7 +104,7 @@ class ConnectionResponse extends Transform {
 		const headers = {};
 		let passed = 0;
 		for (const line of lines) {
-			const header = line.match(headerRegex);
+			const header = headerRegex.exec(line);
 			if (!header) {
 				this.headersReceived = true;
 				this.emit("headers", this.headers);
@@ -271,7 +271,7 @@ const Util = {
 		payload.exception = {
 			message: (typeof e === "string" ? e as string : (e as Error).message || "").split("\n").slice(-1)[0].replace(errorRegex, ""),
 			severity: severity,
-			cause: (typeof e === "string" ? new Error().stack || "unknown" : (e as Error).name)
+			cause: (typeof e === "string" ? new Error().stack ?? "unknown" : (e as Error).name)
 		};
 		const stringified = JSON.stringify(payload);
 		response.writeStatus("200 OK");
@@ -366,7 +366,7 @@ const Util = {
 		};
 		if (opts) Util.mixin(options, opts);
 		const port = decoded.port.length ? Number(decoded.port) : (decoded.protocol === "https:" || decoded.protocol === "wss:" ? 443 : 80);
-		const servername = getServerName(decoded.host) || undefined;
+		const servername = getServerName(decoded.host) ?? undefined;
 		let socket: Socket;
 		const connectOptions: ConnectionOptions = { host: decoded.host, port, rejectUnauthorized: false, ALPNProtocols: ["http/1.1", "http/1.0", "icy"], servername };
 

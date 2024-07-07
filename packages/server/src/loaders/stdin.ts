@@ -68,7 +68,7 @@ async function install(url: string) {
 					const onError = er => {
 						child.removeListener("exit", onExit);
 						clearTimeout(timer);
-						rej(er);
+						rej(er as Error);
 						child.kill();
 					};
 					child.once("exit", onExit);

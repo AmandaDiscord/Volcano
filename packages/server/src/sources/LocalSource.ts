@@ -25,9 +25,9 @@ class LocalSource extends Plugin {
 				{
 					identifier: resource,
 					uri: resource,
-					author: meta.common.artist || "Unknown author",
-					length: Math.round((meta.format.duration || 0) * 1000),
-					title: meta.common.title || "Unknown title",
+					author: meta.common.artist ?? "Unknown author",
+					length: Math.round((meta.format.duration ?? 0) * 1000),
+					title: meta.common.title ?? "Unknown title",
 					isStream: false,
 					probeInfo: {
 						raw: fileEnding,

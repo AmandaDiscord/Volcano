@@ -4,7 +4,7 @@ import * as dl from "play-dl";
 import ytmapi from "ytmusic-api";
 import { Plugin } from "volcano-sdk";
 
-const ytm = new ytmapi.default();
+const ytm = new ytmapi();
 const usableRegex = /^https:\/\/(?:(?:www\.)|(?:music\.)|(?:m\.))?youtu\.?be(?:\.com)?\//;
 const httpRegex = /^https:\/\//;
 
@@ -62,10 +62,10 @@ class YouTubeSource extends Plugin {
 				return {
 					entries: tracks.map(t => ({
 						title: t.name,
-						author: t.artists[0]?.name || "Unknown author",
+						author: t.artist.name ?? "Unknown author",
 						identifier: t.videoId,
 						uri: `https://youtube.com/watch?v=${t.videoId}`,
-						length: Math.round(t.duration * 1000),
+						length: Math.round((t.duration ?? 0) * 1000),
 						isStream: t.duration === 0
 					})),
 					loadType: "SEARCH_RESULT" as const
@@ -138,9 +138,9 @@ class YouTubeSource extends Plugin {
 		}
 		return {
 			identifier: i.id,
-			title: i.title || "Unknown title",
+			title: i.title ?? "Unknown title",
 			length,
-			author: i.channel?.name || "Unknown author",
+			author: i.channel?.name ?? "Unknown author",
 			uri: `https://youtube.com/watch?v=${i.id}`,
 			isStream: length === 0
 		};
@@ -205,7 +205,7 @@ class YouTubeSource extends Plugin {
 			}
 
 			if (id || plid || search) {
-				if (search) return { type: "search", search, site: site || "yt" } as R;
+				if (search) return { type: "search", search, site: site ?? "yt" } as R;
 				else if (id && plid) return { type: "playlist_with_watch", v: id, list: plid, index: Number(url.searchParams.get("index") ?? 0) } as R;
 				else if (plid) return { type: "playlist", list: plid } as R;
 				else return { type: "video", v: id } as R;

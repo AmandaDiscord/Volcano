@@ -5,7 +5,7 @@
 	"main": "index.js",
 	"types": "index.d.ts",
 	"scripts": {
-		"lint": "eslint . --ext js,ts",
+		"lint": "eslint .",
 		"build": "node prebuild.js && tsc -p ./server-tsconfig.json",
 		"postinstall": "npm run build"
 	},
@@ -21,9 +21,9 @@
 	"author": "PapiOphidian",
 	"license": "MIT",
 	"dependencies": {
-		"@discordjs/voice": "^0.16.0",
-		"lavalink-types": "^2.0.2",
-		"uWebSockets.js": "uNetworking/uWebSockets.js#v20.20.0"
+		"@discordjs/voice": "^0.17.0",
+		"lavalink-types": "^2.1.1",
+		"uWebSockets.js": "https://github.com/uNetworking/uWebSockets.js.git#commit=f40213ec0a97d0d8721d9d32d92d6eb6ddcd22e7"
 	},
 	"bugs": {
 		"url": "https://github.com/AmandaDiscord/Volcano/issues"

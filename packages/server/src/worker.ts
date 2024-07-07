@@ -64,7 +64,7 @@ export class Queue {
 
 		this.player.on("stateChange", async (oldState, newState) => {
 			if (newState.status === Discord.AudioPlayerStatus.Idle && oldState.status !== Discord.AudioPlayerStatus.Idle) {
-				const track = this.track?.track || "unknown";
+				const track = this.track?.track ?? "unknown";
 				this.resource = null;
 				this.track = undefined;
 				// Do not log if stopping. Queue.stop will send its own STOPPED reason instead of FINISHED. Do not log if shouldntCallFinish obviously.
@@ -80,18 +80,18 @@ export class Queue {
 		});
 
 		this.player.on("error", (error) => {
-			sendToParent({ op: "event", type: "TrackExceptionEvent", guildId: this.guildID, encodedTrack: this.track?.track || "unknown", exception: { message: error.message, severity: "COMMON", cause: error.stack || new Error().stack || "unknown" } }, this.clientID);
+			sendToParent({ op: "event", type: "TrackExceptionEvent", guildId: this.guildID, encodedTrack: this.track?.track ?? "unknown", exception: { message: error.message, severity: "COMMON", cause: error.stack ?? new Error().stack ?? "unknown" } }, this.clientID);
 		});
 	}
 
 	public get state(): PlayerState & { guildId: string } {
-		const position = Math.floor(((this.resource?.playbackDuration || 0) + this.actions.seekTime) * this.actions.rate);
-		if (this.track && this.track.end && position >= this.track.end) this.stop(this.track.track, true);
+		const position = Math.floor(((this.resource?.playbackDuration ?? 0) + this.actions.seekTime) * this.actions.rate);
+		if (this.track?.end && position >= this.track.end) this.stop(this.track.track, true);
 		return {
 			time: Date.now(),
 			position: position,
 			connected: this.connection.state.status === Discord.VoiceConnectionStatus.Ready,
-			ping: this.connection.ping.ws || Infinity,
+			ping: this.connection.ping.ws ?? Infinity,
 			guildId: this.guildID
 		};
 	}
@@ -239,7 +239,7 @@ export class Queue {
 	public destroy() {
 		if (this.actions.destroyed) return;
 		this.actions.destroyed = true;
-		this.stop(this.track?.track || "unknown", true);
+		this.stop(this.track?.track ?? "unknown", true);
 		this.track = undefined;
 		this.connection.destroy(true);
 		queues.delete(`${this.clientID}.${this.guildID}`);
@@ -277,19 +277,19 @@ export class Queue {
 			toApply.push(bandSettings.map(i => `equalizer=width_type=h:gain=${Math.round(Math.log2(i.gain) * 12)}`).join(","));
 		}
 		if (filters.timescale) {
-			const rate = filters.timescale.rate || 1.0;
-			const pitch = filters.timescale.pitch || 1.0;
-			const speed = filters.timescale.speed || 1.0;
+			const rate = filters.timescale.rate ?? 1.0;
+			const pitch = filters.timescale.pitch ?? 1.0;
+			const speed = filters.timescale.speed ?? 1.0;
 			this.actions.rate = speed;
 			const speeddif = 1.0 - pitch;
 			const finalspeed = speed + speeddif;
 			const ratedif = 1.0 - rate;
 			toApply.push(`asetrate=48000*${pitch + ratedif},atempo=${finalspeed},aresample=48000`);
 		}
-		if (filters.tremolo) toApply.push(`tremolo=f=${filters.tremolo.frequency || 2.0}:d=${filters.tremolo.depth || 0.5}`);
-		if (filters.vibrato) toApply.push(`vibrato=f=${filters.vibrato.frequency || 2.0}:d=${filters.vibrato.depth || 0.5}`);
-		if (filters.rotation) toApply.push(`apulsator=hz=${filters.rotation.rotationHz || 0}`);
-		if (filters.lowPass) toApply.push(`lowpass=f=${500 / filters.lowPass.smoothing}`);
+		if (filters.tremolo) toApply.push(`tremolo=f=${filters.tremolo.frequency ?? 2.0}:d=${filters.tremolo.depth ?? 0.5}`);
+		if (filters.vibrato) toApply.push(`vibrato=f=${filters.vibrato.frequency ?? 2.0}:d=${filters.vibrato.depth ?? 0.5}`);
+		if (filters.rotation) toApply.push(`apulsator=hz=${filters.rotation.rotationHz ?? 0}`);
+		if (filters.lowPass) toApply.push(`lowpass=f=${500 / (filters.lowPass.smoothing ?? 0)}`);
 
 		this._filters.push(...toApply);
 		const previouslyApplying = this.actions.applyingFilters;
@@ -337,7 +337,7 @@ export function onPlayerUpdate(clientID: string, guildID: string, data: UpdatePl
 		if (!track && q.track) q.stop(q.track.track);
 		if (track) {
 			if (noReplace && q.track) console.log("Skipping play request because of noReplace");
-			else q.queue({ track: track, start: Number(withEncoded.position || "0"), end: Number(withEncoded.endTime || "0"), volume: Number(withEncoded.volume || "100"), pause: withEncoded.paused || false });
+			else q.queue({ track: track, start: Number(withEncoded.position ?? "0"), end: Number(withEncoded.endTime ?? "0"), volume: Number(withEncoded.volume ?? "100"), pause: withEncoded.paused ?? false });
 		}
 	}
 	if (data.volume !== undefined) {

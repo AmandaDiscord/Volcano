@@ -5,7 +5,7 @@ export const defaultOptions = {
 		}
 	},
 	server: {
-		port: Number(process.env.PORT || 2333),
+		port: Number(process.env.PORT ?? 2333),
 		address: "0.0.0.0"
 	},
 	lavalink: {

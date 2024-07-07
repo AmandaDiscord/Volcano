@@ -72,7 +72,7 @@ app.get(`/v${lavalinkMajor}/loadtracks`, async (res, req) => {
 		const payload = JSON.stringify(result.result);
 		res.writeStatus("200 OK");
 		Util.assignHeadersToResponse(res, Constants.baseHTTPResponseHeaders);
-		return res.end(payload, true);
+		return void res.end(payload, true);
 	}
 });
 
@@ -92,7 +92,7 @@ app.get(`/v${lavalinkMajor}/decodetrack`, (res, req) => {
 	const payload = JSON.stringify(data);
 	res.writeStatus("200 OK");
 	Util.assignHeadersToResponse(res, Constants.baseHTTPResponseHeaders);
-	return res.end(payload, true);
+	return void res.end(payload, true);
 });
 
 
@@ -110,7 +110,7 @@ app.post(`/v${lavalinkMajor}/decodetracks`, async (res, req) => {
 	const payload = JSON.stringify(data);
 	res.writeStatus("200 OK");
 	Util.assignHeadersToResponse(res, Constants.baseHTTPResponseHeaders);
-	return res.end(payload, true);
+	return void res.end(payload, true);
 });
 
 
@@ -158,7 +158,7 @@ app.get(`/v${lavalinkMajor}/info`, async (res, req) => {
 	const payload = JSON.stringify(data);
 	res.writeStatus("200 OK");
 	Util.assignHeadersToResponse(res, Constants.baseHTTPResponseHeaders);
-	return res.end(payload, true);
+	return void res.end(payload, true);
 });
 
 
@@ -173,7 +173,7 @@ app.get(`/v${lavalinkMajor}/stats`, async (res, req) => {
 	const payload = JSON.stringify(data);
 	res.writeStatus("200 OK");
 	Util.assignHeadersToResponse(res, Constants.baseHTTPResponseHeaders);
-	return res.end(payload, true);
+	return void res.end(payload, true);
 });
 
 
@@ -185,7 +185,7 @@ app.get("/version", (res, req) => {
 	res.writeStatus("200 OK")
 		.writeHeader("Content-Type", "text/plain")
 		.writeHeader("Lavalink-Api-Version", lavalinkMajor);
-	return res.end(payload, true);
+	return void res.end(payload, true);
 });
 
 
@@ -236,7 +236,7 @@ app.get(`/v${lavalinkMajor}/sessions/:sessionID/players`, async (res, req) => {
 	const payload = JSON.stringify(data);
 	res.writeStatus("200 OK");
 	Util.assignHeadersToResponse(res, Constants.baseHTTPResponseHeaders);
-	return res.end(payload, true);
+	return void res.end(payload, true);
 });
 
 
@@ -288,7 +288,7 @@ app.get(`/v${lavalinkMajor}/sessions/:sessionID/players/:guildID`, async (res, r
 	const payload = JSON.stringify(data);
 	res.writeStatus("200 OK");
 	Util.assignHeadersToResponse(res, Constants.baseHTTPResponseHeaders);
-	return res.end(payload, true);
+	return void res.end(payload, true);
 });
 app.patch(`/v${lavalinkMajor}/sessions/:sessionID/players/:guildID`, async (res, req) => {
 	if (!Util.authenticate(req, res)) return;
@@ -329,7 +329,7 @@ app.patch(`/v${lavalinkMajor}/sessions/:sessionID/players/:guildID`, async (res,
 	const stringified = JSON.stringify(payload);
 	res.writeStatus("200 OK");
 	Util.assignHeadersToResponse(res, Constants.baseHTTPResponseHeaders);
-	return res.end(stringified, true);
+	return void res.end(stringified, true);
 });
 app.del(`/v${lavalinkMajor}/sessions/:sessionID/players/:guildID`, async (res, req) => {
 	if (!Util.authenticate(req, res)) return;
@@ -371,7 +371,7 @@ app.patch(`/v${lavalinkMajor}/sessions/:sessionID`, async (res, req) => {
 	const stringified = JSON.stringify(payload);
 	res.writeStatus("200 OK");
 	Util.assignHeadersToResponse(res, Constants.baseHTTPResponseHeaders);
-	return res.end(stringified, true);
+	return void res.end(stringified, true);
 });
 
 
@@ -383,7 +383,7 @@ async function doTrackLoad(id?: string | null, logRequest = true): Promise<{ sym
 	if (!id || typeof id !== "string") return { error: new Error("Invalid or no identifier query string provided."), result: payload };
 
 	const identifier = entities.decode(id);
-	const match = identifier.match(IDRegex);
+	const match = IDRegex.exec(identifier);
 	if (!match) {
 		if (logRequest) console.log(`Got request to load for identifier "${identifier}"`);
 		return { error: new Error("Identifier did not match regex"), result: payload }; // Should theoretically never happen, but TypeScript doesn't know this
@@ -420,11 +420,8 @@ async function doTrackLoad(id?: string | null, logRequest = true): Promise<{ sym
 function assignResults(result: Awaited<ReturnType<NonNullable<import("volcano-sdk").Plugin["infoHandler"]>>>, source: string, payload: import("lavalink-types").TrackLoadingResult) {
 	if (result.source) source = result.source;
 	payload.tracks = result.entries.map(t => ({
-		encoded: encoding.encode(Object.assign({ flags: 1, version: 2, source: source, position: BigInt(0), probeInfo: t["probeInfo"] }, t, { length: BigInt(t.length) })),
-		info: Object.assign({ position: 0 }, (() => {
-			delete t["probeInfo"];
-			return Object.assign({}, t, { isSeekable: !t.isStream, sourceName: source }) as typeof t & { isSeekable: boolean; sourceName: string; };
-		})())
+		encoded: encoding.encode({ flags: 1, version: 2, source: source, position: BigInt(0), probeInfo: t["probeInfo"], ...t, length: BigInt(t.length) }),
+		info: { position: 0, ...(() => { delete t["probeInfo"]; return { ...t, isSeekable: !t.isStream, sourceName: source } })() }
 	}));
 	if (result.plData) payload.playlistInfo = result.plData;
 }

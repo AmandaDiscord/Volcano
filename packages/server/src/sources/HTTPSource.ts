@@ -28,13 +28,13 @@ class HTTPSource extends Plugin {
 		resource = followed.url;
 		const data = followed.data;
 
-		const mimeMatch = data.headers["content-type"]?.match(mimeRegex);
+		const mimeMatch = mimeRegex.exec(data.headers["content-type"]);
 		if (!mimeMatch || (mimeMatch[1] === "application" && !supportedApplicationTypes.includes(mimeMatch[2])) || (mimeMatch[1] === "audio" && unsupportedAudioTypes.includes(mimeMatch[2]))) {
 			data.end();
 			data.destroy();
 			for (const plugin of lavalinkPlugins) {
 				const result = await plugin.postHTTPProcessUnknown?.(resource, data.headers);
-				if (result && result.entries.length) {
+				if (result?.entries.length) {
 					if (!result.source && plugin.source) result.source = plugin.source;
 					return result;
 				}
@@ -92,11 +92,11 @@ class HTTPSource extends Plugin {
 		return {
 			entries: [
 				{
-					title: parsed.common.title || "Unknown title",
-					author: parsed.common.artist || "Unknown author",
+					title: parsed.common.title ?? "Unknown title",
+					author: parsed.common.artist ?? "Unknown author",
 					identifier: resource,
 					uri: resource,
-					length: Math.round((parsed.format.duration || 0) * 1000),
+					length: Math.round((parsed.format.duration ?? 0) * 1000),
 					isStream: chunked,
 					probeInfo: {
 						raw: probe,

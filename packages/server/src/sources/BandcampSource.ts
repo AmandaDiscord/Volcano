@@ -37,7 +37,7 @@ class BandcampSource extends Plugin {
 		const html = await fetch(info.uri!, { redirect: "follow", headers: this.utils.Constants.baseHTTPRequestHeaders }).then(d => d.text());
 		const parser = htmlParse.default(html);
 		const head = parser.getElementsByTagName("head")[0];
-		const stream = head.toString().match(streamRegex);
+		const stream = streamRegex.exec(head.toString());
 		if (!stream) throw new Error("There was no stream URL for that track");
 		const response = await this.utils.connect(entities.decode(stream[1].replace("&quot;", "")), { headers: this.utils.Constants.baseHTTPRequestHeaders });
 
@@ -47,7 +47,7 @@ class BandcampSource extends Plugin {
 	private static parse(html: string) {
 		const parser = htmlParse.default(html);
 		const head = parser.getElementsByTagName("head")[0];
-		const script = head.querySelector("script[type=\"application/ld+json\"]")?.innerHTML || "{}";
+		const script = head.querySelector("script[type=\"application/ld+json\"]")?.innerHTML ?? "{}";
 		const data = JSON.parse(script);
 		if (!data.name) throw new Error("No information about that track was given");
 		return data;
@@ -65,7 +65,7 @@ class BandcampSource extends Plugin {
 	}
 
 	private static getDurationFromString(duration: string) {
-		const match = duration?.match(durationRegex);
+		const match = durationRegex.exec(duration);
 		if (!match) return 0;
 		const hours = Number(match[1]);
 		const minutes = Number(match[2]);
