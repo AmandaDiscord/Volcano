@@ -10,7 +10,7 @@
 		"create-release": "node ./scripts/release.js",
 		"auth-gen": "node ./scripts/auth-gen.js",
 		"dep-report": "node ./scripts/generateDependencyReport.js",
-		"lint": "eslint . -c eslint.config.js"
+		"lint": "eslint . -c eslint.config.cjs"
 	},
 	"engines": {
 		"node": ">=18.0.0",

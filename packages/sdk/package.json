@@ -5,7 +5,7 @@
 	"main": "index.js",
 	"types": "index.d.ts",
 	"scripts": {
-		"lint": "eslint .",
+		"lint": "eslint . -c eslint.config.cjs",
 		"build": "node prebuild.js && tsc -p ./server-tsconfig.json",
 		"postinstall": "npm run build"
 	},
