@@ -9,7 +9,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '21.x'
+          node-version: '22.12'
 
       - name: Install, Compile, and create build info for server
         run: |
@@ -21,7 +21,7 @@ jobs:
           npm --prefix ./packages/server run build
           npm --prefix ./packages/server run create-release
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v7
         with:
           name: server-artifact
           path: |
@@ -38,7 +38,7 @@ jobs:
             PUBLIC_SERVERS.md
             README.md
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v7
         with:
           name: sdk-artifact
           path: |
