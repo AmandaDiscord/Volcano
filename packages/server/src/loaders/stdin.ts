@@ -44,12 +44,16 @@ async function install(url: string) {
 	await fs.promises.writeFile(installDir, Buffer.from(await jsFile.arrayBuffer()), { flag: "w" });
 	if (fetched.dependencies) {
 		const pkg = JSON.parse(await fs.promises.readFile(path.join(lavalinkDirname, "../package.json"), "utf-8"));
+		const alreadyInVolcanoDeps = new Set(Object.keys(pkg.dependencies));
 		for (const dep of Object.keys(pkg.dependencies)) delete fetched.dependencies[dep];
 		if (Object.keys(fetched.dependencies).length) {
 			try {
 				await new Promise((res, rej) => {
 					const command = process.platform === "win32" ? "yarn.cmd" : "yarn";
-					const add = (Object.entries(fetched.dependencies) as unknown as [string, string]).map(([d, ver]) => ver.startsWith("github:") ? `${d}@https://github.com/${ver.replace("github:", "")}` : `${d}@${ver.replace(versionSpecifierRegex, "")}`).join(" ");
+					const add = (Object.entries(fetched.dependencies) as unknown as [string, string])
+						.filter(([d, _ver]) => !alreadyInVolcanoDeps.has(d)) // prevent duping already in volcano's deps
+						.map(([d, ver]) => ver.startsWith("github:") ? `${d}@https://github.com/${ver.replace("github:", "")}` : `${d}@${ver.replace(versionSpecifierRegex, "")}`)
+						.join(" ");
 					console.log("Adding child packages", add);
 					const child = spawn(command, ["add", add], { cwd: path.join(lavalinkDirname, "../") });
 					child.stdout.pipe(process.stdout);
