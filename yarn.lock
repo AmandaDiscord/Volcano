@@ -3671,10 +3671,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"uWebSockets.js@https://github.com/uNetworking/uWebSockets.js.git#commit=dddd8ffd1b2c28a66022160923ca92f064cdacb4":
-  version: 20.69.0
-  resolution: "uWebSockets.js@https://github.com/uNetworking/uWebSockets.js.git#commit=dddd8ffd1b2c28a66022160923ca92f064cdacb4"
-  checksum: f543a3d331e2cd2f5744841280fc725b21d61a36ee48f13128dff9c7f5fc8c2fce5effc2d6ce8ece252cab4b5671dbb8dc103660f06da637a2b3dd6d625b95bc
+"uWebSockets.js@https://github.com/uNetworking/uWebSockets.js.git#v20.70.0":
+  version: 20.70.0
+  resolution: "uWebSockets.js@https://github.com/uNetworking/uWebSockets.js.git#commit=b1092c70692ddbcc87464a77da44848614f6342a"
+  checksum: b12c60843a795fbddccd7cc4f62d46b23a3368985baf5c9bb7dbd90284c0feb66646384753b0f9f6ebb8fe7471135298536b5b55a9ac678762ee1eda48c3f816
   languageName: node
   linkType: hard
 
@@ -3788,7 +3788,7 @@ __metadata:
   dependencies:
     "@discordjs/voice": ^0.19.2
     lavalink-types: ^3.1.0
-    uWebSockets.js: "https://github.com/uNetworking/uWebSockets.js.git#commit=dddd8ffd1b2c28a66022160923ca92f064cdacb4"
+    uWebSockets.js: "https://github.com/uNetworking/uWebSockets.js.git#v20.70.0"
     volcano-encoding: 1.0.0
   languageName: unknown
   linkType: soft
@@ -3807,7 +3807,7 @@ __metadata:
     node-av: ^6.1.1
     node-html-parser: ^9.0.4
     twitch-m3u8: "github:AmandaDiscord/twitch-m3u8#ba927b26fb3c5cb118d75c20f990c5cce8a1ae7a"
-    uWebSockets.js: "https://github.com/uNetworking/uWebSockets.js.git#commit=dddd8ffd1b2c28a66022160923ca92f064cdacb4"
+    uWebSockets.js: "https://github.com/uNetworking/uWebSockets.js.git#v20.70.0"
     volcano-encoding: 1.0.0
     volcano-sdk: 2.0.0-rc.2
     yaml: ^2.9.1

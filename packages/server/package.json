@@ -11,9 +11,7 @@
 		"dep-report": "node ./scripts/generateDependencyReport.js"
 	},
 	"engines": {
-		"node": ">=22.12.0",
-		"npm": ">=8.0.0",
-		"yarn": ">=3.2.0"
+		"node": ">=22.12.0"
 	},
 	"repository": {
 		"type": "git",
@@ -39,7 +37,7 @@
 		"node-av": "^6.1.1",
 		"node-html-parser": "^9.0.4",
 		"twitch-m3u8": "github:AmandaDiscord/twitch-m3u8#ba927b26fb3c5cb118d75c20f990c5cce8a1ae7a",
-		"uWebSockets.js": "https://github.com/uNetworking/uWebSockets.js.git#commit=dddd8ffd1b2c28a66022160923ca92f064cdacb4",
+		"uWebSockets.js": "https://github.com/uNetworking/uWebSockets.js.git#v20.70.0",
 		"volcano-encoding": "1.0.0",
 		"volcano-sdk": "2.0.0-rc.2",
 		"yaml": "^2.9.1",

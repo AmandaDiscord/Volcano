@@ -18,8 +18,9 @@ jobs:
           mv ./.yarnrc.nopath.yml ./.yarnrc.yml
           yarn set version 3.3.0
           yarn install
-          npm --prefix ./packages/server run build
+          yarn build
           npm --prefix ./packages/server run create-release
+          npm pkg delete packageManager
 
       - uses: actions/upload-artifact@v7
         with:
@@ -34,6 +35,8 @@ jobs:
             packages/encoding/index.d.ts
             packages/encoding/package.json
             packages/encoding/LICENSE
+            packages/sdk/index.js
+            packages/sdk/package.json
             PLUGINS.md
             PUBLIC_SERVERS.md
             README.md

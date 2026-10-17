@@ -28,6 +28,8 @@ Read PLUGINS.md for more info and how to install
 # Usage
 Download the latest release from https://github.com/AmandaDiscord/Volcano/releases
 
+Install deps from the extracted folder with `npm install --omit=dev` or `yarn install --production`. `volcano-sdk` and `volcano-encoding` come from `packages/`. The `volcano-sdk` on npm is someone else's.
+
 Starting Volcano could be done by cding into the Volcano folder and then typing `npm run start` or starting the dist/index.js file. The package.json links to the index in the dist folder.
 Be careful with what current working directory you end up using because Volcano will try to read your application.yml config file based on the cwd and then fallback to default options (the exact behavior of LavaLink)
 
