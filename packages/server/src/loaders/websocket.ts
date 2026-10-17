@@ -58,7 +58,6 @@ export function handleWSUpgrade(userID: string, resumeID: string, response: Http
 	if (resume) {
 		clearTimeout(resume.timeout);
 		detachedSessions.delete(resume.sessionID);
-		for (const guildID of resume.players) detachedPlayers.delete(`${userID}.${guildID}`);
 		sessionId = resume.sessionID;
 		console.log(`Resumed session ${sessionId}`);
 		console.log(`Replaying ${resume.events.length.toLocaleString()} events`);
@@ -92,13 +91,22 @@ export function handleWSUpgrade(userID: string, resumeID: string, response: Http
 export function onWSOpen(ws: WebSocket<SessionData>): void {
 	const data = ws.getUserData();
 	connections.set(data.sessionID, ws);
-	for (const guildID of data.players) playerMap.set(`${data.userID}.${guildID}`, ws);
-
-	ws.send(JSON.stringify({ op: "ready", resumed: data.resumed, sessionId: data.sessionID } as ReadyOP));
-	for (const event of data.events) ws.send(Util.stringify(event));
-	data.events.length = 0;
-	ws.ping();
-	Util.getStats(data).then(stats => sendStats(data.sessionID, ws, stats)).catch(() => void 0);
+	// Anything sent in open shares a packet with the 101 and clients like cloudstorm's BetterWs drop it. Lavalink's ready comes later too
+	setTimeout(() => {
+		if (connections.get(data.sessionID) !== ws) return;
+		// Until now a resumed player's events still went to its detached session, whose array is data.events
+		for (const guildID of data.players) {
+			detachedPlayers.delete(`${data.userID}.${guildID}`);
+			playerMap.set(`${data.userID}.${guildID}`, ws);
+		}
+		ws.cork(() => {
+			ws.send(JSON.stringify({ op: "ready", resumed: data.resumed, sessionId: data.sessionID } as ReadyOP));
+			for (const event of data.events) ws.send(Util.stringify(event));
+			data.events.length = 0;
+			ws.ping();
+		});
+		Util.getStats(data).then(stats => sendStats(data.sessionID, ws, stats)).catch(() => void 0);
+	}, 1);
 }
 
 /** Sends stats unless the socket closed while they were being gathered. */
@@ -127,7 +135,8 @@ export function onWSClose(ws: WebSocket<SessionData>, closeCode: number): void {
 		userID: data.userID,
 		resumeTimeout: data.resumeTimeout,
 		players: [...data.players],
-		events: [],
+		// Not empty if the socket closed before open's deferred replay
+		events: data.events,
 		timeout: setTimeout(() => expireDetached(detached), data.resumeTimeout * 1000)
 	};
 	detachedSessions.set(data.sessionID, detached);

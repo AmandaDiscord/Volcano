@@ -8,6 +8,8 @@ import { Plugin } from "volcano-sdk";
 const usableRegex = /^https:\/\/(?:www\.)?twitch\.tv/;
 const vodRegex = /\/videos\/(\d+)$/;
 const channelRegex = /twitch\.tv\/([^/]+)/;
+// Live calls it audio_only and VODs Audio Only
+const audioOnlyRegex = /^audio.only$/i;
 
 /** twitch-m3u8 throws a TypeError when Twitch has no token for the name and a 404 error when the channel is offline. Lavalink finds nothing for both */
 const noStream = (e: Error): Array<import("twitch-m3u8").Stream> => {
@@ -27,7 +29,7 @@ class TwitchSource extends Plugin {
 		if (vod) {
 			const data = await (twitch.getVod(vod[1]) as Promise<Array<import("twitch-m3u8").Stream>>).catch(noStream);
 			if (!data.length) return { entries: [] };
-			const audioOnly = data.find(d => d.quality === "Audio only");
+			const audioOnly = data.find(d => audioOnlyRegex.test(d.quality));
 			const chosen = audioOnly ?? data[0];
 			const streamerName = chosen.url.split("_").slice(1, audioOnly ? -3 : -2).join("_");
 			const res = await fetch(resource, { redirect: "follow", headers: this.utils.Constants.baseHTTPRequestHeaders }).then(r => r.text());
@@ -79,7 +81,7 @@ class TwitchSource extends Plugin {
 		const user = channelRegex.exec(info.uri!);
 		const streams = await twitch[vod ? "getVod" : "getStream"](vod ? vod[1] : user![1]) as Array<import("twitch-m3u8").Stream>;
 		if (!streams.length) throw new Error("There were no available streams for playback");
-		const audioOnly = streams.find(d => d.quality === "Audio only");
+		const audioOnly = streams.find(d => audioOnlyRegex.test(d.quality));
 		const chosen = audioOnly ?? streams[0];
 		return { stream: m3u8(chosen.url) };
 	}

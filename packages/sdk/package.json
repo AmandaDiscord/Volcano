@@ -1,6 +1,6 @@
 {
 	"name": "volcano-sdk",
-	"version": "2.0.0-rc.2",
+	"version": "2.0.0",
 	"description": "An SDK for creating Plugins for Volcano",
 	"main": "index.js",
 	"types": "index.d.ts",

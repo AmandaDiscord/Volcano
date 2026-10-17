@@ -41,7 +41,7 @@ async function install(url: string) {
 
 	const jsFile = await fetch(parsed.toString());
 	const installDir = path.join(lavalinkDirname, "../plugins", fetched.main);
-	await fs.promises.writeFile(installDir, Buffer.from(await jsFile.arrayBuffer()));
+	await fs.promises.writeFile(installDir, Buffer.from(await jsFile.arrayBuffer()), { flag: "w" });
 	if (fetched.dependencies) {
 		const pkg = JSON.parse(await fs.promises.readFile(path.join(lavalinkDirname, "../package.json"), "utf-8"));
 		for (const dep of Object.keys(pkg.dependencies)) delete fetched.dependencies[dep];

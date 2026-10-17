@@ -2737,13 +2737,13 @@ __metadata:
   languageName: node
   linkType: hard
 
-"m3u8stream@npm:^0.8.6":
-  version: 0.8.6
-  resolution: "m3u8stream@npm:0.8.6"
+"m3u8stream@github:AmandaDiscord/node-m3u8stream#bd85c3133f6c74a01880481e1446b726d7cf5e7b":
+  version: 0.8.3
+  resolution: "m3u8stream@https://github.com/AmandaDiscord/node-m3u8stream.git#commit=bd85c3133f6c74a01880481e1446b726d7cf5e7b"
   dependencies:
     miniget: ^4.2.2
     sax: ^1.2.4
-  checksum: b8f61c1101dd3ad873ff2f3d0e9e6a5139ad17e20990b89ae67f2585043bc2b727151ed85f3e58aabc8a1a95af28e1ee26f69af6ac9e8841ff68129eae2f5ac5
+  checksum: 559e25b7a5ef078964ae61c9711fb636af07fa34b16c15e3a010716baaaf9d4cea8066b9594d3282fed4c0879cf5cabd9c5c8821a05e089bcb524600ab1c3eae
   languageName: node
   linkType: hard
 
@@ -3782,7 +3782,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"volcano-sdk@2.0.0-rc.2, volcano-sdk@workspace:packages/sdk":
+"volcano-sdk@2.0.0, volcano-sdk@workspace:packages/sdk":
   version: 0.0.0-use.local
   resolution: "volcano-sdk@workspace:packages/sdk"
   dependencies:
@@ -3802,14 +3802,14 @@ __metadata:
     html-entities: ^2.6.0
     lavalink-types: 3.1.0
     libsodium-wrappers: 0.8.4
-    m3u8stream: ^0.8.6
+    m3u8stream: "github:AmandaDiscord/node-m3u8stream#bd85c3133f6c74a01880481e1446b726d7cf5e7b"
     music-metadata: ^12.2.1
     node-av: ^6.1.1
     node-html-parser: ^9.0.4
     twitch-m3u8: "github:AmandaDiscord/twitch-m3u8#ba927b26fb3c5cb118d75c20f990c5cce8a1ae7a"
     uWebSockets.js: "https://github.com/uNetworking/uWebSockets.js.git#v20.70.0"
     volcano-encoding: 1.0.0
-    volcano-sdk: 2.0.0-rc.2
+    volcano-sdk: 2.0.0
     yaml: ^2.9.1
     ytmusic-api: ^5.3.1
   languageName: unknown

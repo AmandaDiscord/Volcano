@@ -29,8 +29,10 @@ jobs:
             package.json
             packages/server/dist/
             packages/server/scripts/
+            packages/server/plugins
             LICENSE
             packages/server/package.json
+            packages/server/plugin-manifest.json
             packages/encoding/index.js
             packages/encoding/index.d.ts
             packages/encoding/package.json

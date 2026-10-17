@@ -1,6 +1,6 @@
 {
     "name": "volcano",
-    "version": "2.0.0-rc.3",
+    "version": "2.0.0",
     "description": "A light-weight LavaLink compatible replacement",
     "author": "PapiOphidian",
     "private": true,
