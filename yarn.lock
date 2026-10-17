@@ -2737,13 +2737,13 @@ __metadata:
   languageName: node
   linkType: hard
 
-"m3u8stream@github:AmandaDiscord/node-m3u8stream#bd85c3133f6c74a01880481e1446b726d7cf5e7b":
+"m3u8stream@https://github.com/AmandaDiscord/node-m3u8stream/archive/bd85c3133f6c74a01880481e1446b726d7cf5e7b.tar.gz":
   version: 0.8.3
-  resolution: "m3u8stream@https://github.com/AmandaDiscord/node-m3u8stream.git#commit=bd85c3133f6c74a01880481e1446b726d7cf5e7b"
+  resolution: "m3u8stream@https://github.com/AmandaDiscord/node-m3u8stream/archive/bd85c3133f6c74a01880481e1446b726d7cf5e7b.tar.gz"
   dependencies:
     miniget: ^4.2.2
     sax: ^1.2.4
-  checksum: 559e25b7a5ef078964ae61c9711fb636af07fa34b16c15e3a010716baaaf9d4cea8066b9594d3282fed4c0879cf5cabd9c5c8821a05e089bcb524600ab1c3eae
+  checksum: eca3e622ab9b5e47fb133fd663440b799ce44f2b92ff6d26a1d1f628d52261b13d86b6b8bddcceee2834dcaea13d159fb482cecf59dd5b4c1bdd5575a4ee7b98
   languageName: node
   linkType: hard
 
@@ -3802,7 +3802,7 @@ __metadata:
     html-entities: ^2.6.0
     lavalink-types: 3.1.0
     libsodium-wrappers: 0.8.4
-    m3u8stream: "github:AmandaDiscord/node-m3u8stream#bd85c3133f6c74a01880481e1446b726d7cf5e7b"
+    m3u8stream: "https://github.com/AmandaDiscord/node-m3u8stream/archive/bd85c3133f6c74a01880481e1446b726d7cf5e7b.tar.gz"
     music-metadata: ^12.2.1
     node-av: ^6.1.1
     node-html-parser: ^9.0.4

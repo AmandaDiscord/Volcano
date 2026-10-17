@@ -32,7 +32,7 @@
 		"backtracker": "^5.1.1",
 		"html-entities": "^2.6.0",
 		"libsodium-wrappers": "0.8.4",
-		"m3u8stream": "github:AmandaDiscord/node-m3u8stream#bd85c3133f6c74a01880481e1446b726d7cf5e7b",
+		"m3u8stream": "https://github.com/AmandaDiscord/node-m3u8stream/archive/bd85c3133f6c74a01880481e1446b726d7cf5e7b.tar.gz",
 		"music-metadata": "^12.2.1",
 		"node-av": "^6.1.1",
 		"node-html-parser": "^9.0.4",
