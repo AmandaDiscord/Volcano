@@ -1,0 +1,24 @@
+{
+	"name": "volcano-encoding",
+	"version": "1.0.0",
+	"description": "Encode & decode Lavaplayer tracks",
+	"main": "index.js",
+	"types": "index.d.ts",
+	"type": "module",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/AmandaDiscord/Volcano.git"
+	},
+	"keywords": [
+		"lavaplayer",
+		"lavalink",
+		"track"
+	],
+	"author": "natanbc, PapiOphidian",
+	"license": "Apache-2.0",
+	"files": [
+		"./index.js",
+		"./index.d.ts",
+		"./LICENSE"
+	]
+}

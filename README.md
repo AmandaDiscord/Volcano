@@ -16,8 +16,6 @@ What Volcano offers that LavaLink doesn't:
 - Is-Volcano handshake header
 
 What LavaLink offers that Volcano doesn't:
-- All filter op properties
-- Better filtering
 - Better support for SHOUTCast/ICECast
 - IPV6 requesting and rotation (There have been reports that YouTube doesn't ban IPs anymore, but should be taken with a grain of salt)
 - http proxying
@@ -33,10 +31,17 @@ Download the latest release from https://github.com/AmandaDiscord/Volcano/releas
 Starting Volcano could be done by cding into the Volcano folder and then typing `npm run start` or starting the dist/index.js file. The package.json links to the index in the dist folder.
 Be careful with what current working directory you end up using because Volcano will try to read your application.yml config file based on the cwd and then fallback to default options (the exact behavior of LavaLink)
 
+Volcano only settings go in a top level `volcano` section. Lavalink ignores it, so one application.yml works for both.
+
+| Key                     | Default    | What                                     |
+|-------------------------|------------|------------------------------------------|
+| `maxAudioThreads`       | core count | Max threads playing audio                |
+| `playersPerAudioThread` | 50         | Players per thread before another spawns |
+| `youtubeTimeout`        | 12000      | ms before a YouTube request gives up     |
+
 # Requirements
-Node 18 or above (global.fetch).
-FFMPEG will default to using what's installed on the machine and added to path before falling back to avconf and then using the binaries installed by ffmpeg-static.
-FFMPEG in path is preferable as it will almost always provide better performance depending on how you built it.
+Node 22.12 or above (uWebSockets.js ships binaries for Node 22, 24 and 26; @discordjs/voice requires 22.12).
+No FFmpeg install needed. node-av runs it in process
 
 # Performance
 Test Machine: 4 VCores, 8GB VALLOC memory, 200GB SSD. Running Ubuntu 20.04.2 LTS. Provided by Contabo, located in Saint Louis, Missouri.

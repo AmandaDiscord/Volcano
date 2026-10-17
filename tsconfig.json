@@ -1,12 +1,9 @@
 {
 	"compilerOptions": {
-		"allowSyntheticDefaultImports": true,
+		"strict": false,
 		"allowJs": true,
 		"checkJs": true,
-		"esModuleInterop": true,
 		"declaration": false,
-		"emitDecoratorMetadata": true,
-		"experimentalDecorators": true,
 		"incremental": false,
 		"lib": ["esnext", "dom"],
 		"module": "NodeNext",

@@ -1,23 +1,39 @@
 import type { HttpResponse, us_socket_context_t, WebSocket } from "uWebSockets.js";
 
-import type { EventOP, PlayerUpdateOP, StatsOP, ReadyOP, UpdateSessionResult } from "lavalink-types";
+import type { EventOP, PlayerUpdateOP, StatsOP, ReadyOP, UpdateSessionResult } from "lavalink-types/v4.js";
+import type { PlayerResponse } from "../worker.js";
 
 import Util from "../util/Util.js";
 
+import { lavalinkMajor } from "./lavalink.js";
+
 export type SessionData = {
 	userID: string;
-	resumeKey: string;
+	resuming: boolean;
 	resumeTimeout: number;
-	events: Array<any>;
+	events: Array<InternalMessage>;
 	players: Array<string>;
 	resumed: boolean;
 	sessionID: string;
 	ip: string;
 }
 
-const socketDeleteTimeouts = new Map<string, { timeout: NodeJS.Timeout; events: Array<any>; sessionID: string; }>();
+export type InternalMessage = EventOP | PlayerUpdateOP;
+
+/** A resumable session whose socket closed: its players keep running and their events are buffered until it resumes or times out. */
+type DetachedSession = {
+	sessionID: string;
+	userID: string;
+	resumeTimeout: number;
+	players: Array<string>;
+	events: Array<InternalMessage>;
+	timeout: NodeJS.Timeout;
+}
+
 const connections = new Map<string, WebSocket<SessionData>>();
 const playerMap = new Map<string, WebSocket<SessionData>>();
+const detachedSessions = new Map<string, DetachedSession>();
+const detachedPlayers = new Map<string, DetachedSession>();
 
 const UUIDCharacters = "abcdefghijklmnopqrstuvwxyz0123456789"; // Lavalink only generates session IDs with characters a-z and digits 0-9
 function generateUUID(length: number): string {
@@ -30,89 +46,115 @@ function generateUUID(length: number): string {
 	return result;
 }
 
-export function handleWSUpgrade(userID: string, resumeKey: string, response: HttpResponse, context: us_socket_context_t, secKey: string, secProtocol: string, secExtensions: string, ip: string, abortedInfo: { aborted: boolean }): void {
-	const resume = resumeKey.length ? socketDeleteTimeouts.get(resumeKey) : undefined;
-	let sessionId: string | undefined = undefined;
-	const events: Array<any> = [];
+/**
+ * @param resumeID the Session-Id header: the ID of a session that enabled resuming.
+ */
+export function handleWSUpgrade(userID: string, resumeID: string, response: HttpResponse, context: us_socket_context_t, secKey: string, secProtocol: string, secExtensions: string, ip: string, abortedInfo: { aborted: boolean }): void {
 	if (abortedInfo.aborted) return;
+	const candidate = resumeID.length ? detachedSessions.get(resumeID) : undefined;
+	const resume = candidate?.userID === userID ? candidate : undefined;
 
-	if (resumeKey && resume) {
-		sessionId = resume.sessionID;
+	let sessionId: string;
+	if (resume) {
 		clearTimeout(resume.timeout);
-		socketDeleteTimeouts.delete(resumeKey);
-
-		events.push(...resume.events);
-
-		console.log(`Resumed session with key ${resumeKey}`);
+		detachedSessions.delete(resume.sessionID);
+		for (const guildID of resume.players) detachedPlayers.delete(`${userID}.${guildID}`);
+		sessionId = resume.sessionID;
+		console.log(`Resumed session ${sessionId}`);
 		console.log(`Replaying ${resume.events.length.toLocaleString()} events`);
-		resume.events.length = 0;
-	}
-
-	if (!sessionId) {
+	} else {
 		console.log("Connection successfully established");
 		do {
 			sessionId = generateUUID(16);
-		} while (connections.has(sessionId));
+		} while (connections.has(sessionId) || detachedSessions.has(sessionId));
 	}
 
-	response.writeStatus("101 Switching Protocols");
-	response.writeHeader("Session-Resumed", `${String(!!resume)}`);
-	response.writeHeader("Lavalink-Major-Version", lavalinkMajor);
-	response.writeHeader("Is-Volcano", "true");
-	response.upgrade({
-		userID,
-		resumeKey,
-		resumeTimeout: 60,
-		events,
-		players: [],
-		resumed: !!resume,
-		sessionID: sessionId,
-		ip
-	} as SessionData, secKey, secProtocol, secExtensions, context);
+	response.cork(() => {
+		response.writeStatus("101 Switching Protocols");
+		response.writeHeader("Session-Resumed", `${String(!!resume)}`);
+		response.writeHeader("Lavalink-Major-Version", lavalinkMajor);
+		response.writeHeader("Lavalink-Api-Version", lavalinkMajor);
+		response.writeHeader("Is-Volcano", "true");
+		response.upgrade({
+			userID,
+			// resuming is opted into through PATCH /v4/sessions/{id}, so a resumed session keeps it on
+			resuming: !!resume,
+			resumeTimeout: resume?.resumeTimeout ?? 60,
+			events: resume?.events ?? [],
+			players: resume?.players ?? [],
+			resumed: !!resume,
+			sessionID: sessionId,
+			ip
+		} as SessionData, secKey, secProtocol, secExtensions, context);
+	});
 }
 
-export async function onWSOpen(ws: WebSocket<SessionData>) {
+export function onWSOpen(ws: WebSocket<SessionData>): void {
 	const data = ws.getUserData();
 	connections.set(data.sessionID, ws);
+	for (const guildID of data.players) playerMap.set(`${data.userID}.${guildID}`, ws);
 
-	const stats = await Util.getStats();
 	ws.send(JSON.stringify({ op: "ready", resumed: data.resumed, sessionId: data.sessionID } as ReadyOP));
-	ws.send(JSON.stringify(Object.assign(stats, { op: "stats" }) as StatsOP));
-	for (const event of data.events) {
-		ws.send(JSON.stringify(event));
-	}
+	for (const event of data.events) ws.send(Util.stringify(event));
+	data.events.length = 0;
 	ws.ping();
+	Util.getStats(data).then(stats => sendStats(data.sessionID, ws, stats)).catch(() => void 0);
 }
 
-export async function onWSClose(ws: WebSocket<SessionData>, closeCode: number): Promise<void> {
+/** Sends stats unless the socket closed while they were being gathered. */
+export function sendStats(sessionID: string, ws: WebSocket<SessionData>, stats: Awaited<ReturnType<typeof Util.getStats>>): void {
+	if (connections.get(sessionID) !== ws) return;
+	ws.send(JSON.stringify(Object.assign(stats, { op: "stats" }) as StatsOP));
+}
+
+/** Must be called synchronously from the close handler: uWS invalidates the socket once that handler returns. */
+export function onWSClose(ws: WebSocket<SessionData>, closeCode: number): void {
 	const data = ws.getUserData();
+	if (connections.get(data.sessionID) === ws) connections.delete(data.sessionID);
+	for (const guildID of data.players) {
+		const key = `${data.userID}.${guildID}`;
+		if (playerMap.get(key) === ws) playerMap.delete(key);
+	}
 
-	const worker = await import("../worker.js");
+	if (!data.resuming) {
+		destroyPlayers(data.userID, data.players).catch(() => void 0);
+		return;
+	}
 
-	const destroyAllQueues = () => {
-		if (data.resumeKey.length) socketDeleteTimeouts.delete(data.resumeKey);
-		connections.delete(data.sessionID);
-		const forUser = data.players.map(id => worker.queues.get(`${data.userID}.${id}`)).filter(i => !!i) as Array<import("../worker.js").Queue>;
-		for (const q of forUser) {
-			q.destroy();
-		}
-		console.log(`Shutting down ${forUser.length} playing players`);
+	console.log(`Connection closed from /${data.ip} with status CloseStatus[code=${closeCode}, reason=destroy] -- Session ${data.sessionID} can be resumed within the next ${data.resumeTimeout} seconds`);
+	const detached: DetachedSession = {
+		sessionID: data.sessionID,
+		userID: data.userID,
+		resumeTimeout: data.resumeTimeout,
+		players: [...data.players],
+		events: [],
+		timeout: setTimeout(() => expireDetached(detached), data.resumeTimeout * 1000)
 	};
-
-	if (data.resumeKey.length) {
-		console.log(`Connection closed from /${data.ip} with status CloseStatus[code=${closeCode}, reason=destroy] -- Session can be resumed within the next ${data.resumeTimeout} seconds with key ${data.resumeKey}`);
-
-		const timeout: NodeJS.Timeout = setTimeout(destroyAllQueues, (data.resumeTimeout) * 1000);
-		socketDeleteTimeouts.set(data.resumeKey, { sessionID: data.sessionID, timeout, events: [] });
-	} else destroyAllQueues();
+	detachedSessions.set(data.sessionID, detached);
+	for (const guildID of detached.players) detachedPlayers.set(`${data.userID}.${guildID}`, detached);
 }
 
-export function sendMessage(msg: { clientID: string; data: EventOP | PlayerUpdateOP }): void {
-	const ws = playerMap.get(`${msg.clientID}.${msg.data.guildId}`);
-	if (!ws) return;
-	const data = ws.getUserData();
-	if (data.resumeKey.length && socketDeleteTimeouts.has(data.resumeKey)) socketDeleteTimeouts.get(data.resumeKey)!.events.push(msg.data);
-	ws.send(JSON.stringify(msg.data));
+function expireDetached(detached: DetachedSession): void {
+	clearTimeout(detached.timeout);
+	if (detachedSessions.get(detached.sessionID) === detached) detachedSessions.delete(detached.sessionID);
+	for (const guildID of detached.players) {
+		const key = `${detached.userID}.${guildID}`;
+		if (detachedPlayers.get(key) === detached) detachedPlayers.delete(key);
+	}
+	destroyPlayers(detached.userID, detached.players).catch(() => void 0);
+}
+
+async function destroyPlayers(userID: string, guildIDs: Array<string>): Promise<void> {
+	const pool = await import("../util/ThreadPool.js");
+	const count = guildIDs.filter(id => pool.destroyPlayer(userID, id)).length;
+	console.log(`Shutting down ${count} playing players`);
+}
+
+export function sendMessage(msg: { clientID: string; data: InternalMessage }): void {
+	const key = `${msg.clientID}.${msg.data.guildId}`;
+	const ws = playerMap.get(key);
+	if (ws) ws.send(Util.stringify(msg.data));
+	else detachedPlayers.get(key)?.events.push(msg.data);
 }
 
 export function declareClientToPlayer(clientID: string, guildID: string, sessionID: string): void {
@@ -120,8 +162,7 @@ export function declareClientToPlayer(clientID: string, guildID: string, session
 	const socket = connections.get(sessionID);
 	if (!socket) return;
 	const data = socket.getUserData();
-	const existing = data.players.indexOf(guildID);
-	if (existing !== -1) return;
+	if (data.players.includes(guildID)) return;
 	playerMap.set(key, socket);
 	data.players.push(guildID);
 }
@@ -136,29 +177,30 @@ export function onPlayerDelete(clientID: string, guildID: string): void {
 	if (index !== -1) data.players.splice(index, 1);
 }
 
-export function updateResumeInfo(sessionID: string, resumeKey: string | null | undefined, resumeTimeout: number | undefined): UpdateSessionResult {
+export function updateResuming(sessionID: string, resuming: boolean | undefined, timeout: number | undefined): UpdateSessionResult {
 	const socket = connections.get(sessionID);
-	if (!socket) return { resumingKey: resumeKey ?? null, timeout: resumeTimeout ?? 60 };
+	if (!socket) return { resuming: resuming ?? false, timeout: timeout ?? 60 };
 	const data = socket.getUserData();
-	if (resumeKey !== undefined) data.resumeKey = resumeKey ?? "";
-	if (resumeTimeout !== undefined) data.resumeTimeout = resumeTimeout;
-	return { resumingKey: data.resumeKey.length ? data.resumeKey : null, timeout: data.resumeTimeout };
+	if (resuming !== undefined) data.resuming = resuming;
+	if (timeout !== undefined) data.resumeTimeout = timeout;
+	return { resuming: data.resuming, timeout: data.resumeTimeout };
 }
 
-export async function getQueuesForSession(sessionID: string): Promise<Array<import("../worker.js").Queue>> {
+export async function getPlayersForSession(sessionID: string): Promise<Array<PlayerResponse>> {
 	const socket = connections.get(sessionID);
 	if (!socket) return [];
 	const data = socket.getUserData();
-	const worker = await import("../worker.js");
-	return data.players.map(id => worker.queues.get(`${data.userID}.${id}`)).filter(i => !!i) as Array<import("../worker.js").Queue>;
+	const pool = await import("../util/ThreadPool.js");
+	const players = await Promise.all(data.players.map(id => pool.getPlayer(data.userID, id)));
+	return players.filter(p => !!p);
 }
 
-export async function getQueueForSession(sessionID: string, guildID: string): Promise<import("../worker.js").Queue | null> {
+export async function getPlayerForSession(sessionID: string, guildID: string): Promise<PlayerResponse | null> {
 	const socket = connections.get(sessionID);
 	if (!socket) return null;
-	const worker = await import("../worker.js");
 	const data = socket.getUserData();
-	return worker.queues.get(`${data.userID}.${guildID}`) ?? null;
+	const pool = await import("../util/ThreadPool.js");
+	return pool.getPlayer(data.userID, guildID);
 }
 
 export function getSession(sessionID: string) {
@@ -169,4 +211,4 @@ export function sessionExists(sessionID: string): boolean {
 	return connections.has(sessionID);
 }
 
-export default { handleWSUpgrade, sendMessage, declareClientToPlayer, onPlayerDelete, updateResumeInfo, getQueuesForSession, getSession, sessionExists };
+export default { handleWSUpgrade, onWSOpen, onWSClose, sendStats, sendMessage, declareClientToPlayer, onPlayerDelete, updateResuming, getPlayersForSession, getPlayerForSession, getSession, sessionExists };

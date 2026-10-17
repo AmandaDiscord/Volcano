@@ -1,8 +1,17 @@
-import * as dl from "play-dl";
+import { Readable } from "node:stream";
+
+import m3u8 from "m3u8stream";
 import { Plugin } from "volcano-sdk";
 
-const identifierRegex = /^O:/;
-const usableRegex = /^https:\/\/(?:on\.)?soundcloud\.(?:app\.goo\.)?(?:com|gl)/;
+import type { TrackInfo } from "volcano-sdk/types.js";
+
+type Json = Record<string, any>;
+
+const usableRegex = /^https:\/\/(?:on\.|m\.|www\.)?soundcloud\.(?:app\.goo\.)?(?:com|gl)/;
+const apiBase = "https://api-v2.soundcloud.com";
+const formatTypes = [["O:", "hls", "audio/ogg"], ["U:", "hls", "audio/mpeg"], ["M:", "progressive", "audio/mpeg"], ["X:", "hls", "audio/mp4"]];
+
+let clientID: Promise<string> | null = null;
 
 class SoundcloudSource extends Plugin {
 	public source = "soundcloud";
@@ -15,56 +24,106 @@ class SoundcloudSource extends Plugin {
 
 	public async infoHandler(resource: string, searchShort?: string) {
 		if (searchShort === this.searchShorts[0]) {
-			const results = await dl.search(resource, { source: { soundcloud: "tracks" } });
-			return { entries: results.map(SoundcloudSource.songResultToTrack) };
+			const results = await api(`${apiBase}/search/tracks?q=${encodeURIComponent(resource)}&limit=10`);
+			return { entries: toTracks(results.collection) };
 		}
 
 		const followed = await this.utils.followURLS(resource);
 		followed.data.end();
 		followed.data.destroy();
-		resource = followed.url;
 
-		let result: import("play-dl").SoundCloud;
+		let data: Json;
 		try {
-			result = await dl.soundcloud(resource);
+			data = await api(`${apiBase}/resolve?url=${encodeURIComponent(followed.url.replace("://m.", "://"))}`);
 		} catch {
 			throw new Error("There was an error trying to extract the soundcloud info");
 		}
 
-		if (result.type === "playlist") {
-			const playlist = result as import("play-dl").SoundCloudPlaylist;
-			await playlist.fetch();
-			return {
-				plData: {
-					name: playlist.name,
-					selectedTrack: 0
-				},
-				entries: (playlist.tracks as Array<import("play-dl").SoundCloudTrack>).map(SoundcloudSource.songResultToTrack)
-			};
+		if (data.kind === "track") {
+			const track = toTrack(data);
+			if (!track) throw new Error("SoundCloud has no playable format for this track");
+			return { entries: [track] };
 		}
 
-		if (result.type === "track") return { entries: [SoundcloudSource.songResultToTrack(result as import("play-dl").SoundCloudTrack)] };
+		if (data.kind !== "playlist") return { entries: [] };
 
-		throw new Error("Unsupported result type. Expected a playlist or a track. Users cannot be played.");
-	}
+		// Playlists only fully include their first few tracks
+		const stubs = (data.tracks as Array<Json>).filter(t => !t.media).map(t => t.id);
+		const full = new Map<number, Json>();
+		for (let i = 0; i < stubs.length; i += 50) {
+			for (const track of await api(`${apiBase}/tracks?ids=${stubs.slice(i, i + 50).join(",")}`)) full.set(track.id, track);
+		}
 
-	public async streamHandler(info: import("@lavalink/encoding").TrackInfo) {
-		const url = info.identifier.replace(identifierRegex, "");
-		const stream = await dl.stream_from_info(new dl.SoundCloudTrack({ user: {}, media: { transcodings: [{ format: { protocol: "hls", mime_type: "unknown" }, url: url }] } }));
-		return { stream: stream.stream, type: stream.type };
-	}
-
-	private static songResultToTrack(i: import("play-dl").SoundCloudTrack) {
-		if (!i.formats?.[0]) throw new Error("There were no stream URLs for one or multiple tracks returned by SoundCloud");
 		return {
-			identifier: `${i.formats[0].format.protocol === "hls" ? "O:" : ""}${i.formats[0].url}`,
-			author: i.user.name,
-			length: i.durationInMs,
-			isStream: false,
-			title: i.name,
-			uri: i.url
+			plData: { name: data.title, selectedTrack: -1 },
+			entries: toTracks(data.tracks.map((t: Json) => full.get(t.id) ?? t))
 		};
 	}
+
+	public async streamHandler(info: import("volcano-encoding").TrackInfo) {
+		let identifier = info.identifier;
+		let lookup = identifier.startsWith(`${apiBase}/`, 2) ? await api(identifier.slice(2)).catch(() => null) : null;
+		if (!lookup && info.uri) {
+			identifier = toTrack(await api(`${apiBase}/resolve?url=${encodeURIComponent(info.uri)}`))?.identifier ?? "";
+			if (identifier) lookup = await api(identifier.slice(2));
+		}
+		if (!lookup?.url) throw new Error("SoundCloud has no playable format for this track");
+
+		if (!identifier.startsWith("M:")) return { stream: m3u8(lookup.url) };
+		const res = await fetch(lookup.url);
+		if (!res.ok || !res.body) throw new Error(`SoundCloud responded with ${res.status} to the stream`);
+		return { stream: Readable.fromWeb(res.body as import("node:stream/web").ReadableStream) };
+	}
+}
+
+function toTrack(track: Json): TrackInfo | null {
+	if (track.policy === "BLOCK") return null;
+	for (const [prefix, protocol, mime] of formatTypes) {
+		const format = (track.media?.transcodings as Array<Json> | undefined)?.find(t => t.format?.protocol === protocol && t.format.mime_type?.split(";")[0] === mime);
+		if (format) {
+			return {
+				identifier: `${prefix}${format.url}`,
+				author: track.user.username,
+				length: track.full_duration,
+				isStream: false,
+				title: track.title,
+				uri: track.permalink_url,
+				// Same as Lavaplayer's ThumbnailTools.getSoundCloudThumbnail
+				artworkUrl: (track.artwork_url ?? track.user.avatar_url)?.replace("large.jpg", "original.jpg") ?? null,
+				isrc: track.publisher_metadata?.isrc ?? null
+			};
+		}
+	}
+	return null;
+}
+
+function toTracks(tracks: Array<Json>) {
+	return tracks.map(toTrack).filter(t => t !== null);
+}
+
+async function scrapeClientID() {
+	const html = await fetch("https://soundcloud.com/").then(r => r.text());
+	// It's in one of the page's script bundles, usually the last
+	for (const [, src] of Array.from(html.matchAll(/<script crossorigin src="([^"]+)"/g)).reverse()) {
+		const id = /client_id:"(\w+)"/.exec(await fetch(src).then(r => r.text()))?.[1];
+		if (id) return id;
+	}
+	throw new Error("Couldn't find SoundCloud's client_id");
+}
+
+async function api(url: string, retry = true): Promise<any> {
+	clientID ??= scrapeClientID().catch(e => {
+		clientID = null;
+		throw e;
+	});
+	const res = await fetch(`${url}${url.includes("?") ? "&" : "?"}client_id=${await clientID}`);
+	// SoundCloud rotates client_ids
+	if (res.status === 401 && retry) {
+		clientID = null;
+		return api(url, false);
+	}
+	if (!res.ok) throw new Error(`SoundCloud responded with ${res.status}`);
+	return res.json();
 }
 
 export default SoundcloudSource;

@@ -5,15 +5,13 @@
 	"main": "dist/index.js",
 	"type": "module",
 	"scripts": {
-		"build": "tsup",
+		"build": "tsc && node -e \"require('node:fs').cpSync('public', 'dist', { recursive: true })\"",
 		"start": "node --enable-source-maps --optimize_for_size .",
 		"create-release": "node ./scripts/release.js",
-		"auth-gen": "node ./scripts/auth-gen.js",
-		"dep-report": "node ./scripts/generateDependencyReport.js",
-		"lint": "eslint . -c eslint.config.cjs"
+		"dep-report": "node ./scripts/generateDependencyReport.js"
 	},
 	"engines": {
-		"node": ">=18.0.0",
+		"node": ">=22.12.0",
 		"npm": ">=8.0.0",
 		"yarn": ">=3.2.0"
 	},
@@ -32,26 +30,23 @@
 	"author": "PapiOphidian",
 	"license": "MIT",
 	"dependencies": {
-		"@discordjs/opus": "0.9.0",
-		"@discordjs/voice": "^0.17.0",
-		"@lavalink/encoding": "^0.1.2",
-		"backtracker": "^4.0.0",
-		"ffmpeg-static": "^5.2.0",
-		"html-entities": "^2.5.2",
-		"libsodium-wrappers": "0.7.13",
+		"@discordjs/voice": "^0.19.2",
+		"backtracker": "^5.1.1",
+		"html-entities": "^2.6.0",
+		"libsodium-wrappers": "0.8.4",
 		"m3u8stream": "^0.8.6",
-		"music-metadata": "^8.3.0",
-		"node-html-parser": "^6.1.13",
-		"play-dl": "^1.9.7",
+		"music-metadata": "^12.2.1",
+		"node-av": "^6.1.1",
+		"node-html-parser": "^9.0.4",
 		"twitch-m3u8": "github:AmandaDiscord/twitch-m3u8#ba927b26fb3c5cb118d75c20f990c5cce8a1ae7a",
-		"uWebSockets.js": "https://github.com/uNetworking/uWebSockets.js.git#commit=f40213ec0a97d0d8721d9d32d92d6eb6ddcd22e7",
+		"uWebSockets.js": "https://github.com/uNetworking/uWebSockets.js.git#commit=dddd8ffd1b2c28a66022160923ca92f064cdacb4",
+		"volcano-encoding": "1.0.0",
 		"volcano-sdk": "2.0.0-rc.2",
-		"yaml": "^2.4.5",
-		"ytmusic-api": "^5.2.2"
+		"yaml": "^2.9.1",
+		"ytmusic-api": "^5.3.1"
 	},
 	"devDependencies": {
-		"lavalink-types": "2.1.1",
-		"tsup": "^8.1.0"
+		"lavalink-types": "3.1.0"
 	},
 	"files": [
 		"./dist",

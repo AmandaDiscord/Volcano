@@ -1,6 +1,6 @@
-import { join, dirname } from "path";
-import { readFile, writeFile, readdir, stat } from "fs/promises";
-import { fileURLToPath } from "url";
+import { join, dirname } from "node:path";
+import { readFile, writeFile, readdir, stat } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 
 import Constants from "../dist/Constants.js";
 

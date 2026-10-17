@@ -5,20 +5,19 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Setup Node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: '21.x'
 
-      - name: Install, Lint, Compile, and create build info for server
+      - name: Install, Compile, and create build info for server
         run: |
           corepack enable
           rm ./.yarnrc.yml
           mv ./.yarnrc.nopath.yml ./.yarnrc.yml
           yarn set version 3.3.0
           yarn install
-          yarn run lint
           npm --prefix ./packages/server run build
           npm --prefix ./packages/server run create-release
 
@@ -31,6 +30,10 @@ jobs:
             packages/server/scripts/
             LICENSE
             packages/server/package.json
+            packages/encoding/index.js
+            packages/encoding/index.d.ts
+            packages/encoding/package.json
+            packages/encoding/LICENSE
             PLUGINS.md
             PUBLIC_SERVERS.md
             README.md

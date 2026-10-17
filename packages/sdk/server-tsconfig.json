@@ -2,12 +2,14 @@
 	"extends": "../../tsconfig.json",
 	"compilerOptions": {
 		"outDir": "./server-dts",
+		"rootDir": "../server/src",
 		"declaration": true,
 		"sourceMap": false,
 		"emitDeclarationOnly": true,
 		"removeComments": false
 	},
 	"include": [
+		"./index.d.ts",
 		"../server/src/Constants.ts",
 		"../server/src/util/Util.ts",
 		"../server/src/loaders/http.ts",

@@ -1,6 +1,6 @@
 {
     "name": "volcano",
-    "version": "2.0.0-rc.2",
+    "version": "2.0.0-rc.3",
     "description": "A light-weight LavaLink compatible replacement",
     "author": "PapiOphidian",
     "private": true,
@@ -8,17 +8,13 @@
         "packages/*"
     ],
     "scripts": {
-        "lint": "turbo run lint",
         "build": "turbo run build",
         "start": "node --enable-source-maps --optimize_for_size ./packages/server/dist/index.js"
     },
     "devDependencies": {
-        "@types/node": "^20.14.10",
-        "@typescript-eslint/eslint-plugin": "^7.15.0",
-        "@typescript-eslint/parser": "^7.15.0",
-        "eslint": "^9.6.0",
-        "turbo": "^2.0.6",
-        "typescript": "^5.5.3"
+        "@types/node": "^26.6.5",
+        "turbo": "^2.11.9",
+        "typescript": "^7.0.2"
     },
     "packageManager": "yarn@3.3.0"
 }

@@ -1,5 +1,4 @@
-import type { Readable } from "stream";
-import type { LoadType } from "lavalink-types";
+import type { Readable } from "node:stream";
 
 export type TrackInfo = {
 	title: string;
@@ -8,6 +7,8 @@ export type TrackInfo = {
 	uri: string;
 	length: number;
 	isStream: boolean;
+	artworkUrl?: string | null;
+	isrc?: string | null;
 };
 
 export type TrackData = {
@@ -16,7 +17,6 @@ export type TrackData = {
 		name: string;
 		selectedTrack: number;
 	};
-	loadType?: LoadType;
 	source?: string;
 };
 

@@ -6,9 +6,31 @@ import { Plugin } from "volcano-sdk";
 
 const mimeRegex = /^(audio|video|application)\/(.+)$/;
 const httpRegex = /^https?:\/\//;
-const supportedApplicationTypes = ["ogg", "x-mpegURL"];
-const unsupportedAudioTypes = ["midi"];
-const pcmTypes = ["pcm", "wav"];
+const supportedApplicationTypes = new Set(["ogg"]);
+const unsupportedAudioTypes = new Set(["midi"]);
+const playlistTypes = new Set(["x-scpls", "scpls", "x-mpegurl", "mpegurl", "vnd.apple.mpegurl"]);
+export const playlistExtRegex = /\.(?:pls|m3u8?)$/i;
+const plsFileRegex = /^File(\d+)=((?:https?|icy):\/\/.+)$/m;
+const playlistEntryRegex = /^(?:https?|icy):\/\//;
+const probeNames: Array<[RegExp, string]> = [
+	[/^(?:mpeg|mp3)$/i, "mp3"],
+	[/^(?:adts\b|aacp?$)/i, "adts"],
+	[/^(?:ebml\/|webm$|(?:x-)?matroska$|mk[av]$)/i, "matroska/webm"],
+	[/^(?:ogg|oga|opus)$/i, "ogg"],
+	[/^(?:wave?|x-wav|vnd\.wave)$/i, "wav"],
+	[/^(?:x-)?flac$/i, "flac"],
+	// music-metadata names MP4 by its brands, like M4A/isom/iso2
+	[/^(?:x-)?(?:m4[ab]|mp4\d?|isom|iso\d|dash|avc1|3gp\d*)\b/i, "mp4"]
+];
+
+/** Lavaplayer's probe name so Lavalink can decode the track. Hints are music-metadata's container, then a mime subtype or file extension */
+export function lavaplayerProbe(...hints: Array<string | undefined>) {
+	for (const hint of hints) {
+		const name = hint && probeNames.find(([regex]) => regex.test(hint))?.[1];
+		if (name) return name;
+	}
+	return (hints.find(Boolean) ?? "unknown").toLowerCase();
+}
 
 class HTTPSource extends Plugin {
 	public source = "http";
@@ -17,7 +39,7 @@ class HTTPSource extends Plugin {
 		return httpRegex.test(resource);
 	}
 
-	public async infoHandler(resource: string) {
+	public async infoHandler(resource: string, _searchShort?: string, depth = 0) {
 		let parsed: IAudioMetadata | undefined;
 		let isCast = false;
 		let isIcy = false;
@@ -28,8 +50,13 @@ class HTTPSource extends Plugin {
 		resource = followed.url;
 		const data = followed.data;
 
-		const mimeMatch = mimeRegex.exec(data.headers["content-type"]);
-		if (!mimeMatch || (mimeMatch[1] === "application" && !supportedApplicationTypes.includes(mimeMatch[2])) || (mimeMatch[1] === "audio" && unsupportedAudioTypes.includes(mimeMatch[2]))) {
+		const mimeMatch = mimeRegex.exec(data.headers["content-type"]?.toLowerCase() ?? "");
+		if (playlistTypes.has(mimeMatch?.[2] ?? "") || playlistExtRegex.test(new URL(resource).pathname)) {
+			const body = (await this.utils.responseBody(data)).toString();
+			if (!body.includes("#EXT-X-")) return this.followPlaylist(body, depth);
+			return { entries: [{ title: "Unknown title", author: "Unknown author", identifier: resource, uri: resource, length: 0, isStream: true, probeInfo: { raw: "m3u|hls-outer", name: "m3u", parameters: "hls-outer" } }] };
+		}
+		if (!mimeMatch || (mimeMatch[1] === "application" && !supportedApplicationTypes.has(mimeMatch[2])) || (mimeMatch[1] === "audio" && unsupportedAudioTypes.has(mimeMatch[2]))) {
 			data.end();
 			data.destroy();
 			for (const plugin of lavalinkPlugins) {
@@ -49,8 +76,8 @@ class HTTPSource extends Plugin {
 			});
 		}
 
-		chunked = !!data.headers["transfer-encoding"]?.includes("chunked") || isCast || (data.headers["content-type"] === "application/x-mpegURL");
-		probe = mimeMatch ? mimeMatch[2] : "*";
+		chunked = !!data.headers["transfer-encoding"]?.includes("chunked") || isCast;
+		probe = lavaplayerProbe(mimeMatch[2]);
 
 		// Is stream chunked? (SKIPS A LOT OF CHECKS AND JUST RUNS WITH IT)
 		// Will be more than just ice-cast in the future
@@ -64,10 +91,6 @@ class HTTPSource extends Plugin {
 				if (data.headers["icy-description"]) parsed!.common.artist = data.headers["icy-description"] as string;
 				if (data.headers["icy-name"]) parsed!.common.title = data.headers["icy-name"] as string;
 			}
-		} else if (data.headers["content-type"] === "application/x-mpegURL") {
-			data.end();
-			data.destroy();
-			parsed = { common: {}, format: {} } as IAudioMetadata;
 		} else {
 			const promise = parseStream(data, {
 				mimeType: data.headers["content-type"] || undefined,
@@ -81,7 +104,7 @@ class HTTPSource extends Plugin {
 			});
 			try {
 				parsed = await this.utils.createTimeoutForPromise(promise, 5000);
-				if (parsed.format.container) probe = parsed.format.container;
+				probe = lavaplayerProbe(parsed.format.container, mimeMatch[2]);
 			} catch {
 				parsed = { common: {}, format: {} } as IAudioMetadata;
 			}
@@ -108,16 +131,36 @@ class HTTPSource extends Plugin {
 		};
 	}
 
-	public async streamHandler(info: import("@lavalink/encoding").TrackInfo) {
-		if (info.probeInfo!.raw === "x-mpegURL" || info.uri!.endsWith(".m3u8")) return { stream: m3u8(info.uri!), type: StreamType.Arbitrary };
-		else {
-			const response = await this.utils.connect(info.uri!, { headers: this.utils.Constants.baseHTTPRequestHeaders });
-			let type: StreamType | undefined = undefined;
-			if (info.probeInfo!.raw === "ogg") type = StreamType.OggOpus;
-			else if (info.probeInfo!.raw === "opus") type = StreamType.Opus;
-			else if (pcmTypes.includes(info.probeInfo!.raw)) type = StreamType.Raw;
-			return { stream: response, type };
+	public async followPlaylist(body: string, depth: number): Promise<import("volcano-sdk/types.js").TrackData> {
+		if (depth >= 5) throw new Error("Too many nested playlist files");
+		let url: string | undefined = undefined;
+		let title: string | undefined = undefined;
+		const pls = plsFileRegex.exec(body);
+		if (pls) {
+			url = pls[2].trim();
+			title = new RegExp(`^Title${pls[1]}=(.+)$`, "m").exec(body)?.[1].trim();
+		} else {
+			for (const line of body.split(/\r?\n/)) {
+				if (line.startsWith("#EXTINF")) title = line.slice(line.indexOf(",") + 1).trim() || undefined;
+				else if (playlistEntryRegex.test(line)) {
+					url = line.trim();
+					break;
+				} else if (line && !line.startsWith("#")) title = undefined;
+			}
 		}
+		if (!url) throw new Error("The playlist file contains no links.");
+		const result = await this.infoHandler(url.replace(/^icy:/, "http:"), undefined, depth + 1);
+		// The stream's own metadata wins
+		if (title && result.entries[0]?.title === "Unknown title") result.entries[0].title = title;
+		return result;
+	}
+
+	public async streamHandler(info: import("volcano-encoding").TrackInfo) {
+		// x-mpegURL is how Volcano encoded HLS before
+		if (info.probeInfo?.name === "m3u" || info.probeInfo?.raw === "x-mpegURL" || info.uri!.endsWith(".m3u8")) return { stream: m3u8(info.uri!), type: StreamType.Arbitrary };
+		const { data: response } = await this.utils.followURLS(info.uri!);
+		// FFmpeg sniffs everything else, WAV headers included. Only headerless PCM needs telling
+		return { stream: response, type: info.probeInfo?.raw === "pcm" ? StreamType.Raw : undefined };
 	}
 }
 

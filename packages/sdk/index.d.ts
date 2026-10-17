@@ -1,4 +1,3 @@
-/* eslint-disable no-var */
 import { Plugin, LavaLinkConfig } from "./types";
 export { Plugin };
 

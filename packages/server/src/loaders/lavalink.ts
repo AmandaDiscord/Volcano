@@ -1,10 +1,9 @@
-import path from "path";
-import { fileURLToPath } from "url";
+import path from "node:path";
 
-global.lavalinkDirname = path.join(path.dirname(fileURLToPath(import.meta.url)));
+global.lavalinkDirname = path.join(import.meta.dirname, "..");
 global.lavalinkPlugins = [];
 global.lavalinkSources = new Set();
-global.lavalinkVersion = "3.7.5";
+global.lavalinkVersion = "4.2.2";
 global.lavalinkMajor = global.lavalinkVersion.split(".")[0];
 
 // taken from https://github.com/yarnpkg/berry/blob/2cf0a8fe3e4d4bd7d4d344245d24a85a45d4c5c9/packages/yarnpkg-pnp/sources/loader/applyPatch.ts#L414-L435

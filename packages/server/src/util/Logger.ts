@@ -1,5 +1,8 @@
+import { isMainThread, threadId } from "node:worker_threads";
+
 import { getStack } from "backtracker";
 
+const workerName = isMainThread ? "main" : `audio-${threadId}`;
 const workerNameMaxLogLength = 10;
 const scopeNameMaxLogLength = 20;
 
@@ -17,7 +20,7 @@ function getPrefix(type: "warn" | "info" | "error", worker: string) {
 
 function post(type: "info" | "warn" | "error", ...data: Array<any>): void {
 	const fn = type === "info" ? oldLog : type === "warn" ? oldWarn : oldErr;
-	fn(getPrefix(type, "main"), ...data);
+	fn(getPrefix(type, workerName), ...data);
 }
 
 console.log = post.bind(null, "info");

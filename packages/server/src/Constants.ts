@@ -1,4 +1,11 @@
+import os from "node:os";
+
 export const defaultOptions = {
+	volcano: {
+		maxAudioThreads: os.availableParallelism(),
+		playersPerAudioThread: 50,
+		youtubeTimeout: 12000
+	},
 	spring: {
 		main: {
 			"banner-mode": "log"
@@ -11,7 +18,6 @@ export const defaultOptions = {
 	lavalink: {
 		server: {
 			password: "youshallnotpass",
-			youtubeCookie: "",
 			sources: {
 				youtube: true,
 				bandcamp: true,
@@ -23,8 +29,8 @@ export const defaultOptions = {
 			trackStuckThresholdMs: 10000,
 			youtubePlaylistLoadLimit: 6,
 			playerUpdateInterval: 5,
+			opusEncodingQuality: 10,
 			youtubeSearchEnabled: true,
-			youtubeTimeout: 12000,
 			soundcloudSearchEnabled: true,
 			"gc-warnings": true,
 			ratelimit: {
@@ -50,7 +56,7 @@ export const defaultOptions = {
 };
 
 export const baseHTTPResponseHeaders = {
-	"Lavalink-Api-Version": "3" as const,
+	"Lavalink-Api-Version": "4" as const,
 	"Content-Type": "application/json" as const
 };
 
@@ -85,7 +91,7 @@ export const OPCodes = {
 	EVENT: "event" as const
 };
 
-export const defaultFilterValues: import("lavalink-types").Filters = {
+export const defaultFilterValues: import("lavalink-types/v4.js").Filters = {
 	volume: 1.0,
 	equalizer: [
 		{

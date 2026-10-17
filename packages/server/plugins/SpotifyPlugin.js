@@ -1,5 +1,5 @@
 import { Plugin } from "volcano-sdk";
-import htmlParse from "node-html-parser";
+import { parse } from "node-html-parser";
 
 const usableRegex = /^https:\/\/(?:open\.)?spotify(?:\.app)?\.(?:(?:link)|(?:com))/;
 
@@ -40,7 +40,7 @@ class SpotifyPlugin extends Plugin {
 
 		const data = body.toString();
 
-		const parser = htmlParse.default(data);
+		const parser = parse(data);
 		const head = parser.getElementsByTagName("head")[0];
 
 		if (!head) return { entries: [] };
@@ -53,23 +53,24 @@ class SpotifyPlugin extends Plugin {
 			const trackList = head.querySelectorAll("meta[name=\"music:song\"]").map(i => i.getAttribute("content") || "");
 			const filtered = await trackList.filter(i => i.length);
 			const tracks = await Promise.all(filtered.map(track => this.getFromLink(track, depth++)));
-			return { entries: tracks.map(i => i.entries).flat(), plData: { name: title, selectedTrack: 0 } };
+			return { entries: tracks.flatMap(i => i.entries), plData: { name: title, selectedTrack: 0 } };
 		}
 
 		const author = head.querySelector("meta[property=\"og:description\"]")?.getAttribute("content")?.split("·")?.slice(0, -2).join("·")?.trim() || "Unknown Artist";
 		const uri = head.querySelector("meta[property=\"og:audio\"]")?.getAttribute("content") || "";
 		const duration = +(head.querySelector("meta[name=\"music:duration\"]")?.getAttribute("content") || 0);
 		const trackNumber = +(head.querySelector("meta[name=\"music:album:track\"]")?.getAttribute("content") || 0);
+		const artworkUrl = head.querySelector("meta[property=\"og:image\"]")?.getAttribute("content") || null;
 		/** @type {import("volcano-sdk/types.js").TrackInfo} */
-		const thisTrack = { uri, title, author, length: duration * 1000, identifier: url, isStream: false };
+		const thisTrack = { uri, title, author, length: duration * 1000, identifier: url, isStream: false, artworkUrl };
 		if (trackNumber) return { entries: [thisTrack], plData: { name: "Unknown Playlist", selectedTrack: (trackNumber || 1) - 1 } };
 		return { entries: [thisTrack] };
 	}
 
-	/** @param {import("@lavalink/encoding").TrackInfo} info */
+	/** @param {import("volcano-encoding").TrackInfo} info */
 	async streamHandler(info) {
 		if (!info.uri) throw new Error("There was no URI for playback");
-		return { stream: await this.utils.connect(info.uri, { headers: this.utils.Constants.baseHTTPRequestHeaders }) };
+		return { stream: (await this.utils.followURLS(info.uri)).data };
 	}
 }
 

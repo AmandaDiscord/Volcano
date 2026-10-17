@@ -1,7 +1,7 @@
-import repl from "repl";
-import path from "path";
-import fs from "fs";
-import { spawn } from "child_process";
+import repl from "node:repl";
+import path from "node:path";
+import fs from "node:fs";
+import { spawn } from "node:child_process";
 
 import plugins from "./plugins.js";
 import Constants from "../Constants.js";
@@ -74,8 +74,8 @@ async function install(url: string) {
 					child.once("exit", onExit);
 					child.once("error", onError);
 				});
-			} catch (er) {
-				return console.error(er);
+			} catch (error) {
+				return console.error(error);
 			}
 		}
 		await fs.promises.writeFile(pluginManifestDir, JSON.stringify(manifest, null, 2));
@@ -86,7 +86,7 @@ async function install(url: string) {
 	console.info(`Installed ${fetched.name}@${fetched.version}`);
 }
 
-async function customEval(input: string, _context: import("vm").Context, _filename: string, callback: (err: Error | null, result: unknown) => unknown) {
+async function customEval(input: string, _context: import("node:vm").Context, _filename: string, callback: (err: Error | null, result: unknown) => unknown) {
 	const split = input.replace("\n", "").split(" ");
 	const command = split[0];
 	const afterCommand = split.slice(1).join(" ");
@@ -112,4 +112,6 @@ async function customEval(input: string, _context: import("vm").Context, _filena
 }
 
 const cli = repl.start({ prompt: "", eval: customEval, writer: s => s });
-cli.once("exit", () => process.exit());
+cli.once("exit", () => {
+	if (process.stdin.isTTY) process.exit();
+});

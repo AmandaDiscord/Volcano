@@ -1,11 +1,10 @@
-import htmlParse from "node-html-parser";
-import entities from "html-entities";
+import { parse as parseHTML } from "node-html-parser";
+import * as entities from "html-entities";
 import { Plugin } from "volcano-sdk";
 
-const usableRegex = /^https:\/\/[^.]+.bandcamp.com\/(?:album|track)\/[^/]+/;
+const usableRegex = /^(https?:\/\/(?:[^.]+\.)?bandcamp\.com)\/(album|track)\/[\w-]+\/?(?:\?.*)?$/;
 const streamRegex = /(https:\/\/t4\.bcbits\.com\/stream\/[^}]+)/;
-const durationRegex = /^P(\d{2})H(\d{2})M(\d{2})S$/;
-const trackRegex = /\/track\//;
+const tralbumRegex = /data-tralbum="([^"]+)"/;
 
 class BandcampSource extends Plugin {
 	public source = "bandcamp";
@@ -15,62 +14,37 @@ class BandcampSource extends Plugin {
 	}
 
 	public async infoHandler(resource: string) {
-		const html = await fetch(resource, { redirect: "follow", headers: this.utils.Constants.baseHTTPRequestHeaders }).then(d => d.text());
-		const data = BandcampSource.parse(html);
-		const value: Awaited<ReturnType<NonNullable<Plugin["infoHandler"]>>> = { entries: [] };
-		if (data["@type"].includes("MusicAlbum")) {
-			value.plData = { name: data.name, selectedTrack: 0 };
-			const toFetch: Array<string> = data.albumRelease.filter(r => !!r["@id"].match(trackRegex)).map(i => i["@id"]);
-			await Promise.all(toFetch.map(async url => {
-				const html2 = await fetch(url, { redirect: "follow", headers: this.utils.Constants.baseHTTPRequestHeaders }).then(d => d.text());
-				const data2 = BandcampSource.parse(html2);
-				value.entries.push(BandcampSource.trackToResource(data2));
-			}));
-		} else {
-			value.entries.push(BandcampSource.trackToResource(data));
-			if (data.inAlbum) value.plData = { name: data.inAlbum.name, selectedTrack: data.additionalProperty.find(p => p.name === "tracknum")?.value || 1 };
-		}
-		return value;
+		const [, base, type] = usableRegex.exec(resource)!;
+		const res = await fetch(resource, { redirect: "follow", headers: this.utils.Constants.baseHTTPRequestHeaders });
+		if (res.status === 404) return { entries: [] };
+		const tralbum = tralbumRegex.exec(await res.text());
+		if (!tralbum) throw new Error(`${type === "album" ? "Album" : "Track"} information not found on the Bandcamp page.`);
+		const data = JSON.parse(entities.decode(tralbum[1]));
+		const artworkUrl = data.art_id ? `https://f4.bcbits.com/img/a${String(data.art_id).padStart(10, "0")}_1.png` : null;
+		const entries: Array<import("volcano-sdk/types.js").TrackInfo> = data.trackinfo.map((track: { title: string; title_link: string; duration: number }) => ({
+			title: track.title,
+			author: data.artist,
+			identifier: base + track.title_link,
+			uri: base + track.title_link,
+			length: Math.trunc(track.duration * 1000),
+			isStream: false,
+			artworkUrl,
+			// Album pages don't have each track's isrc
+			isrc: type === "track" ? data.current?.isrc ?? null : null
+		}));
+		if (type === "track") return { entries: entries.slice(0, 1) };
+		return { entries, plData: { name: data.current.title, selectedTrack: -1 } };
 	}
 
-	public async streamHandler(info: import("@lavalink/encoding").TrackInfo) {
+	public async streamHandler(info: import("volcano-encoding").TrackInfo) {
 		const html = await fetch(info.uri!, { redirect: "follow", headers: this.utils.Constants.baseHTTPRequestHeaders }).then(d => d.text());
-		const parser = htmlParse.default(html);
+		const parser = parseHTML(html);
 		const head = parser.getElementsByTagName("head")[0];
 		const stream = streamRegex.exec(head.toString());
 		if (!stream) throw new Error("There was no stream URL for that track");
-		const response = await this.utils.connect(entities.decode(stream[1].replace("&quot;", "")), { headers: this.utils.Constants.baseHTTPRequestHeaders });
+		const { data } = await this.utils.followURLS(entities.decode(stream[1].replace("&quot;", "")));
 
-		return { stream: response };
-	}
-
-	private static parse(html: string) {
-		const parser = htmlParse.default(html);
-		const head = parser.getElementsByTagName("head")[0];
-		const script = head.querySelector("script[type=\"application/ld+json\"]")?.innerHTML ?? "{}";
-		const data = JSON.parse(script);
-		if (!data.name) throw new Error("No information about that track was given");
-		return data;
-	}
-
-	private static trackToResource(track: any): import("volcano-sdk/types.js").TrackInfo {
-		return {
-			title: track.name,
-			author: track.byArtist.name,
-			identifier: track["@id"],
-			uri: track["@id"],
-			length: BandcampSource.getDurationFromString(track.duration),
-			isStream: false
-		};
-	}
-
-	private static getDurationFromString(duration: string) {
-		const match = durationRegex.exec(duration);
-		if (!match) return 0;
-		const hours = Number(match[1]);
-		const minutes = Number(match[2]);
-		const seconds = Number(match[3]);
-		return (seconds * 1000) + (minutes * 60 * 1000) + (hours * 60 * 60 * 1000);
+		return { stream: data };
 	}
 }
 

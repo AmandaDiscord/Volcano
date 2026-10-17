@@ -1,11 +1,11 @@
 .turbo
-.yarn/cache
-.yarn/unplugged
-.yarn/releases
+.yarn
 
 node_modules/
 /soundcloud.txt
 /dist
 /application.yml
 /Lavalink.jar
+/plugins
 /target
+/logs

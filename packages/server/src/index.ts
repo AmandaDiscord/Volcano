@@ -1,12 +1,13 @@
 const startTime: number = Date.now();
 
-import os from "os";
-import util from "util";
-import path from "path";
-import fs from "fs";
+import os from "node:os";
+import util from "node:util";
+import path from "node:path";
+import fs from "node:fs";
 
 import "./util/Logger.js";
-import "./loaders/keys.js";
+import "./loaders/config.js";
+import "./loaders/lavalink.js";
 
 import Constants from "./Constants.js";
 
@@ -45,8 +46,7 @@ const properties = {
 	"Build time": buildInfo.build_time ? new Date(buildInfo.build_time).toUTCString() : "unknown",
 	Branch: buildInfo.branch,
 	Commit: buildInfo.commit !== "unknown" ? buildInfo.commit.slice(0, 6) : buildInfo.commit,
-	Node: process.version.replace("v", ""),
-	Downloader: pkg.dependencies["play-dl"].replace("^", "")
+	Node: process.version.replace("v", "")
 };
 
 const longestLength = Object.keys(properties).map(k => k.length).sort((a, b) => b - a)[0];
@@ -54,6 +54,7 @@ const longestLength = Object.keys(properties).map(k => k.length).sort((a, b) => 
 console.log(`\n\n\n${Object.entries(properties).map(props => `	${props[0]}:${" ".repeat(longestLength - props[0].length)}   ${props[1]}`).join("\n")}\n\n`);
 console.log(`Starting Launcher using Node ${process.version.replace("v", "")} on ${os.hostname()} with PID ${process.pid} (${path.join(lavalinkDirname, "index.js")} started by ${username} in ${process.cwd()})`);
 console.log(`OS: ${Constants.platformNames[process.platform] || process.platform} ${os.release()?.split(".")[0] || "Unknown release"} Arch: ${process.arch}`);
+console.log(`Using up to ${lavalinkConfig.volcano.maxAudioThreads} audio threads, ${lavalinkConfig.volcano.playersPerAudioThread} players each before another spawns`);
 
 process.on("unhandledRejection", e => console.error(util.inspect(e, false, Infinity, true)));
 process.on("uncaughtException", (e, origin) => console.error(`${util.inspect(e, false, Infinity, true)}\n${util.inspect(origin)}`));

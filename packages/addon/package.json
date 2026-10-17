@@ -5,13 +5,10 @@
 	"main": "index.js",
 	"types": "index.d.ts",
 	"napi": {
-		"name": "voclano_addon",
-		"triples": {
-			"defaults": false,
-			"additional": [
-				"x86_64-unknown-linux-gnu"
-			]
-		}
+		"binaryName": "voclano_addon",
+		"targets": [
+			"x86_64-unknown-linux-gnu"
+		]
 	},
 	"files": [
 		"index.js",
@@ -19,7 +16,7 @@
 	],
 	"license": "MIT",
 	"devDependencies": {
-		"@napi-rs/cli": "^2.18.4"
+		"@napi-rs/cli": "^3.10.8"
 	},
 	"engines": {
 		"node": ">= 18"

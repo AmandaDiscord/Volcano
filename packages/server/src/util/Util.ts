@@ -1,13 +1,15 @@
-import util from "util";
-import net, { NetConnectOpts, Socket } from "net";
-import tls from "tls";
-import os from "os";
-import { pipeline, Transform } from "stream";
+import net, { Socket } from "node:net";
+import tls from "node:tls";
+import os from "node:os";
+import v8 from "node:v8";
+import { once } from "node:events";
+import { pipeline, Transform } from "node:stream";
 
 import type { HttpRequest, HttpResponse } from "uWebSockets.js";
-import type { ConnectionOptions } from "tls";
-import type { TransformCallback } from "stream";
-import type { TrackLoadingResult, Stats, Severity, ErrorResponse } from "lavalink-types";
+import type { TransformCallback } from "node:stream";
+import * as encoding from "volcano-encoding";
+
+import type { Exception, Track, Stats, Severity, ErrorResponse } from "lavalink-types/v4.js";
 import type { VoiceConnection, AudioPlayer, VoiceConnectionStatus, AudioPlayerStatus, VoiceConnectionState, AudioPlayerState } from "@discordjs/voice";
 
 import Constants from "../Constants.js";
@@ -20,6 +22,7 @@ const errorRegex = /(Error|ERROR):? ?/;
 
 const statusErrorNameMap = {
 	400: "Bad Request" as const,
+	403: "Forbidden" as const,
 	404: "Not Found" as const,
 	408: "Request Timeout" as const,
 	413: "Payload Too Large" as const,
@@ -27,17 +30,11 @@ const statusErrorNameMap = {
 	500: "Internal Server Error" as const
 };
 
-function getServerName(host?: string) {
-	if (!host) return null;
-
-	const servername = getHostname(host);
-	if (net.isIP(servername)) return "";
-
-	return servername;
-}
-
-const responseRegex = /((?:HTTP\/[\d.]+)|(?:ICY)) (\d+) ?(.+)?/;
+const responseRegex = /^(HTTP\/[\d.]+|ICY) (\d+) ?(.*)/;
 const headerRegex = /([^:]+): *([^\r\n]+)/;
+const statusStartRegex = /^(?:HTTP\/|ICY )/;
+const headerEndRegex = /\r?\n\r?\n/;
+const chunkSizeRegex = /^(?:\r\n)?([\da-f]+)[ \t]*(?:;[^\r\n]*)?\r\n/i;
 
 export interface ConnectionResponseEvents {
 	headers: [ConnectionResponse["headers"]];
@@ -65,61 +62,76 @@ interface ConnectionResponse {
 }
 
 class ConnectionResponse extends Transform {
-	private headersReceived = false;
-	private receivedStatus = false;
+	private head: Buffer | null = Buffer.alloc(0);
+	// Bytes left in the current chunk. null when the body isn't chunked, -1 after the last chunk
+	private chunkLeft: number | null = null;
+	private partialChunkLine: Buffer | null = null;
 	public headers: { [header: string]: string } = {};
-	public protocol: string;
-	public status: number;
-	public message: string;
+	public protocol = "UNKNOWN";
+	public status = 0;
+	public message = "";
 
-	public _transform(chunk: Buffer, encoding: BufferEncoding, callback: TransformCallback): void {
-		if (this.headersReceived) {
-			this.push(chunk);
+	public _transform(chunk: Buffer, _encoding: BufferEncoding, callback: TransformCallback): void {
+		if (!this.head) return callback(this.dechunk(chunk));
+
+		const head = Buffer.concat([this.head, chunk]);
+		// latin1 keeps string offsets equal to byte offsets
+		const text = head.toString("latin1");
+		const isHTTP = statusStartRegex.test(text);
+		const end = headerEndRegex.exec(text);
+		if (isHTTP && !end) {
+			this.head = head;
 			return callback();
 		}
+		this.head = null;
 
-		const string = chunk.toString("utf-8");
-		const lines = string.split("\n");
-
-		if (!this.receivedStatus) {
-			const match = responseRegex.exec(lines[0]);
-			if (!match) {
-				this.headersReceived = true;
-				console.warn(`First line in Buffer isn't an HTTP or ICY status: ${lines[0]}`);
-				this.protocol = "UNKNOWN";
-				this.status = 0;
-				this.message = "";
-				this.emit("headers", this.headers);
-				this.push(chunk);
-				callback();
-			} else {
+		let body = head;
+		if (!end || !isHTTP) console.warn(`First line in Buffer isn't an HTTP or ICY status: ${text.split("\n", 1)[0]}`);
+		else {
+			const [status, ...lines] = head.toString("utf-8", 0, end.index).split(/\r?\n/);
+			const match = responseRegex.exec(status);
+			if (match) {
 				this.protocol = match[1];
 				this.status = Number(match[2]);
 				this.message = match[3] || "";
-				lines.splice(0, 1);
 			}
-			this.receivedStatus = true;
+			for (const line of lines) {
+				const header = headerRegex.exec(line);
+				if (header) this.headers[header[1].toLowerCase()] = header[2];
+			}
+			body = head.subarray(end.index + end[0].length);
+			if (this.headers["transfer-encoding"]?.toLowerCase().includes("chunked")) this.chunkLeft = 0;
 		}
 
-		const headers = {};
-		let passed = 0;
-		for (const line of lines) {
-			const header = headerRegex.exec(line);
-			if (!header) {
-				this.headersReceived = true;
-				this.emit("headers", this.headers);
-				lines.splice(0, passed);
-				if (lines[0] === "\r" && lines[1] === "") lines.splice(0, 2);
-				break;
-			}
-			passed++;
-			headers[header[1].toLowerCase()] = header[2];
+		this.emit("headers", this.headers);
+		callback(this.dechunk(body));
+	}
+
+	private dechunk(data: Buffer): Error | null {
+		if (this.chunkLeft === null) {
+			if (data.length) this.push(data);
+			return null;
 		}
-		Object.assign(this.headers, headers);
-		if (!lines.length) return callback();
-		const remaining = Buffer.from(lines.join("\n"));
-		this.push(remaining);
-		callback();
+		let buf = this.partialChunkLine ? Buffer.concat([this.partialChunkLine, data]) : data;
+		this.partialChunkLine = null;
+		while (buf.length && this.chunkLeft !== -1) {
+			if (this.chunkLeft) {
+				const piece = buf.subarray(0, this.chunkLeft);
+				this.push(piece);
+				this.chunkLeft -= piece.length;
+				buf = buf.subarray(piece.length);
+				continue;
+			}
+			const line = chunkSizeRegex.exec(buf.toString("latin1", 0, 256));
+			if (!line) {
+				if (buf.length >= 256) return new Error("Malformed chunked response");
+				this.partialChunkLine = buf;
+				return null;
+			}
+			this.chunkLeft = parseInt(line[1], 16) || -1;
+			buf = buf.subarray(line[0].length);
+		}
+		return null;
 	}
 }
 
@@ -134,33 +146,28 @@ class BufferAccumulator {
 	public size = 0;
 	public expecting: number | null;
 
-	private _allocated: Buffer | null = null;
-	private _streamed: number | null = null;
+	private readonly _allocated: Buffer | null = null;
 
 	public constructor(expecting?: number) {
-		if (expecting) {
-			this._allocated = Buffer.allocUnsafe(expecting);
-			this._streamed = 0;
-		}
+		if (expecting) this._allocated = Buffer.allocUnsafe(expecting);
 		this.expecting = expecting ?? null;
 	}
 
 	public add(buf: Buffer): void {
-		if (this._allocated && this._streamed !== null && this.expecting !== null) {
-			if (this._streamed === this.expecting) return;
-			if ((this._streamed + buf.byteLength) > this.expecting) buf.subarray(0, this.expecting - this._streamed).copy(this._allocated, this._streamed);
-			else buf.copy(this._allocated, this._streamed);
+		if (this._allocated) {
+			this.size += buf.copy(this._allocated, this.size);
 			return;
 		}
-		const obj = { chunk: buf, next: null };
-		if (!this.first) this.first = obj;
+		// Copied because uWS empties its chunks once onData returns
+		const obj = { chunk: Buffer.from(buf), next: null };
+		this.first ??= obj;
 		if (this.last) this.last.next = obj;
 		this.last = obj;
 		this.size += buf.byteLength;
 	}
 
 	public concat(): Buffer | null {
-		if (this._allocated) return this._allocated;
+		if (this._allocated) return this._allocated.subarray(0, this.size);
 		if (!this.first) return null;
 		if (!this.first.next) return this.first.chunk;
 		const r = Buffer.allocUnsafe(this.size);
@@ -181,7 +188,7 @@ function waitForResourceToEnterState(resource: VoiceConnection, status: VoiceCon
 function waitForResourceToEnterState(resource: AudioPlayer, status: AudioPlayerStatus, timeoutMS: number): Promise<void>;
 function waitForResourceToEnterState(resource: VoiceConnection | AudioPlayer, status: VoiceConnectionStatus | AudioPlayerStatus, timeoutMS: number): Promise<void> {
 	return new Promise((res, rej) => {
-		if (resource.state.status === status) res(void 0);
+		if (resource.state.status === status) return res(void 0);
 		let timeout: NodeJS.Timeout | undefined = undefined;
 		function onStateChange(_oldState: VoiceConnectionState | AudioPlayerState, newState: VoiceConnectionState | AudioPlayerState) {
 			if (newState.status !== status) return;
@@ -197,86 +204,90 @@ function waitForResourceToEnterState(resource: VoiceConnection | AudioPlayer, st
 	});
 }
 
-const quoteRegex = /"/g;
+const redirectStatusCodes = new Set([301, 302, 303, 307, 308]);
 
-function stringifyStep(object: any, references: Set<any>): any {
-	const rebuilt = {};
-	for (const key of Object.keys(object)) {
-		if (key[0] === "_") continue;
-		if (object[key] === undefined) continue;
-		if (typeof object[key] === "object" && object[key] !== null && !Array.isArray(object[key])) {
-			if (typeof object[key] === "function") continue;
-			if (references.has(object[key])) rebuilt[key] = "[Circular]";
-			else {
-				references.add(object[key]);
-				rebuilt[key] = stringifyStep(object[key], references);
-			}
-		} else if (Array.isArray(object[key])) rebuilt[key] = object[key].map(i => typeof i === "object" ? stringifyStep(i, references) : i);
-		else rebuilt[key] = object[key];
+function systemCPUTimes() {
+	let busy = 0;
+	let total = 0;
+	for (const { times } of os.cpus()) {
+		const sum = times.user + times.nice + times.sys + times.irq + times.idle;
+		busy += sum - times.idle;
+		total += sum;
 	}
-
-	return rebuilt;
+	return { busy, total };
 }
 
-const mstDayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const mstMonthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+let lastCPU = { at: performance.now(), process: process.cpuUsage(), system: systemCPUTimes() };
 
-const redirectStatusCodes = [301, 302, 303, 307, 308];
+// uWebSockets.js invalidates an HttpRequest as soon as its handler awaits I/O, but error responses are often sent after that point,
+// so the request details they need are captured while the request is still valid (authenticate runs first in every route).
+const requestInfo = new WeakMap<HttpResponse, { url: string; query: string }>();
+
+// A route that skipped authenticate and then awaited would otherwise throw here and leave the client hanging.
+function safeRequestInfo(request: HttpRequest): { url: string; query: string } {
+	try {
+		return { url: request.getUrl(), query: request.getQuery() };
+	} catch {
+		return { url: "unknown", query: "" };
+	}
+}
 
 const Util = {
 	noop() { void 0; },
 
-	processLoad(): Promise<number> {
-		return new Promise(res => {
-			const hrtime = process.hrtime();
-			const totalUsage = process.cpuUsage();
-
-			setTimeout(() => {
-				const hrTimeDif = process.hrtime(hrtime);
-				const cpuTimeDif = process.cpuUsage(totalUsage);
-				const time = Math.min((hrTimeDif[0] * 1e6 + hrTimeDif[1]), 1000);
-				const cpuTime = (cpuTimeDif.user + cpuTimeDif.system) / 1e3;
-				res(cpuTime / time);
-			}, 1000);
-		});
+	// CPU use since the last call, as 0 to 1 across all cores like Lavalink reports it
+	cpuLoad(): { systemLoad: number; lavalinkLoad: number } {
+		const now = { at: performance.now(), process: process.cpuUsage(), system: systemCPUTimes() };
+		const processMS = (now.process.user + now.process.system - lastCPU.process.user - lastCPU.process.system) / 1000;
+		const load = {
+			systemLoad: (now.system.busy - lastCPU.system.busy) / (now.system.total - lastCPU.system.total || 1),
+			lavalinkLoad: processMS / (now.at - lastCPU.at || 1) / cpuCount
+		};
+		lastCPU = now;
+		return load;
 	},
 
-	getIPFromArrayBuffer(arr: ArrayBuffer): string {
-		const uintarr = new Uint8Array(arr);
-		if (uintarr.length === 16) {
-			let result = "";
-			let lastOneWas0 = false;
-			let compressed = false;
-			for (let i = 1; i < uintarr.length + 1; i++) {
-				let compressingThisOne = false;
-				const stringified = uintarr[i - 1].toString(16);
-				if (stringified === "0") lastOneWas0 = true;
-				compressingThisOne = stringified === "0" && !compressed;
-				if (stringified !== "0" && lastOneWas0 && !compressed) {
-					result += "::";
-					compressed = true;
-				}
-				result += `${compressingThisOne ? "" : stringified}`;
-				if ((i % 2) === 0 && i !== uintarr.length && !compressingThisOne) result += ":";
-			}
-			return result;
-		}
-		return uintarr.join(".");
-	},
-
-	standardTrackLoadingErrorHandler(e: Error | string, response: HttpResponse, payload: TrackLoadingResult, severity: Severity = "COMMON"): void {
-		if (response.aborted) return;
-		console.log(`Load failed\n${util.inspect(e, false, Infinity, true)}`);
-		payload.loadType = "LOAD_FAILED";
-		payload.exception = {
-			message: (typeof e === "string" ? e as string : (e as Error).message || "").split("\n").slice(-1)[0].replace(errorRegex, ""),
+	loadException(e: Error | string, severity: Severity = "common"): Exception {
+		return {
+			message: (typeof e === "string" ? e as string : (e as Error).message || "").split("\n").at(-1)?.replace(errorRegex, "") ?? "",
 			severity: severity,
 			cause: (typeof e === "string" ? new Error().stack ?? "unknown" : (e as Error).name)
 		};
-		const stringified = JSON.stringify(payload);
-		response.writeStatus("200 OK");
-		Util.assignHeadersToResponse(response, Constants.baseHTTPResponseHeaders);
-		response.end(stringified, true);
+	},
+
+	toTrack(encoded: string, userData: Record<string, unknown> = {}): Track {
+		const decoded = encoding.decode(encoded);
+		return {
+			encoded,
+			info: {
+				identifier: decoded.identifier,
+				isSeekable: !decoded.isStream,
+				author: decoded.author,
+				length: Number(decoded.length),
+				isStream: decoded.isStream,
+				position: Number(decoded.position),
+				title: decoded.title,
+				uri: decoded.uri ?? null,
+				artworkUrl: decoded.artworkUrl,
+				isrc: decoded.isrc,
+				sourceName: decoded.source
+			},
+			pluginInfo: decoded.probeInfo ? { probeInfo: decoded.probeInfo.raw } : {},
+			userData
+		};
+	},
+
+	/** Stream lengths are Long.MAX like Lavalink, which a double prints as 9223372036854776000. Java and Rust clients can't parse that as a long */
+	stringify(value: unknown): string {
+		return JSON.stringify(value).replaceAll("\"length\":9223372036854776000", "\"length\":9223372036854775807");
+	},
+
+	tryToTrack(encoded: string): Track | null {
+		try {
+			return Util.toTrack(encoded);
+		} catch {
+			return null;
+		}
 	},
 
 	assignHeadersToResponse(response: HttpResponse, headers: Record<string, string>) {
@@ -287,20 +298,23 @@ const Util = {
 
 	createErrorResponse(request: HttpRequest, response: HttpResponse, status: keyof typeof statusErrorNameMap, message: string): void {
 		if (response.aborted) return;
-		const params = new URLSearchParams(request.getQuery());
+		const info = requestInfo.get(response) ?? safeRequestInfo(request);
+		const params = new URLSearchParams(info.query);
 		const trace = params.get("trace");
 		const value: ErrorResponse = {
 			timestamp: Date.now(),
 			status,
 			error: statusErrorNameMap[status],
 			message,
-			path: request.getUrl()
+			path: info.url
 		};
 		if (trace === "true") value.trace = new Error().stack;
 		const payload = JSON.stringify(value);
-		response.writeStatus(`${status} ${value.error}`);
-		Util.assignHeadersToResponse(response, Constants.baseHTTPResponseHeaders);
-		response.end(payload, true);
+		response.cork(() => {
+			response.writeStatus(`${status} ${value.error}`);
+			Util.assignHeadersToResponse(response, Constants.baseHTTPResponseHeaders);
+			response.end(payload, true);
+		});
 	},
 
 	async wrapRequestBodyToErrorResponse(request: HttpRequest, response: HttpResponse, timeout = 10000): Promise<Buffer | null> {
@@ -349,9 +363,11 @@ const Util = {
 		const timerPromise = new Promise<T>((_, reject) => {
 			timer = setTimeout(() => reject(new Error("Timeout reached")), timeout);
 		});
-		const value = await Promise.race([promise, timerPromise]);
-		if (timer) clearTimeout(timer);
-		return value;
+		try {
+			return await Promise.race([promise, timerPromise]);
+		} finally {
+			clearTimeout(timer);
+		}
 	},
 
 	async connect(url: string, opts?: { method?: string; keepAlive?: boolean; headers?: { [header: string]: any } }): Promise<Socket> {
@@ -361,27 +377,28 @@ const Util = {
 			headers: {
 				Host: decoded.host,
 				"User-Agent": Constants.fakeAgent,
-				Accept: "*/*"
+				Accept: "*/*",
+				Connection: "close"
 			}
 		};
 		if (opts) Util.mixin(options, opts);
-		const port = decoded.port.length ? Number(decoded.port) : (decoded.protocol === "https:" || decoded.protocol === "wss:" ? 443 : 80);
-		const servername = getServerName(decoded.host) ?? undefined;
-		let socket: Socket;
-		const connectOptions: ConnectionOptions = { host: decoded.host, port, rejectUnauthorized: false, ALPNProtocols: ["http/1.1", "http/1.0", "icy"], servername };
-
-		let res: Parameters<ConstructorParameters<PromiseConstructor>["0"]>["0"] | undefined = undefined;
-		const promise = new Promise(resolve => res = resolve);
-
-		if (port === 443) socket = tls.connect(connectOptions, res);
-		else socket = net.connect(connectOptions as NetConnectOpts, res);
+		const secure = decoded.protocol === "https:" || decoded.protocol === "wss:";
+		const host = decoded.hostname.replace(/^\[|\]$/g, "");
+		const port = decoded.port ? Number(decoded.port) : secure ? 443 : 80;
+		const socket = secure
+			? tls.connect({ host, port, rejectUnauthorized: false, ALPNProtocols: ["http/1.1", "http/1.0", "icy"], servername: net.isIP(host) ? "" : host })
+			: net.connect({ host, port });
 
 		socket.setNoDelay(true);
 
-		await Util.createTimeoutForPromise(promise, 10000);
+		try {
+			await Util.createTimeoutForPromise(once(socket, secure ? "secureConnect" : "connect"), 10000);
+		} catch (e) {
+			socket.destroy();
+			throw e;
+		}
 
-		const request = `${options.method!.toUpperCase()} ${decoded.pathname}${decoded.search} HTTP/1.1\n${Object.entries(options.headers).map(i => `${i[0]}: ${i[1]}`).join("\r\n")}\r\n\r\n`;
-		if (socket.writable) socket.write(request);
+		socket.write(`${options.method.toUpperCase()} ${decoded.pathname}${decoded.search} HTTP/1.1\r\n${Object.entries(options.headers).map(i => `${i[0]}: ${i[1]}`).join("\r\n")}\r\n\r\n`);
 		return socket;
 	},
 
@@ -421,7 +438,9 @@ const Util = {
 					res(acc.concat() ?? Buffer.allocUnsafe(0));
 				}
 			});
+			// This replaces attachAborthandler's handler, so it has to set aborted too
 			response.onAborted(() => {
+				response.aborted = true;
 				clearTimeout(timer!);
 				rej(new Error("CLIENT_ABORTED"));
 			});
@@ -449,6 +468,10 @@ const Util = {
 			};
 			response.on("data", onData);
 			response.once("end", onEnd);
+			response.once("error", e => {
+				clearTimeout(timer!);
+				rej(e);
+			});
 			timer = setTimeout(() => {
 				response.removeListener("data", onData);
 				response.removeListener("end", onEnd);
@@ -461,76 +484,43 @@ const Util = {
 
 	waitForResourceToEnterState,
 
-	async getStats(): Promise<Stats> {
+	async getStats(session?: { userID: string; players: Array<string> }): Promise<Omit<Stats, "frameStats"> & { frameStats: Stats["frameStats"] | null }> {
 		const memory = process.memoryUsage();
 		const free: number = memory.heapTotal - memory.heapUsed;
-		const pload: number = await Util.processLoad();
-		const osload: Array<number> = os.loadavg();
-		const worker = await import("../worker.js");
-
-		let playing = 0;
-		for (const q of worker.queues.values()) {
-			if (!q.actions.paused) playing++;
-		}
+		const { players, playingPlayers, frames } = await (await import("./ThreadPool.js")).stats();
+		const counts = session?.players.map(guildID => frames[`${session.userID}.${guildID}`]).filter(c => c !== undefined) ?? [];
+		const sent = counts.reduce((acc, [s]) => acc + s, 0);
+		const nulled = counts.reduce((acc, [, n]) => acc + n, 0);
 
 		return {
-			players: worker.queues.size,
-			playingPlayers: playing,
+			players,
+			playingPlayers,
 			uptime: Math.floor(process.uptime() * 1000),
 			memory: {
-				reservable: memory.heapTotal - free,
+				reservable: v8.getHeapStatistics().heap_size_limit,
 				used: memory.heapUsed,
 				free: free,
 				allocated: memory.rss
 			},
 			cpu: {
 				cores: cpuCount,
-				systemLoad: osload[0],
-				lavalinkLoad: pload
+				...Util.cpuLoad()
 			},
-			frameStats: {
-				sent: 0,
-				nulled: 0,
-				deficit: 0
-			}
+			// Averaged per player with Java's integer division. 3000 is a minute of 20ms frames
+			frameStats: counts.length ? {
+				sent: Math.trunc(sent / counts.length),
+				nulled: Math.trunc(nulled / counts.length),
+				deficit: Math.trunc((counts.length * 3000 - sent - nulled) / counts.length)
+			} : null
 		};
-	},
-
-	stringify(data: any, ignoreQuotes?: boolean) {
-		if (typeof data === "bigint") return `${data.toString()}n`;
-		else if (typeof data === "object" && data !== null && !Array.isArray(data)) {
-			const references = new Set<any>();
-			return `{${Object.entries(stringifyStep(data, references)).map(e => `${Util.stringify(e[0])}:${Util.stringify(e[1])}`).join(",")}}`;
-		} else if (Array.isArray(data)) return `[${data.map(i => Util.stringify(i)).join(",")}]`;
-		else if (typeof data === "string" && !ignoreQuotes) return `"${data.replace(quoteRegex, "\\\"")}"`;
-		else return String(data);
-	},
-
-	dateToMSTString(date: Date): string {
-		return `${mstDayNames[date.getDay()]} ${mstMonthNames[date.getMonth()]} ${date.getDate()} ${date.getHours()}:${date.getMinutes()}:${date.getSeconds()} MST ${date.getFullYear()}`;
-	},
-
-	// TypeScript complains about string.prototype.substr being deprecated and only being available for browser compatability
-	// this polyfill has been tested to be compliant with the real substr with some of its quirks like not actually returning a length
-	// of the specified length
-	/**
-	 * Gets a substring beginning at the specified location and having the specified length.
-	 * @param text this string
-	 * @param from The starting position of the desired substring. The index of the first character in the string is zero.
-	 * @param length The number of characters to include in the returned substring.
-	 */
-	substr(text: string, from: number, length?: number) {
-		if (length === 0) return "";
-		if (!length || (from + length) <= text.length) return text.slice(from, length ? from + length : void 0);
-		return text.repeat(Math.ceil(length / (from + text.length))).slice(from, from + length);
 	},
 
 	getHTTP() {
 		return import("../loaders/http.js");
 	},
 
-	getWorker() {
-		return import("../worker.js");
+	getThreadPool() {
+		return import("./ThreadPool.js");
 	},
 
 	getWebsocket() {
@@ -546,11 +536,12 @@ const Util = {
 	},
 
 	authenticate(req: HttpRequest, res: HttpResponse) {
+		requestInfo.set(res, { url: req.getUrl(), query: req.getQuery() });
 		const auth = req.getHeader("authorization");
 		if (auth !== lavalinkConfig.lavalink.server.password) {
-			const ip = Util.getIPFromArrayBuffer(res.getRemoteAddress());
+			const ip = Buffer.from(res.getRemoteAddressAsText()).toString();
 			console.error(`Authorization missing for ${ip} on ${req.getMethod().toUpperCase()} ${req.getUrl()}`);
-			res.writeStatus("401 Unauthorized")
+			res.writeStatus("403 Forbidden")
 				.writeHeader("Lavalink-Api-Version", lavalinkMajor)
 				.endWithoutBody(0, true);
 			return false;
@@ -560,26 +551,14 @@ const Util = {
 
 	async followURLS(url: string, headers?: Record<string, string>, redirects = 0): Promise<{ url: string; data: ConnectionResponse }> {
 		if (redirects > 3) throw new Error(`Too many redirects. Was redirected ${redirects} times`);
-		const stream = await Util.connect(url, { headers: Object.assign(headers || {}, Constants.baseHTTPRequestHeaders) });
+		const stream = await Util.connect(url, { headers: { ...Constants.baseHTTPRequestHeaders, ...headers } });
 		const data = await Util.socketToRequest(stream);
-		if (redirectStatusCodes.includes(data.status) && data.headers["location"]) {
+		if (redirectStatusCodes.has(data.status) && data.headers["location"]) {
 			data.end();
 			data.destroy();
-			return Util.followURLS(data.headers["location"], headers, redirects++);
+			return Util.followURLS(new URL(data.headers["location"], url).href, headers, redirects + 1);
 		} else return { url, data };
 	}
 };
-
-function getHostname(host: string): string {
-	if (host[0] === "[") {
-		const idx = host.indexOf("]");
-		return Util.substr(host, 1, idx - 1);
-	}
-
-	const idx = host.indexOf(":");
-	if (idx === -1) return host;
-
-	return Util.substr(host, 0, idx);
-}
 
 export default Util;
